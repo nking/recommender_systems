@@ -1,0 +1,21 @@
+are there aspects of these movie views that can be recast as forecasting
+problems?
+    trends by genre?
+  - a look at popularity of genres as a time series
+
+low priority to put on future todo list:
+- consider improving the zipcode to timezone translations by using zcta
+  to get zipcode regional boundaries.  then calculate centroids and use a library
+  to transform the coordinates to time zone
+
+consider putting the original transformations into a script that uses Polars
+  instead of Pandas and also uses PySpark and Fugue.
+  very efficient for a desktop local run.  would be interesting to compare
+  to TFX + Spark runner
+
+consider improving the zipcodes to use ZCTA .. 
+  census has a database of zip codes mapped to geographic boundaries 
+  can get centroid of them and then time zone.
+  consider also using the 2010 database for the failied 2020 lookups.
+
+

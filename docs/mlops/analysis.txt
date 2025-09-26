@@ -1,0 +1,27 @@
+libraries:
+  - apache-beam
+  - TFX
+
+TFX is not available for all architectures.  e.g. apple arm m4 pro.
+
+TFX is compatible with a restricted range of python and tensorflow.
+see https://pypi.org/project/tfx/
+
+place the code for recommender systems into TFX components to make a 
+pipeline which is runnable by a local spark runner.
+
+considering custom python functions and using the TFX dsl annotations.
+
+TFXIO might be useful for transforming data into tfrecords.
+
+tf.Transform methods that make a pass through all of the data are needed 
+to count records and to define vocabularies, else the operations are 
+parallelizable in pre-processing..
+
+consider writing a pipeline with placeholders for iteration, approval, and
+deployment.
+
+would like to use the custom python functions with dsl annotations
+
+also create the compiler statements needed to create the yaml intermediate file
+

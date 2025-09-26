@@ -1,0 +1,19 @@
+goal of the recommender systems notebook:
+  - ability to predict what user's would like to see and have not already seen
+    in the moviews inventory.
+
+goal of the refactoring:
+  - refactor the code to use modular custom python functions in TFX pipelines 
+    for MLOps pipeline
+
+---------------------------------------
+
+place the code for recommender systems into TFX components to make a 
+pipeline which is runnable by a local spark runner.
+
+consider writing a pipeline with placeholders for iteration, approval, and
+deployment.
+
+code should be efficient and easy to maintain and modify with knowledge of
+TFX and some knowledge of Apache-Beam.
+
