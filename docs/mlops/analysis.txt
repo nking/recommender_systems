@@ -1,11 +1,17 @@
 libraries:
   - apache-beam
   - TFX
+  - TensorFlow Data Validation
+  - TensorFlow Transform
+  - tfx_bsl
+
+need to use a venv because of the earlier version of python
 
 TFX is not available for all architectures.  e.g. apple arm m4 pro.
 
 TFX is compatible with a restricted range of python and tensorflow.
 see https://pypi.org/project/tfx/
+use python 3.9 or 3.10
 
 place the code for recommender systems into TFX components to make a 
 pipeline which is runnable by a local spark runner.
@@ -18,10 +24,37 @@ tf.Transform methods that make a pass through all of the data are needed
 to count records and to define vocabularies, else the operations are 
 parallelizable in pre-processing..
 
-consider writing a pipeline with placeholders for iteration, approval, and
-deployment.
+consider writing a pipeline with iteration, placeholder for approval, and
+placeholder for deployment.
 
 would like to use the custom python functions with dsl annotations
 
 also create the compiler statements needed to create the yaml intermediate file
+for running with airflow or kfp etc
+
+The transformations can either occur in the pipeline before training,
+or can occur as keras layers within the model.
+An advantage to preprocessing in pipeline before training, is that it makes
+it easier to reuse the code in a pipeline that makes curated features for a
+feature store.  It also makes it easier to use EDA on the features in contrast to
+using keras layers in transformations to features.
+Note that the nomenclature is that raw data is transformed to features and
+the features are the direct inputs to the models.
+
+- there will be scripts to set up the environment (provision a workbench).
+  including setup of scan or other vector db
+- there will be python function custom components
+  - ingest, validate data, transform, train, tune, evaluate
+- there will be a custom component to use the trained model to reconstruct
+  the tf/keras model and extract the query and candidate models.
+- there will be a custom component to create movie vector embeddings
+  and store them in the vector db.
+- there will be an application which:
+  - downloads data if doesn't exist
+  - runs pipeline
+- the evaluate function:
+  - receives user or query information,
+  - transforms the data
+  - performs a db lookup to find candidate movies
+
 

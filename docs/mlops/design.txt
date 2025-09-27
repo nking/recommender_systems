@@ -1,0 +1,55 @@
+see https://www.tensorflow.org/tfx/guide/custom_function_component
+
+============================
+Non-Pipeline scripts:
+
+setup_activate_venv.sh
+# use conda to setup a venv with python 3.9 or 3.10 and install libraries,
+# activate the venv
+
+download.py:
+  input: url, base directory
+  output: dictionary of 'users', 'movies', 'ratings' and their uris
+
+============================
+Custom Python function components
+
+subclassing CsvExampleGen:
+# orders the data by date and makes train, test splits
+inputs: uris for users.data, ratings.dat and movies.dat
+output: proto.Output of ratings w/ user and genres added
+# reads all 3 files, (don't read zip-code from users.dat)
+# uses beam to join ratings with user 
+# columns to merge/join:
+#   join ratings with movies on movies.movie_id==ratings.movie_id
+#   drop zip-code from users if had to read it in
+#   join ratings with users on user_id
+#   # result will be 
+#   user_id, movie_id, rating, timestamp,gender, age_group, occupation, 
+#   genres
+# dropping timezone for now as there were too many missing timezones
+see merge_ratings_genres.py for apache beam code
+
+transformations
+  ins_hr_category(df)
+  df['rating'] /= 5.0
+
+use of StatisticsGen and SchemaGen
+
+subclassing ExampleValidator
+
+subclassing Transform
+see https://www.tensorflow.org/tfx/guide/transform
+
+subclassing Evaluator
+
+subclassing InfraValidator
+# given 
+#   set(['user_id', 'movie_id', 'age_group', 'gender', 'hr_bin', 'occupation'],
+# use query model to make q_emb
+# and then find similar in vectordb
+# given
+#   'movie_id, 'genres'
+# use candidate model to make m_emb
+# and then find similar in vectordb
+#

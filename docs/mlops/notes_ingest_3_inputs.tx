@@ -1,0 +1,133 @@
+This is the response from Google Gemini:
+
+Yes, you can subclass a TFX ExampleGen component to use three different input files by creating a custom executor. This is the recommended approach for handling custom input logic that differs from the standard file-based ExampleGen behavior. 
+Method: Create a custom ExampleGen with a custom executor
+This approach involves creating a custom ExampleGen component that points to a new executor class. Your custom executor is where you will define the logic for reading and processing the three distinct input files. 
+
+Step 1: Define a custom executor
+Create a new executor class that inherits from BaseExampleGenExecutor. Within this class, you will override the Do method to define your custom input reading logic using Apache Beam. 
+
+Step 2: Define the custom ExampleGen component
+Create a component class that inherits from tfx.v1.components.ExampleGen. You will specify your custom executor class in the EXECUTOR_SPEC attribute. You will also define the multiple input file channels in the INPUT_SPEC and OUTPUT_SPEC attributes. 
+Step 3: Use the custom ExampleGen in your pipeline
+In your TFX pipeline definition, instantiate and use your new MyCustomExampleGen component. You will need to create three separate dsl_utils.external_input channels, one for each input file. 
+
+import os
+import tensorflow as tf
+from tfx.components.example_gen import base_example_gen_executor
+from tfx.types import standard_artifacts
+from tfx.types import standard_component_specs
+from tfx_bsl.public import tfxio
+
+class MyCustomExecutor(base_example_gen_executor.BaseExampleGenExecutor):
+  """Custom executor for ExampleGen that handles multiple files."""
+
+  #def Get ) (
+  def Do (
+      self,
+      input_dict: tf.TfList[standard_artifacts.ExternalSource],
+      output_dict: tf.TfList[standard_artifacts.Examples],
+      exec_properties: tf.TfDict[str, tf.TfAny]
+  ) -> None:
+    # Get the input file paths from the input_dict.
+    # The keys will depend on your component definition.
+    input_file_1 = input_dict['input_file_1'].uri
+    input_file_2 = input_dict['input_file_2'].uri
+    input_file_3 = input_dict['input_file_3'].uri
+
+    # Configure your Apache Beam pipeline.
+    beam_pipeline = self._MakeBeamPipeline()
+    
+    # Read and process each input file separately.
+    # This example assumes CSV files, but you can use any reader.
+    data_1 = (
+        beam_pipeline 
+        | 'ReadInputFile1' >> tfxio.CsvReader(input_file_1)
+        | 'ProcessFile1' >>  # Custom PTransform to process file_1
+    )
+    data_2 = (
+        beam_pipeline 
+        | 'ReadInputFile2' >> tfxio.CsvReader(input_file_2)
+        | 'ProcessFile2' >>  # Custom PTransform to process file_2
+    )
+    data_3 = (
+        beam_pipeline 
+        | 'ReadInputFile3' >> tfxio.CsvReader(input_file_3)
+        | 'ProcessFile3' >>  # Custom PTransform to process file_3
+    )
+    
+    # Merge or combine the data from the three files as needed.
+    merged_data = (
+        (data_1, data_2, data_3) 
+        | 'MergeData' >> beam.Flatten()
+        | 'FinalProcessing' >> ... # Example: Convert to TF.Examples
+    )
+    
+    # Write the combined data to the output artifact.
+    # The output path is determined by the output_dict.
+    output_path = os.path.join(output_dict['examples'].uri, self._MakeSplitName())
+    _ = (
+        merged_data
+        | 'WriteExamples' >> tfxio.WriteTFXIOToTFRecords(output_path)
+    )
+    
+    # Run the Beam pipeline.
+    beam_pipeline.run()
+
+
+from tfx import types
+from tfx.dsl.components.component import Component
+from tfx.dsl.components.component import executor_spec
+from tfx.dsl.components.component import input_spec
+from tfx.dsl.components.component import output_spec
+
+class MyCustomExampleGen(Component):
+    """Custom ExampleGen component for multiple inputs."""
+    EXECUTOR_SPEC = executor_spec.ExecutorClassSpec(MyCustomExecutor)
+    
+    INPUT_SPEC = input_spec.InputSpec({
+        'input_file_1': types.Channel(type=standard_artifacts.ExternalSource),
+        'input_file_2': types.Channel(type=standard_artifacts.ExternalSource),
+        'input_file_3': types.Channel(type=standard_artifacts.ExternalSource),
+    })
+    
+    OUTPUT_SPEC = output_spec.OutputSpec({
+        'examples': types.Channel(type=standard_artifacts.Examples),
+    })
+    
+    def __init__(self,
+                 input_file_1: types.Channel,
+                 input_file_2: types.Channel,
+                 input_file_3: types.Channel,
+                 output: types.Channel = None,
+                 instance_name: str = None):
+        super().__init__(
+            input_file_1=input_file_1,
+            input_file_2=input_file_2,
+            input_file_3=input_file_3,
+            output=output,
+            instance_name=instance_name,
+        )
+
+
+from tfx.utils import dsl_utils
+
+# Create a Channel for each input file.
+input_channel_1 = dsl_utils.external_input('/path/to/file1.csv')
+input_channel_2 = dsl_utils.external_input('/path/to/file2.csv')
+input_channel_3 = dsl_utils.external_input('/path/to/file3.csv')
+
+# Use your custom component with the three input channels.
+my_custom_example_gen = MyCustomExampleGen(
+    input_file_1=input_channel_1,
+    input_file_2=input_channel_2,
+    input_file_3=input_channel_3,
+)
+
+# Add the component to your TFX pipeline.
+components = [
+    my_custom_example_gen,
+    # ... other components
+]
+
+

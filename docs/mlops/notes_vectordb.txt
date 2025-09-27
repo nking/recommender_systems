@@ -1,0 +1,154 @@
+this is the response from Gemini on how to use a vectordb within a TFX custom
+Evaluator
+
+------
+
+The custom Evaluator workflow
+Define a CustomExecutor: Create a custom Executor class that inherits from tfx.components.evaluator.executor.Executor. This class will contain your custom evaluation logic.
+Add external library dependencies: Specify your vector database client library (e.g., pinecone-client, weaviate-client, qdrant-client) as a dependency in your component's setup file.
+Implement vector database logic: Inside your CustomExecutor, connect to the vector database. You will likely use the model from the Trainer component to generate embeddings for your evaluation data. Then, query the database with these embeddings to perform your custom evaluation task (e.g., semantic similarity, retrieval-augmented generation validation).
+Define the ComponentSpec: Create a ComponentSpec to define the inputs, outputs, and parameters for your custom component. This allows the TFX pipeline to properly orchestrate the component.
+Create the custom component: Combine the ComponentSpec and the CustomExecutor into a custom TFX component class.
+Integrate into the pipeline: Add your custom component to your TFX pipeline definition. 
+
+------
+
+import os
+import tensorflow as tf
+from tfx import v1 as tfx
+from tfx.types import artifact_utils
+from tfx.types import standard_artifacts
+from tfx.components.evaluator import executor as evaluator_executor
+from tfx.components.evaluator.executor import (
+    ModelEvalOutputs, ModelEvalInputs, ModelEvalParameters
+)
+from tfx.dsl.components.base import executor_spec
+from tfx.utils import io_utils
+from tfx.dsl.io import fileio
+
+# Assume these are installed
+# from pinecone import Pinecone, ServerlessSpec
+# from sentence_transformers import SentenceTransformer
+
+# 1. Define the custom executor.
+class CustomVectorEvaluatorExecutor(evaluator_executor.Executor):
+    """Custom Executor to connect to a vector database for evaluation."""
+
+    def Do(self, input_dict: ModelEvalInputs, output_dict: ModelEvalOutputs,
+           exec_properties: ModelEvalParameters):
+        self.log_info('Starting custom vector evaluation.')
+
+        # Extract artifacts and properties.
+        eval_examples_uri = artifact_utils.get_single_uri(input_dict['examples'])
+        model_uri = artifact_utils.get_single_uri(input_dict['model'])
+
+        # Load the model.
+        model = tf.keras.models.load_model(model_uri)
+        self.log_info(f"Loaded model from: {model_uri}")
+
+        # Connect to your vector database.
+        # This part requires a client library and configuration.
+        # Example with Pinecone:
+        # pinecone_api_key = os.environ.get("PINECONE_API_KEY")
+        # pinecone_env = os.environ.get("PINECONE_ENVIRONMENT")
+        # index_name = "semantic-eval-index"
+        #
+        # pinecone = Pinecone(api_key=pinecone_api_key, environment=pinecone_env)
+        # index = pinecone.Index(index_name)
+
+        # Load and process evaluation data.
+        eval_data_file = os.path.join(eval_examples_uri, 'Split-eval', 'data.tfrecord')
+        dataset = tf.data.TFRecordDataset(eval_data_file)
+        
+        # Assume your model and vector DB are for semantic text search.
+        # Process the evaluation data to get embeddings using the TFX-trained model.
+        # model_for_embeddings = SentenceTransformer('all-MiniLM-L6-v2') # or use the TFX model
+        # queries = [extract_text_from_tf_example(e) for e in dataset]
+        # query_embeddings = model_for_embeddings.encode(queries)
+
+        # Perform similarity search in the vector DB.
+        # For each query_embedding, perform an index.query()
+        # results = index.query(...)
+
+        # Custom evaluation logic based on vector similarity.
+        # For example, check if the top-k results from the DB contain a ground truth label.
+        # semantic_score = calculate_semantic_metric(results)
+
+        # For this simplified example, we will just simulate a metric.
+        # In a real scenario, you'd calculate a score based on your vector search results.
+        semantic_score = 0.95
+
+        # Create the evaluation output artifact.
+        output_eval_uri = artifact_utils.get_single_uri(output_dict['evaluation'])
+        output_dir = os.path.join(output_eval_uri, 'eval_results')
+        fileio.mkdir_p(output_dir)
+
+        # Save your custom metrics, for example, to a file.
+        with open(os.path.join(output_dir, 'custom_metrics.json'), 'w') as f:
+            f.write(f'{{"semantic_score": {semantic_score}}}')
+
+        # The rest of the TFX Evaluator's original logic can be incorporated here
+        # or it can be entirely replaced depending on your needs.
+        # In a full solution, you might run both standard TFMA and your custom logic.
+
+        self.log_info('Custom vector evaluation complete.')
+
+# 2. Define the ComponentSpec.
+class CustomVectorEvaluatorSpec(tfx.dsl.components.base.ComponentSpec):
+    PARAMETERS = {}  # Optional additional parameters for your executor.
+    INPUTS = {
+        'examples': tfx.types.Channel(type=standard_artifacts.Examples),
+        'model': tfx.types.Channel(type=standard_artifacts.Model),
+        # Add other inputs as needed
+    }
+    OUTPUTS = {
+        'evaluation': tfx.types.Channel(type=standard_artifacts.ModelEvaluation),
+        # You can add custom output artifacts if necessary
+    }
+
+# 3. Create the custom component.
+class CustomVectorEvaluator(tfx.dsl.components.base.BaseComponent):
+    SPEC_CLASS = CustomVectorEvaluatorSpec
+    EXECUTOR_SPEC = executor_spec.ExecutorClassSpec(CustomVectorEvaluatorExecutor)
+
+    def __init__(self, examples: tfx.types.Channel, model: tfx.types.Channel,
+                 evaluation: tfx.types.Channel = None):
+        if not evaluation:
+            evaluation = tfx.types.Channel(type=standard_artifacts.ModelEvaluation)
+        
+        super().__init__(
+            spec=CustomVectorEvaluatorSpec(
+                examples=examples,
+                model=model,
+                evaluation=evaluation,
+            )
+        )
+
+# 4. Use the custom component in your TFX pipeline.
+def create_pipeline(pipeline_name, pipeline_root, data_root, serving_model_dir):
+    # ... previous components like ExampleGen, Trainer
+    example_gen = tfx.components.CsvExampleGen(input_base=data_root)
+    # trainer = tfx.components.Trainer(...)
+
+    # Instantiate your custom vector evaluator.
+    custom_evaluator = CustomVectorEvaluator(
+        examples=example_gen.outputs['examples'],
+        model=trainer.outputs['model']
+    )
+
+    # ... other components and pipeline definition
+    components = [
+        example_gen,
+        # trainer,
+        custom_evaluator,
+        # pusher,
+    ]
+
+    return tfx.dsl.Pipeline(
+        pipeline_name=pipeline_name,
+        pipeline_root=pipeline_root,
+        components=components,
+        # ... other pipeline settings
+    )
+
+
