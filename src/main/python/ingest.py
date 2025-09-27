@@ -30,13 +30,12 @@ class ReadMergeAndSplitExecutor(base_example_gen_executor.BaseExampleGenExecutor
 
     pipeline = self._MakeBeamPipeline()
 
-    ratings = merge_and_split(pipeline=pipeline, \
+    ratings = merge(pipeline=pipeline, \
                               ratings_uri='ratings.dat', movies_uri='movies.dat', \
                               users_uri='users.dat', \
                               ratings_key_dict=ratings_key_dict, \
                               users_key_dict=users_key_dict, \
-                              movies_key_dict=movies_key_dict, \
-                              partition_percents=partition_percents)
+                              movies_key_dict=movies_key_dict)
 
     #not yet finished
 

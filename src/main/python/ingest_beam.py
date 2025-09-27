@@ -1,8 +1,8 @@
 import apache_beam as beam
 import time
 
-def merge_and_split(pipeline, ratings_uri, movies_uri, users_uri, \
-  ratings_key_dict, movies_key_dict, users_key_dict, partition_percents):
+def merge(pipeline, ratings_uri, movies_uri, users_uri, \
+  ratings_key_dict, movies_key_dict, users_key_dict):
   '''
   :param pipeline:
   :param ratings_uri:
@@ -13,7 +13,7 @@ def merge_and_split(pipeline, ratings_uri, movies_uri, users_uri, \
   :param movies_key_dict: for movies file, a dictionary with key:values being header_column_name:column number
   :param users_key_dict: for users file, a dictionary with key:values being header_column_name:column number
   :param partition_percents:
-  :return:
+  :return: a PCollection of ratings with joined information from users and movies
   '''
 
   skip = 1
@@ -79,4 +79,15 @@ def merge_and_split(pipeline, ratings_uri, movies_uri, users_uri, \
   print(f'RATINGS type{type(ratings)}')
   ratings | f'ratings_{time.time_ns()}' >> beam.Map(print)
 
+  #['user_id', 'movie_id', 'rating', 'gender', 'age', 'occupation', 'genres']
+
   return ratings
+
+def _split_by_timestamp(pipeline, ratings, partition_percents):
+  # apache beam does not sort globaly by a column, but we can group by user_id
+  # and then sort by timestamp within those groups, then partition.
+  # considering whether this split has data leakage because a movie might
+  # not exist at a time in one users's train partition but does in another's
+  # and similarly for test.  this is not ideal.
+  # the data needs to be split by timestamp before ingestion.
+  pass
