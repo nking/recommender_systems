@@ -1,8 +1,11 @@
 import apache_beam as beam
 import time
+import random
 
-def merge(pipeline, ratings_uri, movies_uri, users_uri, \
-  ratings_key_dict, movies_key_dict, users_key_dict):
+def merge_and_split(pipeline : apache_beam.pipeline.Pipeline, \
+  ratings_uri : str, movies_uri : str, users_uri : str, \
+  ratings_key_dict : dict[str, int], movies_key_dict : dict[str, int], users_key_dict : dict[str, int],
+  partitions : list[int]):
   '''
   :param pipeline:
   :param ratings_uri:
@@ -12,8 +15,9 @@ def merge(pipeline, ratings_uri, movies_uri, users_uri, \
     being header_column_name:column number
   :param movies_key_dict: for movies file, a dictionary with key:values being header_column_name:column number
   :param users_key_dict: for users file, a dictionary with key:values being header_column_name:column number
-  :param partition_percents:
-  :return: a PCollection of ratings with joined information from users and movies
+  :param partition: list of partitions in percent
+  :return: a tuple of PCollection of ratings with joined information from users and movies where each tuple is for a
+     partition specified in partition list
   '''
 
   skip = 1
@@ -46,8 +50,6 @@ def merge(pipeline, ratings_uri, movies_uri, users_uri, \
       | f'group_by_key_{ts}' >> beam.CoGroupByKey())
     # there are multiple lefts on one line now, and one in right's list
 
-    print(f'filter={filter_cols}')
-
     class left_join_fn(beam.DoFn):
       def process(self, kv):
         key, grouped_elements = kv
@@ -76,18 +78,29 @@ def merge(pipeline, ratings_uri, movies_uri, users_uri, \
     ratings_key_dict['movie_id'], movies_key_dict['movie_id'],\
     filter_cols=[])
 
-  print(f'RATINGS type{type(ratings)}')
-  ratings | f'ratings_{time.time_ns()}' >> beam.Map(print)
-
+  #print(f'RATINGS type{type(ratings)}')
+  #ratings | f'ratings_{time.time_ns()}' >> beam.Map(print)
   #['user_id', 'movie_id', 'rating', 'gender', 'age', 'occupation', 'genres']
 
-  return ratings
+  def split_fn(row, num_partitions, ppartitions):
+    # Using a deterministic hash function ensures the split is consistent
+    total = sum(ppartitions)
+    buckets = [p / total for p in ppartitions]
+    rand_num = random.random()
+    s = 0
+    for i, p in enumerate(buckets):
+      s += p
+      if rand_num < s:
+        return i
+    return len(ppartitions) - 1
 
-def _split_by_timestamp(pipeline, ratings, partition_percents):
-  # apache beam does not sort globaly by a column, but we can group by user_id
-  # and then sort by timestamp within those groups, then partition.
-  # considering whether this split has data leakage because a movie might
-  # not exist at a time in one users's train partition but does in another's
-  # and similarly for test.  this is not ideal.
-  # the data needs to be split by timestamp before ingestion.
-  pass
+  # The `split_fn` returns `True` for the first 80% and `False` for the last 20%.
+  ratings_parts = ratings \
+    | f'split_{time.time_ns()}' >> beam.Partition(\
+    split_fn, len(partitions), partitions)
+
+  #for i, part in enumerate(ratings_parts):
+  #  part | f'PARTITIONED_{i}_{time.time_ns()}' >> beam.io.WriteToText(\
+  #    file_path_prefix=f'a_{i}_', file_name_suffix='.txt')
+
+  return ratings_parts

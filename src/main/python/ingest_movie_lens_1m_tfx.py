@@ -1,6 +1,6 @@
 import apache_beam as beam
 
-from ingest_beam import merge_and_split
+from ingest_movie_lens_1m_beam import merge_and_split
 
 import os
 import tensorflow as tf
@@ -28,14 +28,16 @@ class ReadMergeAndSplitExecutor(base_example_gen_executor.BaseExampleGenExecutor
     movies_key_dict = input_dict['movies_key_dict']
     users_key_dict = input_dict['users_key_dict']
 
+    partitions = input_dict['partitions']
+
     pipeline = self._MakeBeamPipeline()
 
-    ratings = merge(pipeline=pipeline, \
-                              ratings_uri='ratings.dat', movies_uri='movies.dat', \
-                              users_uri='users.dat', \
+    ratings = merge_and_split(pipeline=pipeline, \
+                              ratings_uri=ratings_uri, movies_uri=movies_uri, \
+                              users_uri=users_uri, \
                               ratings_key_dict=ratings_key_dict, \
                               users_key_dict=users_key_dict, \
-                              movies_key_dict=movies_key_dict)
+                              movies_key_dict=movies_key_dict, partitions=partitions)
 
     #not yet finished
 
