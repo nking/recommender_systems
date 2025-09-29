@@ -1,44 +1,29 @@
-# code to use as a tft test.  
 import tensorflow as tf
 import tensorflow_transform as tft
-import tensorflow_transform.beam as tft_beam
 import apache_beam as beam
-import numpy as np
+
+# Define the raw data and its schema
+RAW_DATA_FEATURE_SPEC = {
+  'x': tf.io.FixedLenFeature([], tf.float32),
+  'y': tf.io.FixedLenFeature([], tf.string)
+}
+RAW_DATA = [
+  {'x': 10.0, 'y': 'apple'},
+  {'x': 20.0, 'y': 'orange'},
+  {'x': 30.0, 'y': 'apple'},
+  {'x': 40.0, 'y': 'apple'}
+]
+
 
 # Define the preprocessing function
 def preprocessing_fn(inputs):
+  """Preprocesses input data by normalizing 'x' and vocabulary-izing 'y'."""
+  # Scale 'x' using the min and max observed across the entire dataset
   x = inputs['x']
-  # Scale the input 'x' to have a mean of 0 and variance of 1
-  x_centered = x - tft.mean(x)
-  return {
-      'x_centered': x_centered
-  }
+  x_scaled = tft.scale_by_min_max(x)
 
-# Define your input data
-input_data = [
-    {'x': np.array([1.0], dtype=np.float32)},
-    {'x': np.array([2.0], dtype=np.float32)},
-    {'x': np.array([3.0], dtype=np.float32)},
-]
+  # Vocabulary-ize 'y' to convert strings to integer IDs
+  y = inputs['y']
+  y_vocab = tft.compute_and_apply_vocabulary(y)
 
-try:
-    # Use a pipeline to test the transformation
-    with beam.Pipeline() as pipeline:
-      with tft_beam.Context(temp_dir='/tmp'):
-        dataset_metadata = tft.DatasetMetadata.from_feature_spec({
-            'x': tf.io.FixedLenFeature([], tf.float32)
-        })
-        transformed_dataset, transform_fn = (
-            (pipeline | 'CreateData' >> beam.Create(input_data))
-            #.with_input_types(dataset_metadata.schema)
-            | 'AnalyzeAndTransform' >> tft_beam.AnalyzeAndTransformDataset(
-                preprocessing_fn
-            )
-        )
-        (
-            transformed_dataset
-            | 'PrintOutput' >> beam.Map(print)
-        )
-except Exception as ex:
-  print(f'error: {ex}')
-
+  return {'x_scaled': x_scaled, 'y_vocab': y_vocab}
