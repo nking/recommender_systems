@@ -2,10 +2,10 @@ import apache_beam as beam
 import time
 import random
 
-def merge_and_split(pipeline : apache_beam.pipeline.Pipeline, \
+def merge_and_split(pipeline : beam.pipeline.Pipeline, \
   ratings_uri : str, movies_uri : str, users_uri : str, \
   ratings_key_dict : dict[str, int], movies_key_dict : dict[str, int], users_key_dict : dict[str, int],
-  partitions : list[int]) -> apache_beam.pvalue.PCollection:
+  partitions : list[int]) -> beam.pvalue.PCollection:
   '''
   :param pipeline:
   :param ratings_uri:

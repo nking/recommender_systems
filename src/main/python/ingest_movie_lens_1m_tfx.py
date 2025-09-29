@@ -1,5 +1,4 @@
 import apache_beam as beam
-
 from ingest_movie_lens_1m_beam import merge_and_split
 
 import os

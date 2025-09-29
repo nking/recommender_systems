@@ -13,7 +13,7 @@ def ingest_and_transform_pipeline(ratings_uri : str, movies_uri : str, users_uri
   users_key_col_dict : dict[str, int], \
   partitions : list[int]) -> None:
 
-  input_dict_ser = stringify_ingest_params(ratings_uri, movies_uri, users_uri, \
+  input_dict_ser = stringify_ingest_params(ratings_uri, movies_uri, users_uri,
     ratings_key_col_dict, movies_key_col_dict, users_key_col_dict, \
     partitions)
 
@@ -51,6 +51,7 @@ def ingest_and_transform_pipeline(ratings_uri : str, movies_uri : str, users_uri
   '''
 
 if __name__ == "__main__":
+  from tfx import v1 as tfx
 
   ratings_uri = "../resources/ml-1m/ratings.dat"
   movies_uri = "../resources/ml-1m/movies.dat"
