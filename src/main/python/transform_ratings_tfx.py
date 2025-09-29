@@ -8,12 +8,10 @@ def preprocessing_fn(inputs):
   """Defines the feature engineering steps for the model."""
   outputs = {}
   # Example: Normalize a numeric feature
-  outputs['normalized_feature'] = tft.scale_to_zscore(
-    inputs['numeric_feature'])
+  outputs['normalized_feature'] = tft.scale_to_zscore(inputs['numeric_feature'])
 
   # Example: One-hot encode a categorical feature
-  outputs['one_hot_category'] = tft.compute_and_apply_vocabulary(
-    inputs['categorical_feature'])
+  outputs['one_hot_category'] = tft.compute_and_apply_vocabulary(inputs['categorical_feature'])
 
   return outputs
 
@@ -28,9 +26,7 @@ within the beam pipeline
 '''
 from tfx.dsl.component.experimental.decorators import component
 from tfx.types import Channel
-from tfx.types.standard_artifacts import Examples, Schema, \
-  TransformGraph
-
+from tfx.types.standard_artifacts import Examples, Schema, TransformGraph
 
 @component
 def TransformRatingsComponent(

@@ -50,12 +50,12 @@ def main(args):
     del args
 
     input_tfxio = _make_tfxio()
-
-    print(f'inputs={input_tfxio}')
+    #tfx_bsl.tfxio.dataset_tfxio.DatasetTFXIO
 
     # User-Defined Processing Pipeline
     with beam.Pipeline() as pipeline:
         with tft_beam.Context(temp_dir=tempfile.mkdtemp()):
+            #TUPLE
             raw_dataset = (
                 pipeline | "ReadRecordBatch" >> input_tfxio.BeamSource(batch_size=5),
                 input_tfxio.TensorAdapterConfig(),
@@ -67,12 +67,11 @@ def main(args):
                     _preprocessing_fn, output_record_batches=True
                 )
             )
+            #apache_beam.pvalue.PCollection
             transformed_data = transformed_data | "ExtractRecordBatch" >> beam.Keys()
             _ = transformed_data | "PrintTransformedData" >> beam.Map(
                 _print_record_batch
             )
-            print(f'raw_dataset TYPE {type(raw_dataset)}')
-            print(f'transformed_data TYPE {type(transformed_data)}')
 
 
 if __name__ == "__main__":

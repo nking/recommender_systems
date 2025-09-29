@@ -20,7 +20,7 @@ def merge_and_split(pipeline : apache_beam.pipeline.Pipeline, \
      partition specified in partition list
   '''
 
-  skip = 1
+  skip = 0
 
   # user_id,movie_id,rating
   ratings_pc = pipeline \

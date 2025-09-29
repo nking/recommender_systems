@@ -1,14 +1,13 @@
 import os
 from ingest_movie_lens_1m_tfx import *
 from stringify_ingest_params import stringify_ingest_params
-
 from tfx import v1 as tfx
 
-@dsl.pipeline(
+@tfx.dsl.pipeline(
     name="ingest, transform  pipeline",
     description="a pipeline to ingest and transform the data",
 )
-def ingest_and_transform(ratings_uri : str, movies_uri : str, users_uri : str, \
+def ingest_and_transform_pipeline(ratings_uri : str, movies_uri : str, users_uri : str, \
   ratings_key_col_dict : dict[str, int], \
   movies_key_col_dict : dict[str, int], \
   users_key_col_dict : dict[str, int], \
@@ -23,10 +22,9 @@ def ingest_and_transform(ratings_uri : str, movies_uri : str, users_uri : str, \
   for i, part in enumerate(ingest_task.outputs['examples']):
     print(f'part_{i}:\n{part}')
 
-  partition_0 = ingest_task.outputs['examples'].get()[0]
+  part_0 = ingest_task.outputs['examples'].get()[0]
 
-  #stats_gen = tfx.components.StatisticsGen(examples=ingest_task.outputs['examples'])
-
+  stats_gen = tfx.components.StatisticsGen(examples=ingest_task.outputs['examples'])
 
   '''
   #in a notebook, interactive:
@@ -43,26 +41,32 @@ def ingest_and_transform(ratings_uri : str, movies_uri : str, users_uri : str, \
   context.show(ratings_schema_gen.outputs['schema'])
   '''
 
+  '''
   transform_task = TransformRatingsComponent(\
     examples=ingest_task.outputs['examples'],\
     transformed_examples=transformed_examples_channel,
     # A new Channel for output
     transform_graph=transform_graph_channel  # A new Channel for output
   )
+  '''
 
-'''
-#or instead of using in a component, could test locally with:
-#from tfx.orchestration import pipeline
-#from tfx.orchestration.local.local_dag_runner import LocalDagRunner
-my_pipeline = pipeline.Pipeline(
-  pipeline_name='my_tfx_pipeline',
-  components=[
-    # ... other components
-    my_transform_component_instance
-  ],
-  pipeline_root='./tfx_pipeline_output',
-  metadata_connection_config=None # For local execution
-)
+if __name__ == "__main__":
 
-LocalDagRunner().run(my_pipeline)
-'''
+  ratings_uri = "../resources/ml-1m/ratings.dat"
+  movies_uri = "../resources/ml-1m/movies.dat"
+  users_uri = "../resources/ml-1m/users.dat"
+  ratings_key_col_dict = {"user_id": 0, "movie_id": 1, "rating": 2, "timestamp": 3}
+  movies_key_col_dict = {"movie_id": 0, "title": 1, "genres": 2}
+  users_key_col_dict = {"user_id": 0, "gender": 1, "age": 2, \
+                         "occupation": 3, "zipcode": 4}
+  partitions = [80, 10, 10]
+
+  #replace LocalDagRunner with apache-beam, or airflow or kubeflow pipelines or vertex ai, ...
+  my_pipeline = ingest_and_transform_pipeline(\
+    ratings_uri, movies_uri, users_uri, \
+    ratings_key_col_dict, \
+    movies_key_col_dict, \
+    users_key_col_dict, \
+    partitions)
+
+  tfx.orchestration.LocalDagRunner().run(my_pipeline)
