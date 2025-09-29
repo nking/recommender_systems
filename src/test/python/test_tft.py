@@ -7,13 +7,9 @@ RAW_DATA_FEATURE_SPEC = {
   'x': tf.io.FixedLenFeature([], tf.float32),
   'y': tf.io.FixedLenFeature([], tf.string)
 }
-RAW_DATA = [
-  {'x': 10.0, 'y': 'apple'},
-  {'x': 20.0, 'y': 'orange'},
-  {'x': 30.0, 'y': 'apple'},
-  {'x': 40.0, 'y': 'apple'}
-]
 
+RAW_DATA =\
+  {'x': [10.0, 20.0, 30.0, 40.0], 'y': ['apple', 'orange', 'apple','apple']}
 
 # Define the preprocessing function
 def preprocessing_fn(inputs):
