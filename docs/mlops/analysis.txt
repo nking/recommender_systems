@@ -13,6 +13,26 @@ TFX is compatible with a restricted range of python and tensorflow.
 see https://pypi.org/project/tfx/
 use python 3.9 or 3.10
 
+considering the various ways to pre-process, transform data.
+wanting a component for transformations in a pipeline to automate the process,
+and want the transformations to be distributable.
+- tf.data is for in-memory size data processing so not an option here.
+- consider using keras layers
+  pros:
+    - less code, simpler to maintain
+  cons:
+    - by performing the transformation to featurees in the model, we are
+      repeating work, especially during the compute intensive hyper-parameter
+      tuning phase.
+    - features are not saved in a feature store, which might be a preference
+      for some organization
+    - cannot perform stats on features
+- using tft and tfx
+  pros:
+    - transform to features once and that is input to the hyper-parameter tuning
+  cons:
+    - it's more work, at least while I'm ramping up.
+
 place the code for recommender systems into TFX components to make a 
 pipeline which is runnable by a local spark runner.
 
