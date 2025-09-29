@@ -27,3 +27,6 @@ def preprocessing_fn(inputs):
   y_vocab = tft.compute_and_apply_vocabulary(y)
 
   return {'x_scaled': x_scaled, 'y_vocab': y_vocab}
+
+if __name__ == "__main__":
+  print(preprocessing_fn(RAW_DATA))
