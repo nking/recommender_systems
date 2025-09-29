@@ -30,7 +30,7 @@ try:
         })
         transformed_dataset, transform_fn = (
             (pipeline | 'CreateData' >> beam.Create(input_data))
-            .with_input_types(dataset_metadata.schema)
+            #.with_input_types(dataset_metadata.schema)
             | 'AnalyzeAndTransform' >> tft_beam.AnalyzeAndTransformDataset(
                 preprocessing_fn
             )
