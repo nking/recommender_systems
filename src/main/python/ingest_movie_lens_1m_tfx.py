@@ -4,7 +4,7 @@ from ingest_movie_lens_1m_beam import merge_and_split
 import os
 import tensorflow as tf
 from tfx.components.example_gen import base_example_gen_executor
-from tfx.dsl.component.experimental.decorators import component
+#from tfx.dsl.component.experimental.decorators import component
 from tfx.types import standard_artifacts
 from tfx.types import standard_component_specs
 from tfx_bsl.public import tfxio
@@ -21,7 +21,7 @@ from tfx.utils import json_utils
 
 #can constrain the python version with:
 # base_image="python:3.11-slim")
-@component(use_beam=True)
+@tfx.dsl.components.component(use_beam=True)
 def ReadMergeAndSplitComponent(\
   input_dict_ser: standard_artifacts.String,
   output_examples: Outputs[Examples]

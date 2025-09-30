@@ -24,11 +24,11 @@ within the beam pipeline
     )
     
 '''
-from tfx.dsl.component.experimental.decorators import component
+#from tfx.dsl.component.experimental.decorators import component
 from tfx.types import Channel
 from tfx.types.standard_artifacts import Examples, Schema, TransformGraph
 
-@component(use_beam=True)
+@tfx.dsl.components.component(use_beam=True)
 def TransformRatingsComponent(
   examples: Channel[Examples],
   schema: Channel[Schema],
