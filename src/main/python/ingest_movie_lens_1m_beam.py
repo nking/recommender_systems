@@ -179,6 +179,8 @@ def join_and_split(\
 
 if __name__ == "__main__":
 
+  #TODO: move this out of source code and into test code
+
   import apache_beam as beam
 
   ratings_uri = "../resources/ml-1m/ratings.dat"

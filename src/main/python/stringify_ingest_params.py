@@ -34,6 +34,8 @@ def stringify_ingest_params(ratings_uri : str, movies_uri : str, users_uri : str
   return serialized
 
 if __name__ == "__main__":
+  # TODO: move this out of source code and into test code
+
   _ratings_uri = "ratings.dat"
   _movies_uri = "movies.dat"
   _users_uri = "users.dat"
