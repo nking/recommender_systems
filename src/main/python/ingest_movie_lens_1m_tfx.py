@@ -14,7 +14,7 @@ from tfx.types import artifact
 from tfx.types import channel
 from tfx.types import standard_artifacts
 from tfx.types.standard_artifacts import Examples
-from tfx.types.artifact import Outputs
+#from tfx.types.artifact import Outputs
 
 import json
 from tfx.utils import json_utils
@@ -24,7 +24,7 @@ from tfx.utils import json_utils
 @tfx.dsl.components.component(use_beam=True)
 def ReadMergeAndSplitComponent(\
   input_dict_ser: standard_artifacts.String,
-  output_examples: Outputs[Examples]
+  output_examples: tfx.dsl.components.OutputArtifact[Examples]
   ) -> None:
   '''
   :param input_dict_ser: a json stringified dictionary of the folling:
