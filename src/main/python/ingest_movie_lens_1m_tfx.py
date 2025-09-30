@@ -1,26 +1,85 @@
 import apache_beam as beam
-from ingest_movie_lens_1m_beam import merge_and_split
+from ingest_movie_lens_1m_beam import join_and_split
 
 import os
-from tfx import v1 as tfx
-import tensorflow as tf
-from tfx.components.example_gen import base_example_gen_executor
-#from tfx.dsl.component.experimental.decorators import component
-from tfx.types import standard_artifacts
-from tfx.types import standard_component_specs
-from tfx_bsl.public import tfxio
+import absl
+import json
+import pprint
+import tempfile
 
-import typing
+from typing import Any, Dict, List, Text
+
+import numpy as np
+import tensorflow as tf
+import tensorflow_datasets as tfds
+import tensorflow_recommenders as tfrs
+import apache_beam as beam
+
+from absl import logging
+
+from tfx.components.example_gen.base_example_gen_executor import BaseExampleGenExecutor
+from tfx.components.example_gen.component import FileBasedExampleGen
+from tfx.components.example_gen import utils
+from tfx.dsl.components.base import executor_spec
+
 from tfx.types import artifact
+from tfx.types import artifact_utils
 from tfx.types import channel
 from tfx.types import standard_artifacts
 from tfx.types.standard_artifacts import Examples
-#from tfx.types.artifact import Outputs
+
+from tfx.dsl.component.experimental.annotations import InputArtifact
+from tfx.dsl.component.experimental.annotations import OutputArtifact
+from tfx.dsl.component.experimental.annotations import Parameter
+from tfx.dsl.component.experimental.decorators import component
+from tfx.types.experimental.simple_artifacts import Dataset
+
+from tfx import v1 as tfx
+from tfx.orchestration.experimental.interactive.interactive_context import InteractiveContext
+
+# Set up logging.
+tf.get_logger().propagate = False
+absl.logging.set_verbosity(absl.logging.INFO)
+pp = pprint.PrettyPrinter()
+
+print(f"TensorFlow version: {tf.__version__}")
+print(f"TFX version: {tfx.__version__}")
 
 import json
 from tfx.utils import json_utils
 
+# for a TFX pipeline, we want the ingestion to be performed by
+# an ExampleGen component
+# that accepts input data and formats it as tf.Examples
 #can constrain the python version with:
+class MovieLens1mExecutor(BaseExampleGenExecutor):
+  def GetInputSourceToExamplePTransform(self) -> beam.PTransform:
+    """Returns PTransform for TF Dataset to TF examples."""
+    return _TFDatasetToExample
+
+@beam.ptransform_fn
+@beam.typehints.with_input_types(beam.Pipeline)
+@beam.typehints.with_output_types(tf.train.Example)
+def _TIngestMergeSplitExample(  # pylint: disable=invalid-name
+    pipeline: beam.Pipeline,
+    exec_properties: Dict[str, Any],
+    split_pattern: str
+    ) -> beam.pvalue.PCollection:
+    """Read a TensorFlow Dataset and create tf.Examples"""
+    custom_config = json.loads(exec_properties['custom_config'])
+    dataset_name = custom_config['dataset']
+    split_name = custom_config['split']
+
+    builder = tfds.builder(dataset_name)
+    builder.download_and_prepare()
+
+    return (pipeline
+            | 'MakeExamples' >> tfds.beam.ReadFromTFDS(builder, split=split_name)
+            | 'AsNumpy' >> beam.Map(tfds.as_numpy)
+            | 'ToDict' >> beam.Map(dict)
+            | 'ToTFExample' >> beam.Map(utils.dict_to_example)
+            )
+
 # base_image="python:3.11-slim")
 @tfx.dsl.components.component(use_beam=True)
 def ReadMergeAndSplitComponent(\
@@ -68,12 +127,12 @@ def ReadMergeAndSplitComponent(\
 
   with beam.Pipeline() as pipeline:
     # ratings is a tuple of the partitions
-    ratings = merge_and_split(pipeline=pipeline, \
-                            ratings_uri=ratings_uri, movies_uri=movies_uri, \
-                            users_uri=users_uri, \
-                            ratings_key_dict=ratings_key_dict, \
-                            users_key_dict=users_key_dict, \
-                            movies_key_dict=movies_key_dict, partitions=partitions)
+    ratings = join_and_split(pipeline=pipeline, \
+                             ratings_uri=ratings_uri, movies_uri=movies_uri, \
+                             users_uri=users_uri, \
+                             ratings_key_dict=ratings_key_dict, \
+                             users_key_dict=users_key_dict, \
+                             movies_key_dict=movies_key_dict, buckets=partitions)
 
     #The output_examples.uri is managed by TFX's ML Metadata (MLMD)
     # system and the orchestrator (e.g., Apache Airflow,

@@ -5,7 +5,14 @@ libraries:
   - TensorFlow Transform
   - tfx_bsl
 
-need to use a venv because of the earlier version of python
+need to use a conda venv because of the earlier version of python
+with python 3.10, these are the versions to install:
+pip -q install pyarrow==10.0.1
+pip -q install apache-beam==2.59.0
+pip -q install tensorflow==2.16.1
+pip -q install tfx==1.16.0
+#pip -q install tensorflow-transform==1.16.0
+tfx installs many dependencies listed from the github README or pypi 
 
 TFX is not available for all architectures.  e.g. apple arm m4 pro.
 
