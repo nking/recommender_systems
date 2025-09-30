@@ -2,6 +2,7 @@ import apache_beam as beam
 from ingest_movie_lens_1m_beam import merge_and_split
 
 import os
+from tfx import v1 as tfx
 import tensorflow as tf
 from tfx.components.example_gen import base_example_gen_executor
 #from tfx.dsl.component.experimental.decorators import component

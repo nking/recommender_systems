@@ -3,6 +3,7 @@
 import apache_beam as beam
 import tensorflow as tf
 import tensorflow_transform as tft
+from tfx import v1 as tfx
 
 def preprocessing_fn(inputs):
   """Defines the feature engineering steps for the model."""
