@@ -24,7 +24,7 @@ from tfx.utils import json_utils
 # base_image="python:3.11-slim")
 @tfx.dsl.components.component(use_beam=True)
 def ReadMergeAndSplitComponent(\
-  input_dict_ser: standard_artifacts.String,\
+  input_dict_ser: tfx.dsl.components.InputArtifact[standard_artifacts.String],\
   output_examples: tfx.dsl.components.OutputArtifact[Examples]\
   ) -> None:
   '''
