@@ -4,7 +4,7 @@ from ingest_movie_lens_1m_beam import merge_and_split
 import os
 import tensorflow as tf
 from tfx.components.example_gen import base_example_gen_executor
-from tfx.dsl.components import component
+from tfx.dsl.component.experimental.decorators import component
 from tfx.types import standard_artifacts
 from tfx.types import standard_component_specs
 from tfx_bsl.public import tfxio
