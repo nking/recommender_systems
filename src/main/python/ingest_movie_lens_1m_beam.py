@@ -7,10 +7,6 @@ from typing import Any, Dict, List, Text
 from apache_beam.pvalue import TaggedOutput
 from CustomUTF8Coder import CustomUTF8Coder
 
-#tf.train.Example is for independent, fixed-size examples
-#tf.train.SequenceExample is for variable-length sequential data,
-#    such as sentences, time series, or videos.
-
 class LeftJoinFn(beam.DoFn):
   '''
   left join of left PCollection rows with right PCollection row.
@@ -194,7 +190,14 @@ if __name__ == "__main__":
   delim = "::"
   partitions = [80, 10, 10]
 
-  with beam.Pipeline() as pipeline:
+  #DirectRunner is default pipeline if options is not specified
+  from apache_beam.options.pipeline_options import PipelineOptions, \
+    StandardOptions
+  # Define your pipeline options
+  options = PipelineOptions(['--runner=SparkRunner', \
+    '--spark_master_url=local[*]' ])
+
+  with beam.Pipeline(options=options) as pipeline:
     ratings = join_and_split(pipeline=pipeline, \
       ratings_uri=ratings_uri, movies_uri=movies_uri, \
       users_uri=users_uri, headers_present=headers_present, delim=delim,\
