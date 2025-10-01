@@ -18,6 +18,9 @@ from tfx.components.example_gen.base_example_gen_executor import BaseExampleGenE
 #from tfx.components.example_gen import utils
 from tfx.dsl.components.base import executor_spec
 from tfx.dsl.components.base import base_component
+from tfx.types.component_spec import ChannelParameter
+from tfx.types.component_spec import ComponentSpec
+from tfx.types.component_spec import ExecutionParameter
 
 #from tfx.types import artifact_utils
 #from tfx.types import standard_artifacts
@@ -52,7 +55,7 @@ from tfx.proto import example_gen_pb2
 #tf.train.SequenceExample is for variable-length sequential data,
 #    such as sentences, time series, or videos.
 
-class IngestMovieLensExecutorSpec(types.ComponentSpec):
+class IngestMovieLensExecutorSpec(ComponentSpec):
   """ComponentSpec for Custom TFX MovieLensExecutor Component."""
   PARAMETERS = {
     # These are parameters that will be passed in the call to
@@ -221,12 +224,12 @@ class IngestMovieLensComponent(base_component.BaseComponent):
     movies_key_col_dict : Dict[str,int], \
     bucket_names : List[str], \
     buckets : List[int], \
-    output_examples : Optional[types.Channel] = None):
+    output_examples : Optional[tfx.types.Channel] = None):
 
     print(f'DEBUG IngestMovieLensComponent init')
 
     if not output_examples:
-      output_examples = types.Channel(type=standard_artifacts.Examples)
+      output_examples = tfx.types.Channel(type=standard_artifacts.Examples)
 
     spec = IngestMovieLensExecutorSpec(
       name=name, ratings_uri=ratings_uri, movies_uri=movies_uri,\
