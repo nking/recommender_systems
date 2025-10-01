@@ -98,6 +98,44 @@ class MovieLens1mExecutor(BaseExampleGenExecutor):
 
     raise RuntimeError('not yet finished')
 
+    # see line 200-ish of
+    #https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/components/example_gen/base_example_gen_executor.py#L120
+
+    #split the data
+    from tfx.proto import example_gen_pb2
+
+    splits = []
+    for i, b in enumerate(buckets):
+      splits.append(example_gen_pb2.SplitConfig.Split(name=f'part_{i}', percentage=b))
+
+    output_config = example_gen_pb2.Output(
+      split_config=example_gen_pb2.SplitConfig(
+        splits=splits
+      )
+    )
+    #split.hash_buckets
+    #
+
+    buckets2 = []
+    total_buckets = 0
+    for split in output_config.split_config.splits:
+      total_buckets += split.hash_buckets
+      buckets.append(total_buckets)
+    example_splits = (
+      pipeline
+      | 'InputToRecord' >>
+      # pylint: disable=no-value-for-parameter
+      input_to_record(exec_properties, input_config.splits[0].pattern)
+      | 'SplitData' >> beam.Partition(_PartitionFn, len(buckets),
+                                      buckets,
+                                      output_config.split_config))
+
+
+    result = {}
+    for index, example_split in enumerate(example_splits):
+      result[split_names[index]] = example_split
+    return result
+
 if __name__ == "__main__":
 
   #TODO: move this out of source code and into test code
