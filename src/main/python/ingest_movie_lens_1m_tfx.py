@@ -118,8 +118,8 @@ class MovieLens1mExecutor(BaseExampleGenExecutor):
       ratings_uri=exec_properties['ratings_uri'], \
       movies_uri=exec_properties['movies_uri'], \
       users_uri=exec_properties['users_uri'], \
-      headers_present=headers_present\,
-      delim=exec_properties['delim'],\
+      headers_present=headers_present, \
+      delim=exec_properties['delim'], \
       ratings_key_dict=exec_properties['ratings_key_col_dict'], \
       users_key_dict=exec_properties['users_key_col_dict'], \
       movies_key_dict=exec_properties['movies_key_col_dict'])
@@ -183,36 +183,35 @@ if __name__ == "__main__":
     users_uri:users_uri, ratings_key_col_dict:ratings_key_col_dict, \
     movies_key_col_dict:movies_key_col_dict, \
     users_key_col_dict:users_key_col_dict, \
-    headers_present:headers_present, delim=delim, buckets=buckets \
+    headers_present:headers_present, delim:delim, buckets:buckets \
   }
 
   context = InteractiveContext()
 
   ratings_example_gen = (MovieLens1mExecutor(\
-    exec_properties: exec_properties,\
+    exec_properties=exec_properties,\
     custom_executor_spec=executor_spec.ExecutorClassSpec(MovieLens1mExecutor)))
+
   context.run(ratings_example_gen, enable_cache=True)
 
+  print("context run finished")
+
   #https://www.tensorflow.org/tfx/tutorials/tfx/recommenders#create_inspect_examples_utility
-  def inspect_examples(component,
-                       channel_name='examples',
-                       split_name='train',
-                       num_examples=1):
+  def inspect_examples(component, channel_name='examples', split_name='train', num_examples=1):
     # Get the URI of the output artifact, which is a directory
     full_split_name = 'Split-{}'.format(split_name)
-    print(
-      'channel_name: {}, split_name: {} (\"{}\"), num_examples: {}\n'.format(
-        channel_name, split_name, full_split_name, num_examples))
-    train_uri = os.path.join(
-      component.outputs[channel_name].get()[0].uri, full_split_name)
+
+    print(\
+      'channel_name: {}, split_name: {} (\"{}\"), num_examples: {}\n'.format(\
+      channel_name, split_name, full_split_name, num_examples))
+
+    train_uri = os.path.join(component.outputs[channel_name].get()[0].uri, full_split_name)
 
     # Get the list of files in this directory (all compressed TFRecord files)
-    tfrecord_filenames = [os.path.join(train_uri, name)
-                          for name in os.listdir(train_uri)]
+    tfrecord_filenames = [os.path.join(train_uri, name) for name in os.listdir(train_uri)]
 
     # Create a `TFRecordDataset` to read these files
-    dataset = tf.data.TFRecordDataset(tfrecord_filenames,
-                                      compression_type="GZIP")
+    dataset = tf.data.TFRecordDataset(tfrecord_filenames, compression_type="GZIP")
 
     # Iterate over the records and print them
     for tfrecord in dataset.take(num_examples):
@@ -222,3 +221,5 @@ if __name__ == "__main__":
       pp.pprint(example)
 
   inspect_examples(ratings_example_gen)
+
+  print("tests done")
