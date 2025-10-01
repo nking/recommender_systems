@@ -1,5 +1,5 @@
 # recommender_systems
-repository for some of the code at https://www.kaggle.com/code/nicholeasuniquename/recommender-systems
+repository for refactoring of code at https://www.kaggle.com/code/nicholeasuniquename/recommender-systems to use MLOps
 
 NOT COMPLETE YET
 
