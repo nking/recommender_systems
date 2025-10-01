@@ -23,8 +23,7 @@ from tfx.types.component_spec import ComponentSpec
 from tfx.types.component_spec import ExecutionParameter
 
 #from tfx.types import artifact_utils
-#from tfx.types import standard_artifacts
-from tfx.types.standard_artifacts import Examples
+from tfx.types import standard_artifacts
 
 #from tfx.dsl.component.experimental.annotations import InputArtifact
 #from tfx.dsl.component.experimental.annotations import OutputArtifact
