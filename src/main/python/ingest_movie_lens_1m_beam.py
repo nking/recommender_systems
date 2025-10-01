@@ -246,7 +246,7 @@ if __name__ == "__main__":
   #pyspark 3.2.4 is compatible with java >= 8 and <= 11 and python >= 3.6 and <= 3.9
   # start Docker, then use portable SparkRunner
   # https://beam.apache.org/documentation/runners/spark/
-  from pyspark import SparkConf
+  #from pyspark import SparkConf
   options = PipelineOptions(\
     #runner='SparkRunner',\
     #runner='PortableRunner',\
