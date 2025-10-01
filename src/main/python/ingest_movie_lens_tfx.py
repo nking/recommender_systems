@@ -242,15 +242,16 @@ class IngestMovieLensComponent(base_component.BaseComponent):
 
 if __name__ == "__main__":
 
+  from tfx.orchestration.local.local_dag_runner import LocalDagRunner
+
   #TODO: move this out of source code and into test code
   #  ... unittest.mock in Python
   # see https://github.com/tensorflow/tfx/blob/master/tfx/components/example_gen/base_example_gen_executor_test.py
 
+  print(f'begin test')
+
   from tfx.dsl.components.base import executor_spec
   print(f'executor_spec={executor_spec.ExecutorClassSpec(IngestMovieLensExecutor)}')
-
-  from tfx.orchestration.experimental.interactive.interactive_context import \
-    InteractiveContext
 
   kaggle = True
   if kaggle:
@@ -272,7 +273,7 @@ if __name__ == "__main__":
   # use json.dumps
   headers_present = False
   buckets = [80, 10, 10]
-  bucket_names = ['train', 'evel', 'test']
+  bucket_names = ['train', 'eval', 'test']
 
   #exec_properties = {ratings_uri:ratings_uri, movies_uri:movies_uri, \
   #  users_uri:users_uri, ratings_key_col_dict:ratings_key_col_dict, \
@@ -282,7 +283,7 @@ if __name__ == "__main__":
   #}
   #exec_properties = json.dumps(exec_properties)
 
-  context = InteractiveContext()
+  #context = InteractiveContext()
 
   ratings_example_gen = IngestMovieLensComponent( \
     name=name, ratings_uri=ratings_uri, movies_uri=movies_uri, \
@@ -293,11 +294,9 @@ if __name__ == "__main__":
     bucket_names=bucket_names, buckets=buckets \
   )
 
-  context.run(component=ratings_example_gen, enable_cache=True)
+  my_pipeline = pipeline.Pipeline( components=[ratings_example_gen] )
 
-  print("context run finished")
-
-  #pipeline.Pipeline( components=[example_gen, hello, statistics_gen, ...]
+  LocalDagRunner().run(my_pipeline)
 
   #https://www.tensorflow.org/tfx/tutorials/tfx/recommenders#create_inspect_examples_utility
   def inspect_examples(component, channel_name='examples', split_name='train', num_examples=1):
