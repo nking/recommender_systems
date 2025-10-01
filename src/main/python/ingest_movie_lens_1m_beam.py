@@ -224,9 +224,15 @@ if __name__ == "__main__":
 
   import apache_beam as beam
 
-  ratings_uri = "../resources/ml-1m/ratings.dat"
-  movies_uri = "../resources/ml-1m/movies.dat"
-  users_uri = "../resources/ml-1m/users.dat"
+  kaggle = True
+  if kaggle:
+    prefix = '/kaggle/working/ml-1m/'
+  else:
+    prefix = "../resources/ml-1m/"
+  ratings_uri = f"{prefix}ratings.dat"
+  movies_uri = f"{prefix}movies.dat"
+  users_uri = f"{prefix}users.dat"
+
   ratings_key_col_dict = {"user_id": 0, "movie_id": 1, "rating": 2, "timestamp": 3}
   movies_key_col_dict = {"movie_id": 0, "title": 1, "genres": 2}
   users_key_col_dict = {"user_id": 0, "gender": 1, "age": 2, \
