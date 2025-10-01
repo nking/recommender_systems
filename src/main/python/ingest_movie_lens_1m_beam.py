@@ -78,14 +78,13 @@ def merge_by_key(l_pc : beam.pvalue.PCollection, r_pc : beam.pvalue.PCollection,
 #  Dict[str, int], Dict[str, int], Dict[str, int], \
 #  List[int])
 #@beam.typehints.with_output_types(Dict[str, beam.pvalue.PCollection])
-def join_and_split(\
+def ingest_and_join(\
   #pipeline: BeamComponentParameter[beam.Pipeline],
   pipeline : beam.pipeline.Pipeline, \
   ratings_uri : str, movies_uri : str, users_uri : str, \
   headers_present: bool, delim: str, \
   ratings_key_dict : Dict[str, int], movies_key_dict : Dict[str, int], \
-  users_key_dict : Dict[str, int], \
-  buckets : List[int]) -> Dict[str, beam.pvalue.PCollection]:
+  users_key_dict : Dict[str, int]) -> Dict[str, beam.pvalue.PCollection]:
   '''
   reads in the 3 expected files from the uris given, and then uses
   left joins of ratings with user information and movie genres to
@@ -142,6 +141,50 @@ def join_and_split(\
   ratings = merge_by_key(ratings_1, movies_pc, \
     ratings_key_dict['movie_id'], movies_key_dict['movie_id'],\
     filter_cols=[movies_key_dict['title']])
+
+  return ratings
+
+#@beam.ptransform_fn
+#@beam.typehints.with_input_types(beam.Pipeline, str, str, str,\
+#  Dict[str, int], Dict[str, int], Dict[str, int], \
+#  List[int])
+#@beam.typehints.with_output_types(Dict[str, beam.pvalue.PCollection])
+def ingest_join_and_split(\
+  #pipeline: BeamComponentParameter[beam.Pipeline],
+  pipeline : beam.pipeline.Pipeline, \
+  ratings_uri : str, movies_uri : str, users_uri : str, \
+  headers_present: bool, delim: str, \
+  ratings_key_dict : Dict[str, int], movies_key_dict : Dict[str, int], \
+  users_key_dict : Dict[str, int], \
+  buckets : List[int]) -> Dict[str, beam.pvalue.PCollection]:
+  '''
+  reads in the 3 expected files from the uris given, and then uses
+  left joins of ratings with user information and movie genres to
+  make a PCollection, and then splits the PCollection into the
+  given buckets, randomly, returning a dictionary of the partitioned
+  PCollections.
+
+  :param pipeline:
+  :param ratings_uri:
+  :param movies_uri:
+  :param users_uri:
+  :param headers_present:
+  :param ratings_key_dict: for ratings file, a dictionary with key:values
+    being header_column_name:column number
+  :param movies_key_dict: for movies file, a dictionary with key:values being header_column_name:column number
+  :param users_key_dict: for users file, a dictionary with key:values being header_column_name:column number
+  :param buckets: list of partitions in percent
+  :return: a tuple of PCollection of ratings with joined information from users and movies where each tuple is for a
+     partition specified in partition list
+  '''
+
+  # user_id,movie_id,rating,gender,age,occupation,zipcode,genres
+  ratings = ingest_and_join(pipeline=pipeline, \
+    ratings_uri=ratings_uri, movies_uri=movies_uri, \
+    users_uri=users_uri, headers_present=headers_present, delim=delim,\
+    ratings_key_dict=ratings_key_col_dict, \
+    users_key_dict=users_key_col_dict, \
+    movies_key_dict=movies_key_col_dict)
 
   #print(f'RATINGS type{type(ratings)}')
   #ratings | f'ratings_{time.time_ns()}' >> beam.Map(print)
@@ -211,13 +254,13 @@ if __name__ == "__main__":
  # with beam.Pipeline() as pipeline:
 
   with beam.Pipeline() as pipeline:
-    ratings = join_and_split(pipeline=pipeline, \
-      ratings_uri=ratings_uri, movies_uri=movies_uri, \
-      users_uri=users_uri, headers_present=headers_present, delim=delim,\
-      ratings_key_dict=ratings_key_col_dict, \
-      users_key_dict=users_key_col_dict, \
-      movies_key_dict=movies_key_col_dict, \
-      buckets=partitions)
+    ratings = ingest_join_and_split(pipeline=pipeline, \
+                                    ratings_uri=ratings_uri, movies_uri=movies_uri, \
+                                    users_uri=users_uri, headers_present=headers_present, delim=delim, \
+                                    ratings_key_dict=ratings_key_col_dict, \
+                                    users_key_dict=users_key_col_dict, \
+                                    movies_key_dict=movies_key_col_dict, \
+                                    buckets=partitions)
 
     from apache_beam.testing.util import assert_that, is_not_empty
 

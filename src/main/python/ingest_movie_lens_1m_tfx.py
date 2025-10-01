@@ -1,5 +1,5 @@
 import apache_beam as beam
-from ingest_movie_lens_1m_beam import join_and_split
+from ingest_movie_lens_1m_beam import ingest_and_join
 
 import os
 import absl
@@ -48,111 +48,75 @@ print(f"TFX version: {tfx.__version__}")
 import json
 from tfx.utils import json_utils
 
+#tf.train.Example is for independent, fixed-size examples
+#tf.train.SequenceExample is for variable-length sequential data,
+#    such as sentences, time series, or videos.
+
 # for a TFX pipeline, we want the ingestion to be performed by
-# an ExampleGen component
-# that accepts input data and formats it as tf.Examples
-#can constrain the python version with:
+# an ExampleGen component that accepts input data and formats it as tf.Examples
 class MovieLens1mExecutor(BaseExampleGenExecutor):
-  def GetInputSourceToExamplePTransform(self) -> beam.PTransform:
-    """Returns PTransform for TF Dataset to TF examples."""
-    return _TFDatasetToExample
+  def GenerateExamplesByBeam(self, \
+    pipeline: beam.Pipeline, \
+    exec_properties: Dict[str, Any]\
+  ) -> Dict[str, beam.pvalue.PCollection]:
+    '''
+    :param pipeline:
+    :param exec_properties: is a dictionary holding:
+      key = "ratings_uri", value = uri for ratings file in ml1m format,
+      key = "movies_uri", value = uri for movies file in ml1m format,
+      key = "users_uri", value = uri for users file in ml1m format,
+      key = headers_present, value = Bool for whether of not the first
+        line in the ratings, movies, and users files are headers.
+      key = delim, value = the delimiter used between columns in a row.
+        e.g. "::"
+      key = "ratings_key_col_dict", value = dictionary for ratings_uri of
+        keys=coulmn names and values = the column numbers,
+      key = "movies_key_col_dict", value = dictionary for ratings_uri of
+        keys=coulmn names and values = the column numbers,
+      key = "users_key_col_dict", value = dictionary for ratings_uri of
+        keys=coulmn names and values = the column numbers,
+      key = buckets, value = a list of integers as percents of the whole,
 
-@beam.ptransform_fn
-@beam.typehints.with_input_types(beam.Pipeline)
-@beam.typehints.with_output_types(tf.train.Example)
-def _TIngestMergeSplitExample(  # pylint: disable=invalid-name
-    pipeline: beam.Pipeline,
-    exec_properties: Dict[str, Any],
-    split_pattern: str
-    ) -> beam.pvalue.PCollection:
-    """Read a TensorFlow Dataset and create tf.Examples"""
-    custom_config = json.loads(exec_properties['custom_config'])
-    dataset_name = custom_config['dataset']
-    split_name = custom_config['split']
+    :return:  a dictionary of the merged, split data as keys=name, values
+      = PCollection for a partition
+    '''
 
-    builder = tfds.builder(dataset_name)
-    builder.download_and_prepare()
+    # Get input path from artifacts
 
-    return (pipeline
-            | 'MakeExamples' >> tfds.beam.ReadFromTFDS(builder, split=split_name)
-            | 'AsNumpy' >> beam.Map(tfds.as_numpy)
-            | 'ToDict' >> beam.Map(dict)
-            | 'ToTFExample' >> beam.Map(utils.dict_to_example)
-            )
+    #apache_beam.pvalue.DoOutputsTuple
+    ratings_tuple = ingest_and_join(pipeline=pipeline, \
+      ratings_uri=exec_properties['ratings_uri'], \
+      movies_uri=exec_properties['movies_uri'], \
+      users_uri=exec_properties['users_uri'], \
+      headers_present=exec_properties['headers_present']\,
+      delim=exec_properties['delim'],\
+      ratings_key_dict=exec_properties['ratings_key_col_dict'], \
+      users_key_dict=exec_properties['users_key_col_dict'], \
+      movies_key_dict=exec_properties['movies_key_col_dict'])
 
-# base_image="python:3.11-slim")
-@tfx.dsl.components.component(use_beam=True)
-def ReadMergeAndSplitComponent(\
-  input_dict_ser: standard_artifacts.String,\
-  output_examples: tfx.dsl.components.OutputArtifact[Examples]\
-  ) -> None:
-  '''
-  :param input_dict_ser: a json stringified dictionary of the folling:
-    key = "ratings.dat", value = uri for ratings file in ml1m format,
-    key = "movies.dat", value = uri for movies file in ml1m format,
-    key = "users.dat", value = uri for users file in ml1m format,
-    key = "ratings_key_dict", value = dictionary for ratings.dat of
-      keys=coumn names and values = the column numbers,
-    key = "movies_key_dict", value = dictionary for movies.dat of
-      keys=coumn names and values = the column numbers,
-    key = "users_key_dict", value = dictionary for users.dat of
-      keys=coumn names and values = the column numbers,
-    key = partitions, value = a list of integers as percents of the whole
+    buckets=exec_properties['buckets']
 
-    NOTE: to convert the dictionary into a string see stringify_ingest_params.py
+    raise RuntimeError('not yet finished')
 
-  :param output_examples: where the ratings with user and movie merge
-    partitioned Examples are stored.  Do not pass this in as input.
-    This is declared in the method but should not be passed in by user.
-    The output_examples.uri is managed by TFX's ML Metadata (MLMD)
-    system and the orchestrator (e.g., Apache Airflow,
-    Kubeflow Pipelines). When this component executes,
-    TFX automatically creates a directory in the pipeline's workspace
-    for this output artifact and provides your component with the
-    path to write the Examples.data
-  '''
-  input_dict = json.loads(input_dict_ser)
+if __name__ == "__main__":
 
-  ratings_uri = input_dict['ratings.dat']
-  movies_uri = input_dict['movies.dat']
-  users_uri = input_dict['users.dat']
+  #TODO: move this out of source code and into test code
 
-  ratings_key_dict = input_dict['ratings_key_dict']
-  movies_key_dict = input_dict['movies_key_dict']
-  users_key_dict = input_dict['users_key_dict']
+  ratings_uri = "../resources/ml-1m/ratings.dat"
+  movies_uri = "../resources/ml-1m/movies.dat"
+  users_uri = "../resources/ml-1m/users.dat"
+  ratings_key_col_dict = {"user_id": 0, "movie_id": 1, "rating": 2,
+                          "timestamp": 3}
+  movies_key_col_dict = {"movie_id": 0, "title": 1, "genres": 2}
+  users_key_col_dict = {"user_id": 0, "gender": 1, "age": 2, \
+                        "occupation": 3, "zipcode": 4}
+  headers_present = False
+  delim = "::"
+  buckets = [80, 10, 10]
 
-  partitions = input_dict['partitions']
-
-  #pipeline = self._MakeBeamPipeline()
-
-  with beam.Pipeline() as pipeline:
-    # ratings is a tuple of the partitions
-    ratings = join_and_split(pipeline=pipeline, \
-                             ratings_uri=ratings_uri, movies_uri=movies_uri, \
-                             users_uri=users_uri, \
-                             ratings_key_dict=ratings_key_dict, \
-                             users_key_dict=users_key_dict, \
-                             movies_key_dict=movies_key_dict, buckets=partitions)
-
-    #The output_examples.uri is managed by TFX's ML Metadata (MLMD)
-    # system and the orchestrator (e.g., Apache Airflow,
-    # Kubeflow Pipelines). When this component executes,
-    # TFX automatically creates a directory in the pipeline's workspace
-    # for this output artifact and provides your component with the
-    # path to write the Examples.data
-
-    #write to output.  this could be improved
-    names = []
-    for i, part in enumerate(ratings):
-      # Write to the output artifact's URI
-      # io_utils.get_uri_for_writing_result(output_examples.uri)
-      names.append(f'part_{i}_')
-      output_split_path = os.path.join(output_examples.uri, names[-1])
-      _ = part | f'write split {i}' >> beam.io.tfrecordio.WriteToTFRecord(\
-        file_path_prefix=output_split_path,
-        shard_name_template='',
-        # Use empty template if you want a single file or manage sharding explicitly
-        #file_name_suffix='.tfrecord',
-        coder=beam.coders.BytesCoder()
-    )
-    output_examples.split_names = str(names)
+  exec_properties = {ratings_uri:ratings_uri, movies_uri:movies_uri, \
+    users_uri:users_uri, ratings_key_col_dict:ratings_key_col_dict, \
+    movies_key_col_dict:movies_key_col_dict, \
+    users_key_col_dict:users_key_col_dict, \
+    headers_present:headers_present, delim=delim, buckets=buckets \
+  }

@@ -1,5 +1,7 @@
 see https://www.tensorflow.org/tfx/guide/custom_function_component
 
+see https://github.com/PacktPublishing/Building-Big-Data-Pipelines-with-Apache-Beam
+
 ============================
 Custom Python function components
 
