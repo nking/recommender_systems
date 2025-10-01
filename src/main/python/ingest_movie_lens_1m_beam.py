@@ -147,6 +147,8 @@ def join_and_split(\
   #ratings | f'ratings_{time.time_ns()}' >> beam.Map(print)
   #['user_id', 'movie_id', 'rating', 'gender', 'age', 'occupation', 'genres']
 
+  #TODO: look into extending BaseExampleGenExecutor for its split by buckets.
+  #it might handle the scatter-gather more efficiently
   def split_fn(row, num_partitions, ppartitions):
     # Using a deterministic hash function ensures the splits are consistent
     total = sum(ppartitions)
@@ -193,11 +195,22 @@ if __name__ == "__main__":
   #DirectRunner is default pipeline if options is not specified
   from apache_beam.options.pipeline_options import PipelineOptions, \
     StandardOptions
-  # Define your pipeline options
-  options = PipelineOptions(['--runner=SparkRunner', \
-    '--spark_master_url=local[*]' ])
 
-  with beam.Pipeline(options=options) as pipeline:
+  import argparse
+
+  #apache-beam 2.59.0 - 2.68.0 with SparkRunner supports pyspark 3.2.x
+  #but not 4.0.0
+  #pyspark 3.2.4 is compatible with java >= 8 and <= 11 and python >= 3.6 and <= 3.9
+
+  from pyspark import SparkConf
+  options = PipelineOptions(\
+    runner='SparkRunner',\
+    #spark_conf=spark_conf_list,\
+  )
+  #to use Sparkrunner:
+ # with beam.Pipeline() as pipeline:
+
+  with beam.Pipeline() as pipeline:
     ratings = join_and_split(pipeline=pipeline, \
       ratings_uri=ratings_uri, movies_uri=movies_uri, \
       users_uri=users_uri, headers_present=headers_present, delim=delim,\
@@ -210,6 +223,7 @@ if __name__ == "__main__":
 
     for k, v in ratings.items():
       assert_that(v, is_not_empty(), label=f'Assert Non-Empty {k} PCollection')
+    print(f'tests done')
 
     if False:
       pre = f'../../../bin/ml1m_ingest_'
