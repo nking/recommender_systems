@@ -111,9 +111,6 @@ def ingest_and_join(\
   else:
     skip = 0
 
-  if buckets is None or len(buckets)==0:
-    buckets = [100]
-
   # user_id,movie_id,rating
   ratings_pc = pipeline \
     | 'ReadRatings' >> beam.io.ReadFromText(ratings_uri, \
@@ -186,6 +183,9 @@ def ingest_join_and_split(\
     users_key_dict=users_key_col_dict, \
     movies_key_dict=movies_key_col_dict)
 
+  if buckets is None or len(buckets)==0:
+    buckets = [100]
+
   #print(f'RATINGS type{type(ratings)}')
   #ratings | f'ratings_{time.time_ns()}' >> beam.Map(print)
   #['user_id', 'movie_id', 'rating', 'gender', 'age', 'occupation', 'genres']
@@ -244,16 +244,16 @@ if __name__ == "__main__":
   #apache-beam 2.59.0 - 2.68.0 with SparkRunner supports pyspark 3.2.x
   #but not 4.0.0
   #pyspark 3.2.4 is compatible with java >= 8 and <= 11 and python >= 3.6 and <= 3.9
-
+  # start Docker, then use portable SparkRunner
+  # https://beam.apache.org/documentation/runners/spark/
   from pyspark import SparkConf
   options = PipelineOptions(\
-    runner='SparkRunner',\
+    #runner='SparkRunner',\
+    #runner='PortableRunner',\
+    runner='DirectRunner',\
     #spark_conf=spark_conf_list,\
   )
-  #to use Sparkrunner:
- # with beam.Pipeline() as pipeline:
-
-  with beam.Pipeline() as pipeline:
+  with beam.Pipeline(options=options) as pipeline:
     ratings = ingest_join_and_split(pipeline=pipeline, \
                                     ratings_uri=ratings_uri, movies_uri=movies_uri, \
                                     users_uri=users_uri, headers_present=headers_present, delim=delim, \
