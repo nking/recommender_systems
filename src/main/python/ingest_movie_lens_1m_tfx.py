@@ -32,7 +32,7 @@ from tfx import v1 as tfx
 
 # Set up logging.
 tf.get_logger().propagate = False
-absl.logging.set_verbosity(absl.logging.INFO)
+absl.logging.set_verbosity(absl.logging.DEBUG)
 pp = pprint.PrettyPrinter()
 
 print(f"TensorFlow version: {tf.__version__}")
@@ -84,28 +84,26 @@ class MovieLens1mExecutor(BaseExampleGenExecutor):
     bucket_names = exec_properties['bucket_names']
     buckets = exec_properties['buckets']
 
-    '''
     try:
-      headers_present = json.loads(exec_properties['headers_present'])
+      headers_present = json.loads(headers_present)
     except Exception as ex:
       err = f'exec_properties["headers_present"] must hold the result of json.dumps(True or False)'
       logger.error(f'ERROR: {err}: {ex}')
       raise ValueError(f'ERROR: {err}: {ex}')
 
     try:
-      buckets = json.loads(exec_properties['buckets'])
+      buckets = json.loads(buckets)
     except Exception as ex:
       err = f'exec_properties["buckets"] must hold the result of json.dumps(list of int)'
       logger.error(f'ERROR: {err}: {ex}')
       raise ValueError(f'ERROR: {err}: {ex}')
 
     try:
-      bucket_names = json.loads(exec_properties['bucket_names'])
+      bucket_names = json.loads(bucket_names)
     except Exception as ex:
       err = f'exec_properties["bucket_names"] must hold the result of json.dumps(list of str)'
       logger.error(f'ERROR: {err}: {ex}')
       raise ValueError(f'ERROR: {err}: {ex}')
-    '''
 
     if len(buckets) != len(bucket_names):
       err = (f'deserialized buckets must be same length as deserialized bucket_names'
@@ -175,9 +173,9 @@ if __name__ == "__main__":
 
   #these might need to be serialized into strings for tfx,
   # use json.dumps
-  headers_present = False
-  buckets = [80, 10, 10]
-  bucket_names = ['train', 'evel', 'test']
+  headers_present = json.dumps(False)
+  buckets = json.dumps([80, 10, 10])
+  bucket_names = json.dumps(['train', 'evel', 'test'])
 
   exec_properties = {ratings_uri:ratings_uri, movies_uri:movies_uri, \
     users_uri:users_uri, ratings_key_col_dict:ratings_key_col_dict, \
@@ -188,9 +186,9 @@ if __name__ == "__main__":
 
   context = InteractiveContext()
 
-  ratings_example_gen = (MovieLens1mExecutor(\
+  ratings_example_gen = MovieLens1mExecutor(\
     exec_properties=exec_properties,\
-    custom_executor_spec=executor_spec.ExecutorClassSpec(MovieLens1mExecutor)))
+    custom_executor_spec=executor_spec.ExecutorClassSpec(MovieLens1mExecutor))
 
   context.run(ratings_example_gen, enable_cache=True)
 
