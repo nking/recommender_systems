@@ -1,5 +1,5 @@
 import os
-from ingest_movie_lens_1m_tfx import *
+from ingest_movie_lens_tfx import *
 from stringify_ingest_params import stringify_ingest_params
 from tfx import v1 as tfx
 

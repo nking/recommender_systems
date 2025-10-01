@@ -8,13 +8,13 @@ from apache_beam.pvalue import TaggedOutput
 from CustomUTF8Coder import CustomUTF8Coder
 
 class LeftJoinFn(beam.DoFn):
-  '''
+  """
   left join of left PCollection rows with right PCollection row.
 
   if there is  more than one row in the right, a ValueError is thrown.
 
   :return returns merged rows
-  '''
+  """
   def __init__(self, right_filter_cols):
     self.right_filter_cols = right_filter_cols
 
@@ -27,7 +27,7 @@ class LeftJoinFn(beam.DoFn):
 
     for left in grouped_elements['left']:
       # join grouped_elements['left'] and grouped_elements['right'][0]
-      # merge, reorder etc as wanted
+      # merge, reorder etc. as wanted
       row = left.copy()
       for i, right in enumerate(grouped_elements['right'][0]):
         if i not in self.right_filter_cols:
@@ -41,7 +41,7 @@ class LeftJoinFn(beam.DoFn):
 def merge_by_key(l_pc : beam.pvalue.PCollection, r_pc : beam.pvalue.PCollection, \
   l_key_col : Dict[str, int], r_key_col : Dict[str, int], \
   filter_cols : List[int]) -> beam.pvalue.PCollection:
-  '''
+  """
   merges PCollection l_pc with PCollection r_pc on the columns given by
   l_key_col and r_key_col.  While merging, it excludes any columns
   in the right dataset given by filter_cols.
@@ -55,7 +55,7 @@ def merge_by_key(l_pc : beam.pvalue.PCollection, r_pc : beam.pvalue.PCollection,
   :param r_key_col:
   :param filter_cols:
   :return: a merged PCollection
-  '''
+  """
   # need unique names for each beam process, so adding a timestamp
   ts = time.time_ns()
   l_keyed = l_pc | f'kv_l_{ts}' >> beam.Map(lambda x: (x[l_key_col], x))
@@ -85,7 +85,7 @@ def ingest_and_join(\
   headers_present: bool, delim: str, \
   ratings_key_dict : Dict[str, int], movies_key_dict : Dict[str, int], \
   users_key_dict : Dict[str, int]) -> Dict[str, beam.pvalue.PCollection]:
-  '''
+  """
   reads in the 3 expected files from the uris given, and then uses
   left joins of ratings with user information and movie genres to
   make a PCollection, and then splits the PCollection into the
@@ -104,7 +104,7 @@ def ingest_and_join(\
   :param buckets: list of partitions in percent
   :return: a tuple of PCollection of ratings with joined information from users and movies where each tuple is for a
      partition specified in partition list
-  '''
+  """
 
   if headers_present:
     skip = 1
@@ -154,7 +154,7 @@ def ingest_join_and_split(\
   ratings_key_dict : Dict[str, int], movies_key_dict : Dict[str, int], \
   users_key_dict : Dict[str, int], \
   buckets : List[int]) -> Dict[str, beam.pvalue.PCollection]:
-  '''
+  """
   reads in the 3 expected files from the uris given, and then uses
   left joins of ratings with user information and movie genres to
   make a PCollection, and then splits the PCollection into the
@@ -173,7 +173,7 @@ def ingest_join_and_split(\
   :param buckets: list of partitions in percent
   :return: a tuple of PCollection of ratings with joined information from users and movies where each tuple is for a
      partition specified in partition list
-  '''
+  """
 
   # user_id,movie_id,rating,gender,age,occupation,zipcode,genres
   ratings = ingest_and_join(pipeline=pipeline, \

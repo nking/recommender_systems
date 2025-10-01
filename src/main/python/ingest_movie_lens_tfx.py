@@ -1,5 +1,5 @@
 import apache_beam as beam
-from ingest_movie_lens_1m_beam import ingest_and_join
+from ingest_movie_lens_beam import ingest_and_join
 
 import os
 import absl
@@ -17,6 +17,7 @@ from absl import logging
 from tfx.components.example_gen.base_example_gen_executor import BaseExampleGenExecutor
 #from tfx.components.example_gen import utils
 from tfx.dsl.components.base import executor_spec
+from tfx.dsl.components.base import base_component
 
 #from tfx.types import artifact_utils
 #from tfx.types import standard_artifacts
@@ -29,6 +30,10 @@ from tfx.types.standard_artifacts import Examples
 #from tfx.types.experimental.simple_artifacts import Dataset
 
 from tfx import v1 as tfx
+
+'''
+building a custom component
+'''
 
 # Set up logging.
 tf.get_logger().propagate = False
@@ -47,16 +52,55 @@ from tfx.proto import example_gen_pb2
 #tf.train.SequenceExample is for variable-length sequential data,
 #    such as sentences, time series, or videos.
 
+class IngestMovieLensExecutorSpec(types.ComponentSpec):
+  """ComponentSpec for Custom TFX MovieLensExecutor Component."""
+  PARAMETERS = {
+    # These are parameters that will be passed in the call to
+    # create an instance of this component.
+    'name': ExecutionParameter(type=Text),
+    'ratings_uri' : ExecutionParameter(type=Text),
+    'movies_uri' : ExecutionParameter(type=Text),
+    'users_uri' : ExecutionParameter(type=Text),
+    'headers_present' : ExecutionParameter(type=bool),
+    'delim' : ExecutionParameter(type=Text),
+    'ratings_key_col_dict' : ExecutionParameter(type=Dict[str,int]),
+    'users_key_col_dict' : ExecutionParameter(type=Dict[str,int]),
+    'movies_key_col_dict' : ExecutionParameter(type=Dict[str,int]),
+    'bucket_names': ExecutionParameter(type=List[str]),
+    'buckets' : ExecutionParameter(type=List[int])
+  }
+  INPUTS = {
+    # these are tracked by MLMD.  they are usually the output artifacts
+    #   of an upstream component
+    # INPUTS will be a dictionary with input artifacts, including URIs
+
+    #'ratings_uri' : ChannelParameter(type=standard_artifacts.String), \
+    #'movies_uri' : ChannelParameter(type=standard_artifacts.String), \
+    #'users_uri' : ChannelParameter(type=standard_artifacts.String), \
+    #'headers_present' : ChannelParameter(type=standard_artifacts.JsonValue), \
+    #'delim' : ChannelParameter(type=standard_artifacts.String), \
+    #'ratings_key_dict' : ChannelParameter(type=standard_artifacts.JsonValue), \
+    #'users_key_dict' : ChannelParameter(type=standard_artifacts.JsonValue), \
+    #'movies_key_dict' : ChannelParameter(type=standard_artifacts.JsonValue), \
+    #'bucket_names' : ChannelParameter(type=standard_artifacts.JsonValue)
+    #'buckets' : ChannelParameter(type=standard_artifacts.JsonValue) \
+  }
+  OUTPUTS = {
+    # these are tracked by MLMD
+    # OUTPUTS will be a dictionary which this component will populate
+    'output_examples': ChannelParameter(type=standard_artifacts.Examples),
+  }
+
 # for a TFX pipeline, we want the ingestion to be performed by
 # an ExampleGen component that accepts input data and formats it as tf.Examples
-class MovieLens1mExecutor(BaseExampleGenExecutor):
+class IngestMovieLensExecutor(BaseExampleGenExecutor):
   def GenerateExamplesByBeam(self, \
     pipeline: beam.Pipeline, \
     exec_properties: Dict[str, Any]\
   ) -> Dict[str, beam.pvalue.PCollection]:
-    '''
+    """
     :param pipeline:
-    :param exec_properties: is a dictionary holding:
+    :param exec_properties: is a json string serialized dictionary holding:
 
       key = "ratings_uri", value = uri for ratings file in ml1m format,
       key = "movies_uri", value = uri for movies file in ml1m format,
@@ -78,12 +122,26 @@ class MovieLens1mExecutor(BaseExampleGenExecutor):
 
     :return:  a dictionary of the merged, split data as keys=name, values
       = PCollection for a partition
-    '''
+    """
 
+    print(f'DEBUG exec_properties')
+    print(f'type={type(exec_properties)}')
+    for k, v in exec_properties.items():
+      print(f'key={k}, value={v}')
+
+    '''
+    try:
+      exec_properties = json.loads(exec_properties)
+    except Exception as ex:
+      err = f'exec_properties must hold the result of json.dumps(dict)'
+      logger.error(f'ERROR: {err}: {ex}')
+      raise ValueError(f'ERROR: {err}: {ex}')
+    '''
     headers_present = exec_properties['headers_present']
     bucket_names = exec_properties['bucket_names']
     buckets = exec_properties['buckets']
 
+    '''
     try:
       headers_present = json.loads(headers_present)
     except Exception as ex:
@@ -104,6 +162,7 @@ class MovieLens1mExecutor(BaseExampleGenExecutor):
       err = f'exec_properties["bucket_names"] must hold the result of json.dumps(list of str)'
       logger.error(f'ERROR: {err}: {ex}')
       raise ValueError(f'ERROR: {err}: {ex}')
+    '''
 
     if len(buckets) != len(bucket_names):
       err = (f'deserialized buckets must be same length as deserialized bucket_names'
@@ -146,11 +205,49 @@ class MovieLens1mExecutor(BaseExampleGenExecutor):
       result[split_names[index]] = example_split
     return result
 
+class IngestMovieLensComponent(base_component.BaseComponent):
+  SPEC_CLASS = IngestMovieLensExecutorSpec
+  EXECUTOR_SPEC = executor_spec.ExecutorClassSpec(IngestMovieLensExecutor)
+
+  def __init__(self,\
+    name : Optional[Text],
+    ratings_uri : Text, \
+    movies_uri : Text, \
+    users_uri : Text, \
+    headers_present : bool, \
+    delim : Text, \
+    ratings_key_col_dict : Dict[str,int], \
+    users_key_col_dict : Dict[str,int], \
+    movies_key_col_dict : Dict[str,int], \
+    bucket_names : List[str], \
+    buckets : List[int], \
+    output_examples : Optional[types.Channel] = None):
+
+    print(f'DEBUG IngestMovieLensComponent init')
+
+    if not output_examples:
+      output_examples = types.Channel(type=standard_artifacts.Examples)
+
+    spec = IngestMovieLensExecutorSpec(
+      name=name, ratings_uri=ratings_uri, movies_uri=movies_uri,\
+      users_uri=users_uri, headers_present=headers_present,\
+      delim=delim, ratings_key_col_dict=ratings_key_col_dict,\
+      users_key_col_dict=users_key_col_dict,\
+      movies_key_col_dict=movies_key_col_dict,\
+      bucket_names=bucket_names, buckets=buckets,\
+      output_examples=output_examples)
+
+    super().__init__(spec=spec)
+
+
 if __name__ == "__main__":
 
   #TODO: move this out of source code and into test code
   #  ... unittest.mock in Python
   # see https://github.com/tensorflow/tfx/blob/master/tfx/components/example_gen/base_example_gen_executor_test.py
+
+  from tfx.dsl.components.base import executor_spec
+  print(f'executor_spec={executor_spec.ExecutorClassSpec(IngestMovieLensExecutor)}')
 
   from tfx.orchestration.experimental.interactive.interactive_context import \
     InteractiveContext
@@ -173,26 +270,34 @@ if __name__ == "__main__":
 
   #these might need to be serialized into strings for tfx,
   # use json.dumps
-  headers_present = json.dumps(False)
-  buckets = json.dumps([80, 10, 10])
-  bucket_names = json.dumps(['train', 'evel', 'test'])
+  headers_present = False
+  buckets = [80, 10, 10]
+  bucket_names = ['train', 'evel', 'test']
 
-  exec_properties = {ratings_uri:ratings_uri, movies_uri:movies_uri, \
-    users_uri:users_uri, ratings_key_col_dict:ratings_key_col_dict, \
-    movies_key_col_dict:movies_key_col_dict, \
-    users_key_col_dict:users_key_col_dict, \
-    headers_present:headers_present, delim:delim, buckets:buckets \
-  }
+  #exec_properties = {ratings_uri:ratings_uri, movies_uri:movies_uri, \
+  #  users_uri:users_uri, ratings_key_col_dict:ratings_key_col_dict, \
+  #  movies_key_col_dict:movies_key_col_dict, \
+  #  users_key_col_dict:users_key_col_dict, \
+  #  headers_present:headers_present, delim:delim, buckets:buckets \
+  #}
+  #exec_properties = json.dumps(exec_properties)
 
   context = InteractiveContext()
 
-  ratings_example_gen = MovieLens1mExecutor(\
-    exec_properties=exec_properties,\
-    custom_executor_spec=executor_spec.ExecutorClassSpec(MovieLens1mExecutor))
+  ratings_example_gen = IngestMovieLensComponent( \
+    name=name, ratings_uri=ratings_uri, movies_uri=movies_uri, \
+    users_uri=users_uri, headers_present=headers_present, \
+    delim=delim, ratings_key_col_dict=ratings_key_col_dict, \
+    users_key_col_dict=users_key_col_dict, \
+    movies_key_col_dict=movies_key_col_dict, \
+    bucket_names=bucket_names, buckets=buckets \
+  )
 
-  context.run(ratings_example_gen, enable_cache=True)
+  context.run(component=ratings_example_gen, enable_cache=True)
 
   print("context run finished")
+
+  #pipeline.Pipeline( components=[example_gen, hello, statistics_gen, ...]
 
   #https://www.tensorflow.org/tfx/tutorials/tfx/recommenders#create_inspect_examples_utility
   def inspect_examples(component, channel_name='examples', split_name='train', num_examples=1):

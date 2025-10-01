@@ -5,7 +5,7 @@ def stringify_ingest_params(ratings_uri : str, movies_uri : str, users_uri : str
   movies_key_col_dict : dict[str, int], \
   users_key_col_dict : dict[str, int], \
   partitions : list[int]) -> str:
-  '''
+  """
   serialize content into a string for input into ReadMergeAndSplit component.
 
   :param ratings_uri:
@@ -20,10 +20,11 @@ def stringify_ingest_params(ratings_uri : str, movies_uri : str, users_uri : str
     "ratings_uri", "ratings_uri", "ratings_uri",
     "ratings_key_dict", "movies_key_dict", "users_key_dict",
     "partitions"
-  '''
-  params = {"ratings_uri" : ratings_uri, \
-    "ratings_uri" : movies_uri, \
-    "ratings_uri" : users_uri, \
+  """
+  params = {
+    "ratings_uri" : ratings_uri, \
+    "movies_uri" : movies_uri, \
+    "users_uri" : users_uri, \
     "ratings_key_dict" : ratings_key_col_dict, \
     "movies_key_dict" : movies_key_col_dict, \
     "users_key_dict" : users_key_col_dict, \
