@@ -72,7 +72,6 @@ def ingest_movie_lens_component( \
   """
   logging.info("ingest_movie_lens_component")
 
-  headers_present = json.loads(headers_present)
   ratings_key_col_dict = json.loads(ratings_key_col_dict)
   movies_key_col_dict = json.loads(movies_key_col_dict)
   users_key_col_dict = json.loads(users_key_col_dict)
@@ -171,7 +170,6 @@ if __name__ == "__main__":
   #these might need to be serialized into strings for tfx,
   # use json.dumps
   headers_present = False
-  headers_present = json.dumps(headers_present)
   buckets = [80, 10, 10]
   buckets = json.dumps(buckets)
   bucket_names = ['train', 'eval', 'test']
