@@ -24,8 +24,7 @@ from tfx.dsl.components.base import executor_spec, base_component, base_beam_com
 from tfx import types
 from tfx.types.component_spec import ChannelParameter, ComponentSpec, ExecutionParameter
 
-from tfx.types import artifact_utils
-from tfx.types import standard_artifacts
+from tfx.types import artifact_utils, standard_artifacts, standard_component_specs
 
 #from tfx.dsl.component.experimental.annotations import InputArtifact
 #from tfx.dsl.component.experimental.annotations import OutputArtifact
