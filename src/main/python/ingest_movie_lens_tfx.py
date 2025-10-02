@@ -21,6 +21,7 @@ from tfx.dsl.components.base import base_component
 from tfx.types.component_spec import ChannelParameter
 from tfx.types.component_spec import ComponentSpec
 from tfx.types.component_spec import ExecutionParameter
+from tfx.types import Channel
 
 #from tfx.types import artifact_utils
 from tfx.types import standard_artifacts
@@ -223,12 +224,12 @@ class IngestMovieLensComponent(base_component.BaseComponent):
     movies_key_col_dict : Dict[str,int], \
     bucket_names : List[str], \
     buckets : List[int], \
-    output_examples : Optional[tfx.types.Channel] = None):
+    output_examples : Optional[Channel] = None):
 
     print(f'DEBUG IngestMovieLensComponent init')
 
     if not output_examples:
-      output_examples = tfx.types.Channel(type=standard_artifacts.Examples)
+      output_examples = Channel(type=standard_artifacts.Examples)
 
     spec = IngestMovieLensExecutorSpec(
       name=name, ratings_uri=ratings_uri, movies_uri=movies_uri,\
