@@ -77,7 +77,7 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
 
     output_data_dir = os.path.join('/kaggle/working/bin/', self._testMethodName)
     pipeline_root = os.path.join(output_data_dir, 'Test')
-    fileio.makedirs(pipeline_root)
+    fileio.makedirs(pipeline_root, exist_ok=True)
 
     pipeline_info = data_types.PipelineInfo(
         pipeline_name='Test', pipeline_root=pipeline_root, run_id='123')
