@@ -108,7 +108,7 @@ def ingest_movie_lens_component( \
     cumulative_buckets = []
     for b in buckets:
       s += int(100*(b/total))
-      cumulative_buckets.append()
+      cumulative_buckets.append(s)
 
     #type: apache_beam.pvalue.DoOutputsTuple
     ratings_tuple = ratings \

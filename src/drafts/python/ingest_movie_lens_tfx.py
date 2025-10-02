@@ -265,7 +265,7 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
     cumulative_buckets = []
     for b in buckets:
       s += int(100 * (b / total))
-      cumulative_buckets.append()
+      cumulative_buckets.append(s)
 
     #_PartitionFn is from BaseExampleGenExecutor via base_example_gen_executor.py
     example_splits = (\
