@@ -13,7 +13,7 @@ import tensorflow as tf
 
 from absl import logging
 
-from tfx.components.example_gen.base_example_gen_executor import BaseExampleGenExecutor
+from tfx.components.example_gen.base_example_gen_executor import BaseExampleGenExecutor, _PartitionFn
 #from tfx.components.example_gen import utils
 from tfx.dsl.components.base import executor_spec, base_component, base_beam_component
 from tfx import types
