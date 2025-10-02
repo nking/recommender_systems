@@ -10,7 +10,6 @@ from typing import Any, Dict, List, Text, Optional
 
 import numpy as np
 import tensorflow as tf
-import apache_beam as beam
 
 from absl import logging
 
@@ -73,8 +72,8 @@ class IngestMovieLensExecutorSpec(ComponentSpec):
     'buckets' : ExecutionParameter(type=List[int])
   }
   INPUTS = {
-    # these are tracked by MLMD.  they are usually the output artifacts
-    #   of an upstream component
+    # these are tracked by MLMD.  They are usually the output artifacts
+    #   of an upstream component.
     # INPUTS will be a dictionary with input artifacts, including URIs
 
     #'ratings_uri' : ChannelParameter(type=standard_artifacts.String), \
@@ -89,42 +88,51 @@ class IngestMovieLensExecutorSpec(ComponentSpec):
     #'buckets' : ChannelParameter(type=standard_artifacts.JsonValue) \
   }
   OUTPUTS = {
-    # these are tracked by MLMD
+    # these are tracked by MLMD.
     # OUTPUTS will be a dictionary which this component will populate
     'output_examples': ChannelParameter(type=standard_artifacts.Examples),
   }
 
 # for a TFX pipeline, we want the ingestion to be performed by
 # an ExampleGen component that accepts input data and formats it as tf.Examples
+
+# we're extending BaseExampleGenExecutor. it invokes it's own Do method.
+# see https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/components/example_gen/base_example_gen_executor.py#L222
+# the Do method invokes GenerateExamplesByBeam.
+# GenerateExamplesByBeam uses GetInputSourcesToExamplePTransform.
+# The later is abstract in BaseExampleGenExecutor so must be implemented.
+#
+# The reason for overrriding the Do method of BaseExampleGenExecutor here
+# is because using a split (data partitions by directory or file name)
+# naively, seems like it might be more complicated for uris that are
+# not file sources, and writing an input_config example_gen_pb2.Input.Split
+# pattern when all files are in the same directory isn't clear.
+#
+# It might be simpler to extend
+# base_executor.BaseExecutor and override the Do method instead of
+# extending BaseExampleGenExecutor as is done here.
+
 class IngestMovieLensExecutor(BaseExampleGenExecutor):
-  def GenerateExamplesByBeam(self, \
-    pipeline: beam.Pipeline, \
-    exec_properties: Dict[str, Any]\
-  ) -> Dict[str, beam.pvalue.PCollection]:
-    """
-    :param pipeline:
-    :param exec_properties: is a json string serialized dictionary holding:
+  """executor to ingest movie lens data, join, and split into buckets"""
+  @beam.ptransform_fn
+  @beam.typehints.with_input_types(beam.Pipeline)
+  @beam.typehints.with_output_types(tf.train.Example)
+  def _MovieLensToExample( # pylint: disable=invalid-name
+    self, pipeline: beam.Pipeline, exec_properties: Dict[str, Any],
+    split_pattern: str) -> Dict[str, beam.pvalue.PCollection]:
+    """Read ratings, movies, and users files, join them,
+    and transform to TF examples.
 
-      key = "ratings_uri", value = uri for ratings file in ml1m format,
-      key = "movies_uri", value = uri for movies file in ml1m format,
-      key = "users_uri", value = uri for users file in ml1m format,
-      key = headers_present, value = Bool for whether of not the first
-        line in the ratings, movies, and users files are headers.
-      key = delim, value = the delimiter used between columns in a row.
-        e.g. "::"
-      key = "ratings_key_col_dict", value = dictionary for ratings_uri of
-        keys=coulmn names and values = the column numbers,
-      key = "movies_key_col_dict", value = dictionary for ratings_uri of
-        keys=coulmn names and values = the column numbers,
-      key = "users_key_col_dict", value = dictionary for ratings_uri of
-        keys=coulmn names and values = the column numbers,
-      key = buckets, value = a list of integers as percents of the whole,
-        e.g. [80, 10, 10]
-      key = bucket_names, value = a list of strings of names for the
-        buckets,  e.g. ['train', 'eval', test']
+    Args:
+      pipeline: beam pipeline.
+      exec_properties: A dict of execution properties.
+        - input_base: input dir that contains Avro data.
+      split_pattern: Split.pattern in Input config, glob relative file pattern
+        that maps to input files with root directory given by input_base.
+        Not used.
 
-    :return:  a dictionary of the merged, split data as keys=name, values
-      = PCollection for a partition
+    Returns:
+      PCollection of TF examples.
     """
 
     print(f'DEBUG exec_properties')
@@ -166,7 +174,6 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       logger.error(f'ERROR: {err}: {ex}')
       raise ValueError(f'ERROR: {err}: {ex}')
     '''
-
     if len(buckets) != len(bucket_names):
       err = (f'deserialized buckets must be same length as deserialized bucket_names'
              f' buckets={buckets}, bucket_names={bucket_names}')
@@ -184,9 +191,51 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       users_key_dict=exec_properties['users_key_col_dict'], \
       movies_key_dict=exec_properties['movies_key_col_dict'])
 
+    return ratings_tuple
+
+  def GetInputSourceToExamplePTransform(self) -> beam.PTransform:
+    """Returns PTransform for ratings, movies, users joined to TF examples."""
+    logging.debug("in IngestMovieLensExecutor.GetInputSourceToExamplePTransform")
+    return _MovieLensToExample
+
+  def GenerateExamplesByBeam(self, \
+    pipeline: beam.Pipeline, \
+    exec_properties: Dict[str, Any]\
+  ) -> Dict[str, beam.pvalue.PCollection]:
+    """
+    :param pipeline:
+    :param exec_properties: is a json string serialized dictionary holding:
+
+      key = "ratings_uri", value = uri for ratings file in ml1m format,
+      key = "movies_uri", value = uri for movies file in ml1m format,
+      key = "users_uri", value = uri for users file in ml1m format,
+      key = headers_present, value = Bool for whether of not the first
+        line in the ratings, movies, and users files are headers.
+      key = delim, value = the delimiter used between columns in a row.
+        e.g. "::"
+      key = "ratings_key_col_dict", value = dictionary for ratings_uri of
+        keys=coulmn names and values = the column numbers,
+      key = "movies_key_col_dict", value = dictionary for ratings_uri of
+        keys=coulmn names and values = the column numbers,
+      key = "users_key_col_dict", value = dictionary for ratings_uri of
+        keys=coulmn names and values = the column numbers,
+      key = buckets, value = a list of integers as percents of the whole,
+        e.g. [80, 10, 10]
+      key = bucket_names, value = a list of strings of names for the
+        buckets,  e.g. ['train', 'eval', test']
+
+    :return:  a dictionary of the merged, split data as keys=name, values
+      = PCollection for a partition
+    """
+
     #https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/components/example_gen/base_example_gen_executor.py#L120
     #line 200-ish
     #split the data
+
+    logging.debug(\
+      "in IngestMovieLensExecutor.GenerateExamplesByBeam")
+
+    ratings_tuple = self.GetInputSourceToExamplePTransform()
 
     splits = []
     for n, b in zip(bucket_names, buckets):
@@ -207,6 +256,52 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
     for index, example_split in enumerate(example_splits):
       result[split_names[index]] = example_split
     return result
+
+  def Do(
+    self,
+    input_dict: Dict[str, List[types.Artifact]],
+    output_dict: Dict[str, List[types.Artifact]],
+    exec_properties: Dict[str, Any],
+  ) -> None:
+    """Takes input data sources and generates serialized data splits.
+
+    Args:
+      input_dict: Input dict from input key to a list of Artifacts. Depends on
+        detailed example gen implementation.
+      output_dict: Output dict from output key to a list of Artifacts.
+        - examples: splits of serialized records.
+      exec_properties: A dict of execution properties.
+
+    Returns:
+      None
+    """
+    logging.debug("in IngestMovieLensExecutor.Do")
+    #https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/components/example_gen/base_example_gen_executor.py#L281
+    with self._make_beam_pipeline() as pipeline:
+      example_splits = self.GenerateExamplesByBeam(pipeline, exec_properties)
+
+      # pylint: disable=expression-not-assigned, no-value-for-parameter
+      for split_name, example_split in example_splits.items():
+        (example_split \
+        | f'WriteSplit[{split_name}]' >> write_split.WriteSplit( \
+        artifact_utils.get_split_uri( \
+        output_dict[standard_component_specs.EXAMPLES_KEY], \
+        split_name), output_file_format, exec_properties))
+      # pylint: enable=expression-not-assigned, no-value-for-parameter
+
+    output_payload_format = exec_properties.get(\
+      standard_component_specs.OUTPUT_DATA_FORMAT_KEY)
+    if output_payload_format:
+      for output_examples_artifact in output_dict[standard_component_specs.EXAMPLES_KEY]:
+        examples_utils.set_payload_format(output_examples_artifact, \
+          output_payload_format)
+
+    if output_file_format:
+      for output_examples_artifact in output_dict[standard_component_specs.EXAMPLES_KEY]:
+        examples_utils.set_file_format(output_examples_artifact,\
+          write_split.to_file_format_str(output_file_format))
+
+    logging.info('Examples generated.')
 
 class IngestMovieLensComponent(base_component.BaseComponent):
   SPEC_CLASS = IngestMovieLensExecutorSpec
@@ -230,6 +325,7 @@ class IngestMovieLensComponent(base_component.BaseComponent):
 
     if not output_examples:
       output_examples = Channel(type=standard_artifacts.Examples)
+      # = channel_utils.as_channel(type=standard_artifacts.Examples)
 
     spec = IngestMovieLensExecutorSpec(
       name=name, ratings_uri=ratings_uri, movies_uri=movies_uri,\
@@ -240,7 +336,8 @@ class IngestMovieLensComponent(base_component.BaseComponent):
       bucket_names=bucket_names, buckets=buckets,\
       output_examples=output_examples)
 
-    super().__init__(spec=spec)
+    #super().__init__(spec=spec)
+    super(IngestMovieLensComponent, self).__init__(spec=spec)
 
 if __name__ == "__main__":
 
@@ -300,6 +397,9 @@ if __name__ == "__main__":
     bucket_names=bucket_names, buckets=buckets \
   )
 
+  statistics_gen = tfx.components.StatisticsGen(\
+    examples=ratings_example_gen.outputs['examples'])
+
   PIPELINE_NAME = "MovieLensIngestTest"
   PIPELINE_ROOT = os.path.join(output_dir, 'pipelines', PIPELINE_NAME)
   # Path to a SQLite DB file to use as an MLMD storage.
@@ -310,7 +410,6 @@ if __name__ == "__main__":
     os.mkdir(os.path.join(output_dir, 'metadata'))
   if not os.path.exists(PIPELINE_ROOT):
     os.mkdir(PIPELINE_ROOT)
-
 
   my_pipeline = tfx.dsl.Pipeline(\
     pipeline_name=PIPELINE_NAME, \
@@ -329,7 +428,8 @@ if __name__ == "__main__":
       'channel_name: {}, split_name: {} (\"{}\"), num_examples: {}\n'.format(\
       channel_name, split_name, full_split_name, num_examples))
 
-    train_uri = os.path.join(component.outputs[channel_name].get()[0].uri, full_split_name)
+    train_uri = os.path.join(\
+      component.outputs[channel_name].get()[0].uri, full_split_name)
 
     # Get the list of files in this directory (all compressed TFRecord files)
     tfrecord_filenames = [os.path.join(train_uri, name) for name in os.listdir(train_uri)]
