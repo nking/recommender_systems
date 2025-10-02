@@ -260,10 +260,17 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       )
     )
 
+    total = sum(a)
+    s = 0
+    cumulative_buckets = []
+    for b in buckets:
+      s += int(100 * (b / total))
+      cumulative_buckets.append()
+
     #_PartitionFn is from BaseExampleGenExecutor via base_example_gen_executor.py
     example_splits = (\
       pipeline | 'SplitData' >> beam.Partition(_PartitionFn, len(buckets),\
-      buckets, output_config.split_config))
+      cumulative_buckets, output_config.split_config))
 
     result = {}
     for index, example_split in enumerate(example_splits):

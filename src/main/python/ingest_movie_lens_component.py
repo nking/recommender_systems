@@ -104,10 +104,17 @@ def ingest_movie_lens_component( \
       movies_key_dict=movies_key_col_dict, \
       buckets=partitions)
 
+    total = sum(a)
+    s = 0
+    cumulative_buckets = []
+    for b in buckets:
+      s += int(100*(b/total))
+      cumulative_buckets.append()
+
     #type: apache_beam.pvalue.DoOutputsTuple
     ratings_tuple = ratings \
       | f'split_{time.time_ns()}' >> beam.Partition( \
-      _PartitionFn, len(buckets), buckets, output_config.split_config)
+      _PartitionFn, len(buckets), cumulative_buckets, output_config.split_config)
 
     logging.debug(f"have ratings_tuple.  type={type(ratings_tuple)}")
 
