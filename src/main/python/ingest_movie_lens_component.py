@@ -1,5 +1,6 @@
 import os
 import absl
+from absl import logging
 import json
 import pprint
 
@@ -14,10 +15,7 @@ from partition_funcs import *
 
 from tfx import v1 as tfx
 
-import numpy as np
 import tensorflow as tf
-
-from absl import logging
 
 tf.get_logger().propagate = False
 absl.logging.set_verbosity(absl.logging.DEBUG)
