@@ -299,7 +299,8 @@ if __name__ == "__main__":
     bucket_names=bucket_names, buckets=buckets \
   )
 
-  my_pipeline = tfx.dsl.Pipeline( components=[ratings_example_gen] )
+  my_pipeline = tfx.dsl.Pipeline(pipeline_name='testing', \
+    components=[ratings_example_gen], enable_cache=True)
 
   LocalDagRunner().run(my_pipeline)
 
