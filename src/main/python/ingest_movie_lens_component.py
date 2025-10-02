@@ -102,9 +102,9 @@ def ingest_movie_lens_component( \
       ratings_key_dict=ratings_key_col_dict, \
       users_key_dict=users_key_col_dict, \
       movies_key_dict=movies_key_col_dict, \
-      buckets=partitions)
+      buckets=buckets)
 
-    total = sum(a)
+    total = sum(buckets)
     s = 0
     cumulative_buckets = []
     for b in buckets:

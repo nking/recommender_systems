@@ -260,7 +260,7 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       )
     )
 
-    total = sum(a)
+    total = sum(buckets)
     s = 0
     cumulative_buckets = []
     for b in buckets:
