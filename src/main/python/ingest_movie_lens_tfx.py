@@ -299,7 +299,7 @@ if __name__ == "__main__":
     bucket_names=bucket_names, buckets=buckets \
   )
 
-  my_pipeline = beam.pipeline.Pipeline( components=[ratings_example_gen] )
+  my_pipeline = tfx.dsl.Pipeline( components=[ratings_example_gen] )
 
   LocalDagRunner().run(my_pipeline)
 
