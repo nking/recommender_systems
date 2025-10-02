@@ -3,6 +3,7 @@ import absl
 from absl import logging
 import json
 import pprint
+import time
 
 import apache_beam as beam
 from tfx.types import standard_artifacts
