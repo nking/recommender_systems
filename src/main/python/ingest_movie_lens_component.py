@@ -96,7 +96,7 @@ def ingest_movie_lens_component( \
   )
 
   with beam_pipeline as pipeline:
-    ratings = ingest_join_and_split(pipeline=pipeline, \
+    ratings = ingest_and_join(pipeline=pipeline, \
       ratings_uri=ratings_uri, movies_uri=movies_uri, \
       users_uri=users_uri, headers_present=headers_present, delim=delim, \
       ratings_key_dict=ratings_key_col_dict, \
