@@ -303,7 +303,8 @@ if __name__ == "__main__":
   PIPELINE_NAME = "MovieLensIngestTest"
   PIPELINE_ROOT = os.path.join(output_dir, 'pipelines', PIPELINE_NAME)
   # Path to a SQLite DB file to use as an MLMD storage.
-  METADATA_PATH = os.path.join(output_dir, 'metadata', PIPELINE_NAME, 'metadata.db')
+  METADATA_PATH = os.path.join(output_dir, 'metadata', PIPELINE_NAME, \
+    'metadata.db')
 
   my_pipeline = tfx.dsl.Pipeline(\
     pipeline_name=PIPELINE_NAME, \
