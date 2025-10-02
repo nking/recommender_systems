@@ -236,7 +236,8 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
 
     splits = []
     for n, b in zip(bucket_names, buckets):
-      splits.append(example_gen_pb2.SplitConfig.Split(name=n, percentage=b))
+      #see https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/proto/example_gen.proto#L146
+      splits.append(example_gen_pb2.SplitConfig.Split(name=n, hash_buckets=b))
 
     output_config = example_gen_pb2.Output(
       split_config=example_gen_pb2.SplitConfig(
