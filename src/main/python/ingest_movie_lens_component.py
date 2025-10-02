@@ -6,8 +6,8 @@ import pprint
 import apache_beam as beam
 from tfx.types import standard_artifacts
 from tfx.dsl.component.experimental import annotations
-#from tfx.dsl.component.experimental.decorators import component
-from tfx.dsl.components.component import component
+from tfx.dsl.component.experimental.decorators import component
+#from tfx.dsl.components.component import component
 
 from ingest_movie_lens_beam import ingest_and_join
 from partition_funcs import *
