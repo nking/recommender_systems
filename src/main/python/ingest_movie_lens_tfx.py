@@ -15,12 +15,9 @@ from absl import logging
 
 from tfx.components.example_gen.base_example_gen_executor import BaseExampleGenExecutor
 #from tfx.components.example_gen import utils
-from tfx.dsl.components.base import executor_spec
-from tfx.dsl.components.base import base_component
+from tfx.dsl.components.base import executor_spec, base_component, base_beam_component
 from tfx import types
-from tfx.types.component_spec import ChannelParameter
-from tfx.types.component_spec import ComponentSpec
-from tfx.types.component_spec import ExecutionParameter
+from tfx.types.component_spec import ChannelParameter, ComponentSpec, ExecutionParameter
 
 #from tfx.types import artifact_utils
 from tfx.types import standard_artifacts
@@ -303,9 +300,11 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
 
     logging.info('Examples generated.')
 
-class IngestMovieLensComponent(base_component.BaseComponent):
+#class IngestMovieLensComponent(base_component.BaseComponent):
+class IngestMovieLensComponent(base_beam_component.BaseBeamComponent):
   SPEC_CLASS = IngestMovieLensExecutorSpec
-  EXECUTOR_SPEC = executor_spec.ExecutorClassSpec(IngestMovieLensExecutor)
+  #EXECUTOR_SPEC = executor_spec.ExecutorClassSpec(IngestMovieLensExecutor)
+  EXECUTOR_SPEC = executor_spec.BeamExecutorSpec(IngestMovieLensExecutor)
 
   def __init__(self,\
     name : Optional[Text],
