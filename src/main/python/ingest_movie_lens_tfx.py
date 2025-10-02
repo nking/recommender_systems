@@ -6,7 +6,7 @@ import absl
 import json
 import pprint
 
-from typing import Any, Dict, List, Text
+from typing import Any, Dict, List, Text, Optional
 
 import numpy as np
 import tensorflow as tf
