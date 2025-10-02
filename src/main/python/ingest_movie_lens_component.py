@@ -101,8 +101,7 @@ def ingest_movie_lens_component( \
       users_uri=users_uri, headers_present=headers_present, delim=delim, \
       ratings_key_dict=ratings_key_col_dict, \
       users_key_dict=users_key_col_dict, \
-      movies_key_dict=movies_key_col_dict, \
-      buckets=buckets)
+      movies_key_dict=movies_key_col_dict)
 
     total = sum(buckets)
     s = 0
