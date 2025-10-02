@@ -278,6 +278,8 @@ if __name__ == "__main__":
   buckets = [80, 10, 10]
   bucket_names = ['train', 'eval', 'test']
 
+  name = "test_tfx_component"
+
   #exec_properties = {ratings_uri:ratings_uri, movies_uri:movies_uri, \
   #  users_uri:users_uri, ratings_key_col_dict:ratings_key_col_dict, \
   #  movies_key_col_dict:movies_key_col_dict, \
