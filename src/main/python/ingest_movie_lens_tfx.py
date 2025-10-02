@@ -307,7 +307,7 @@ if __name__ == "__main__":
 
   my_pipeline = tfx.dsl.Pipeline(\
     pipeline_name=PIPELINE_NAME, \
-    pipeline_root=pipeline_root,\
+    pipeline_root=PIPELINE_ROOT,\
     metadata_connection_config=tfx.orchestration.metadata.sqlite_metadata_connection_config(METADATA_PATH),\
     components=[ratings_example_gen], enable_cache=True)
 
