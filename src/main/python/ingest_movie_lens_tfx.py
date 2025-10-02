@@ -245,6 +245,9 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       )
     )
 
+    #using _PartitionFn is like using an undocumented method, so might
+    #need to replace it locally if it disappears in future version
+
     #_PartitionFn is from BaseExampleGenExecutor via base_example_gen_executor.py
     example_splits = (
       pipeline | 'SplitData' >> beam.Partition(_PartitionFn, len(buckets),
