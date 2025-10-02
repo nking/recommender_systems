@@ -242,7 +242,6 @@ class IngestMovieLensComponent(base_component.BaseComponent):
 
     super().__init__(spec=spec)
 
-
 if __name__ == "__main__":
 
   from tfx.orchestration.local.local_dag_runner import LocalDagRunner
