@@ -405,10 +405,8 @@ if __name__ == "__main__":
   METADATA_PATH = os.path.join(output_dir, 'metadata', PIPELINE_NAME, \
     'metadata.db')
 
-  if not os.path.exists(os.path.join(output_dir, 'metadata')):
-    os.mkdir(os.path.join(output_dir, 'metadata'))
-  if not os.path.exists(PIPELINE_ROOT):
-    os.mkdir(PIPELINE_ROOT)
+  os.makedirs(os.path.join(output_dir, 'metadata'), exist_ok=True)
+  os.makedirs(PIPELINE_ROOT, exist_ok=True)
 
   my_pipeline = tfx.dsl.Pipeline(\
     pipeline_name=PIPELINE_NAME, \
