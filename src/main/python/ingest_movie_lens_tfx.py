@@ -109,8 +109,6 @@ class IngestMovieLensExecutorSpec(ComponentSpec):
 # base_executor.BaseExecutor and override the Do method instead of
 # extending BaseExampleGenExecutor as is done here.
 
-class IngestMovieLensExecutor(BaseExampleGenExecutor):
-  """executor to ingest movie lens data, join, and split into buckets"""
   @beam.ptransform_fn
   @beam.typehints.with_input_types(beam.Pipeline)
   @beam.typehints.with_output_types(tf.train.Example)
@@ -189,6 +187,9 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       movies_key_dict=exec_properties['movies_key_col_dict'])
 
     return ratings_tuple
+
+class IngestMovieLensExecutor(BaseExampleGenExecutor):
+  """executor to ingest movie lens data, join, and split into buckets"""
 
   def GetInputSourceToExamplePTransform(self) -> beam.PTransform:
     """Returns PTransform for ratings, movies, users joined to TF examples."""
