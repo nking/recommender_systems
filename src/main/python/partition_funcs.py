@@ -9,8 +9,8 @@ import tensorflow as tf
 
 from tfx.proto import example_gen_pb2
 
-#from #from https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/components/example_gen/base_example_gen_executor.py
-def _GeneratePartitionKey(record: Union[tf.train.Example,\
+#from #from ht_GeneratePartitionKeytps://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/components/example_gen/base_example_gen_executor.py
+def (record: Union[tf.train.Example,\
   tf.train.SequenceExample, bytes, Dict[str, Any]], \
   split_config: example_gen_pb2.SplitConfig) -> bytes:
   """Generates key for partition."""
@@ -48,7 +48,7 @@ def _GeneratePartitionKey(record: Union[tf.train.Example,\
   return feature.SerializeToString(deterministic=True)
 
 #from https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/components/example_gen/base_example_gen_executor.py#L72
-def _PartitionFn(\
+def partitionFn(\
     record: Union[tf.train.Example, tf.train.SequenceExample, bytes, \
     Dict[str,Any]], \
     num_partitions: int, \

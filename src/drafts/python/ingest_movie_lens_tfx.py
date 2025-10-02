@@ -38,7 +38,7 @@ from tfx.types import artifact_utils, standard_artifacts, standard_component_spe
 #from tfx.types.experimental.simple_artifacts import Dataset
 
 from ingest_movie_lens_beam import ingest_and_join
-from partition_funcs import *
+from partition_funcs import partitionFn
 
 from tfx import v1 as tfx
 
@@ -269,7 +269,7 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
 
     #_PartitionFn is from BaseExampleGenExecutor via base_example_gen_executor.py
     example_splits = (\
-      pipeline | 'SplitData' >> beam.Partition(_PartitionFn, len(buckets),\
+      pipeline | 'SplitData' >> beam.Partition(partitionFn, len(buckets),\
       cumulative_buckets, output_config.split_config))
 
     result = {}

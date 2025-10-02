@@ -21,7 +21,6 @@ import os
 
 from unittest import mock
 import tensorflow as tf
-from ingest_movie_lens_tfx import IngestMovieLensComponent, IngestMovieLensExecutor
 from tfx.dsl.components.base import executor_spec
 from tfx.dsl.io import fileio
 from tfx.orchestration import data_types
@@ -30,6 +29,8 @@ from tfx.orchestration import publisher
 from tfx.orchestration.launcher import in_process_component_launcher
 from tfx.proto import example_gen_pb2
 from tfx.utils import name_utils
+
+from ingest_movie_lens_tfx import IngestMovieLensComponent, IngestMovieLensExecutor
 
 from ml_metadata.proto import metadata_store_pb2
 

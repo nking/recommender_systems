@@ -12,7 +12,7 @@ from tfx.dsl.component.experimental.decorators import component
 #from tfx.dsl.components.component import component
 
 from ingest_movie_lens_beam import ingest_and_join
-from partition_funcs import *
+from partition_funcs import partitionFn
 
 from tfx import v1 as tfx
 
@@ -114,7 +114,7 @@ def ingest_movie_lens_component( \
     #type: apache_beam.pvalue.DoOutputsTuple
     ratings_tuple = ratings \
       | f'split_{time.time_ns()}' >> beam.Partition( \
-      _PartitionFn, len(buckets), cumulative_buckets, output_config.split_config)
+      partitionFn, len(buckets), cumulative_buckets, output_config.split_config)
 
     logging.debug(f"have ratings_tuple.  type={type(ratings_tuple)}")
 
