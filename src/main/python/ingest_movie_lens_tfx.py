@@ -397,7 +397,7 @@ if __name__ == "__main__":
   )
 
   statistics_gen = tfx.components.StatisticsGen(\
-    examples=ratings_example_gen.outputs['examples'])
+    examples=ratings_example_gen.outputs['output_examples'])
 
   PIPELINE_NAME = "MovieLensIngestTest"
   PIPELINE_ROOT = os.path.join(output_dir, 'pipelines', PIPELINE_NAME)
@@ -443,6 +443,6 @@ if __name__ == "__main__":
       example.ParseFromString(serialized_example)
       pp.pprint(example)
 
-  inspect_examples(ratings_example_gen)
+  inspect_examples(ratings_example_gen, channel_name='output_examples')
 
   print("tests done")
