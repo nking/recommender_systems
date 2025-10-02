@@ -18,11 +18,13 @@ from absl import logging
 
 from tfx.components.example_gen.base_example_gen_executor import BaseExampleGenExecutor
 #from tfx.components.example_gen import utils
+from tfx.components.example_gen import write_split
+from tfx.components.util import examples_utils
 from tfx.dsl.components.base import executor_spec, base_component, base_beam_component
 from tfx import types
 from tfx.types.component_spec import ChannelParameter, ComponentSpec, ExecutionParameter
 
-#from tfx.types import artifact_utils
+from tfx.types import artifact_utils
 from tfx.types import standard_artifacts
 
 #from tfx.dsl.component.experimental.annotations import InputArtifact
