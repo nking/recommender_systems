@@ -258,8 +258,10 @@ if __name__ == "__main__":
   kaggle = True
   if kaggle:
     prefix = '/kaggle/working/ml-1m/'
+    output_dir = '/kaggle/working/bin'
   else:
     prefix = "../resources/ml-1m/"
+    output_dir = '../../bin'
   ratings_uri = f"{prefix}ratings.dat"
   movies_uri = f"{prefix}movies.dat"
   users_uri = f"{prefix}users.dat"
@@ -298,7 +300,15 @@ if __name__ == "__main__":
     bucket_names=bucket_names, buckets=buckets \
   )
 
-  my_pipeline = tfx.dsl.Pipeline(pipeline_name='testing', \
+  PIPELINE_NAME = "MovieLensIngestTest"
+  PIPELINE_ROOT = os.path.join(output_dir, 'pipelines', PIPELINE_NAME)
+  # Path to a SQLite DB file to use as an MLMD storage.
+  METADATA_PATH = os.path.join(output_dir, 'metadata', PIPELINE_NAME, 'metadata.db')
+
+  my_pipeline = tfx.dsl.Pipeline(\
+    pipeline_name=PIPELINE_NAME, \
+    pipeline_root=pipeline_root,\
+    metadata_connection_config=tfx.orchestration.metadata.sqlite_metadata_connection_config(METADATA_PATH),\
     components=[ratings_example_gen], enable_cache=True)
 
   LocalDagRunner().run(my_pipeline)
