@@ -1,7 +1,9 @@
 import unittest
 from typing import  Dict, Union
 #from ... main.python.infile_dict_util import *
+#from ... main.python.infile_dict_util import _assert_dict_1
 from infile_dict_util import *
+from infile_dict_util import _assert_dict_1
 
 class TestInfileDictUtils(unittest.TestCase):
 
@@ -11,8 +13,8 @@ class TestInfileDictUtils(unittest.TestCase):
       if k in ['ratings', 'movies', 'users']:
         key = k
         break
-    self.assertIsNotNone(key, f"dictionary does not contain one of expected keys: {'ratings', 'movies', 'users'}")
-    r = infile_dict_util._assert_dict_1(ml_dict)
+    self.assertIsNotNone(key, "dictionary does not contain one of expected keys: 'ratings', 'movies', 'users'")
+    r = _assert_dict_1(ml_dict[key])
     self.assertIsNone(r, r)
 
   def _assert_merged_dict_content(self,
@@ -20,7 +22,7 @@ class TestInfileDictUtils(unittest.TestCase):
     r = dict_formedness_error(merged_dict)
     self.assertIsNone(r, r)
 
-  def make_file_dict_test(self):
+  def test_make_file_dict(self):
     ratings_uri = "../resources/ml-1m/ratings.dat"
     movies_uri = "../resources/ml-1m/movies.dat"
     users_uri = "../resources/ml-1m/users.dat"
@@ -54,6 +56,15 @@ class TestInfileDictUtils(unittest.TestCase):
                               users_dict=users_dict)
 
     self._assert_merged_dict_content(merged_dict)
+
+    schema_dict = create_namedtuple_schemas(merged_dict)
+    for k in schema_dict:
+      self.assertTrue(k in ['ratings', 'movies', 'users'], f"key {k} not recognized")
+      file_cols = schema_dict[k]
+      # should be a list of tuples of (column_name, column_type)
+      for _name, _type in file_cols:
+        self.assertTrue(isinstance(_name, str))
+        self.assertIsNotNone(_type)
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Literal, Union
+from typing import Any, Dict, List, Literal, Union, Tuple
 
 def make_file_dict(for_file: Literal['ratings', 'movies', 'users'], \
   uri: str, col_names: List[str], col_types : List[Any], \
@@ -38,6 +38,14 @@ def make_file_dict(for_file: Literal['ratings', 'movies', 'users'], \
 def merge_dicts(ratings_dict: Dict[str, Union[str, Dict]], \
   movies_dict: Dict[str, Union[str, Dict]], \
   users_dict: Dict[str, Union[str, Dict]]) -> Dict[str, Union[str, Dict]]:
+  """
+  merge the 3 dictionaries, each created by make_file_dict, into single
+  output dictionary
+  :param ratings_dict:
+  :param movies_dict:
+  :param users_dict:
+  :return: a merge of the 3 dictionaries
+  """
 
   return {**ratings_dict, **movies_dict, **users_dict}
 
@@ -71,6 +79,29 @@ def _assert_dict_1(ml_dict: Dict) -> Union[str, None]:
       return f"missing ml_dict[key]['cols'][{name}]['type']"
 
   return None
+
+def create_namedtuple_schemas(infiles_dict: Dict[str, Union[str, Dict]]) -> Dict[str, List[Tuple]]:
+  """
+  from a dictionary created with merge_dicts, create a dictionary of
+  of lists of tuples of column names and types that can be used as a
+  schema for a PCollection for each top level key
+  :param infiles_dict:
+  :return: a dictionary of list of tuples of column name and types,
+  useable with coders.registry.register_coder
+  """
+  out = {}
+  for key in infiles_dict:
+    s = []
+    for col_name in infiles_dict[key]['cols']:
+      idx = infiles_dict[key]['cols'][col_name]['index']
+      t = infiles_dict[key]['cols'][col_name]['type']
+      s.append((col_name, idx, t))
+    s.sort(key=lambda x: x[0])
+    s2 = []
+    for c, i, t in s:
+      s2.append((c, t))
+    out[key] = s2
+  return out
 
 def dict_formedness_error(ml_dict: Dict[str, Union[str, Dict]]) -> Union[str, None]:
   """
