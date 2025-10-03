@@ -13,6 +13,7 @@ from tfx.dsl.component.experimental.decorators import component
 
 from ingest_movie_lens_beam import ingest_and_join
 from partition_funcs import partitionFn
+from tfx.proto import example_gen_pb2
 
 from tfx import v1 as tfx
 

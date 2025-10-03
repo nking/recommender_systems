@@ -37,6 +37,8 @@ from tfx.types import artifact_utils, standard_artifacts, standard_component_spe
 #from tfx.dsl.component.experimental.decorators import component
 #from tfx.types.experimental.simple_artifacts import Dataset
 
+from tfx.proto import example_gen_pb2
+
 from ingest_movie_lens_beam import ingest_and_join
 from partition_funcs import partitionFn
 
@@ -56,8 +58,6 @@ print(f"TFX version: {tfx.__version__}")
 
 import json
 #from tfx.utils import json_utils
-
-from tfx.proto import example_gen_pb2
 
 #tf.train.Example is for independent, fixed-size examples
 #tf.train.SequenceExample is for variable-length sequential data,
