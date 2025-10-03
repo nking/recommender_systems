@@ -5,19 +5,6 @@ from infile_dict_util import *
 
 class TestInfileDictUtils(unittest.TestCase):
 
-  def _assert_dict_1(self, ml_dict: Dict) -> None:
-    """test contents of dict[key]"""
-    self.assertTrue('cols' in ml_dict, f"dictionary is missing ['cols']")
-
-    self.assertTrue('uri' in ml_dict, "dictionary is missing key ['uri']")
-    self.assertIsNotNone(ml_dict['uri'], "dictionary is missing value for ['uri']")
-
-    for name in ml_dict['cols']:
-      self.assertTrue('index' in ml_dict['cols'][name], \
-        f"missing ml_dict[key]['cols'][{name}]['index']")
-      self.assertTrue('index' in ml_dict['cols'][name], \
-        f"missing ml_dict[key]['cols'][{name}]['type']")
-
   def _assert_dict_content(self, ml_dict: Dict[str, Union[str, Dict]]) -> None:
     key = None
     for k in ml_dict:
@@ -25,14 +12,13 @@ class TestInfileDictUtils(unittest.TestCase):
         key = k
         break
     self.assertIsNotNone(key, f"dictionary does not contain one of expected keys: {'ratings', 'movies', 'users'}")
-    self._assert_dict_1(ml_dict)
+    r = infile_dict_util._assert_dict_1(ml_dict)
+    self.assertIsNone(r, r)
 
   def _assert_merged_dict_content(self,
     merged_dict: Dict[str, Union[str, Dict]]) -> None:
-    for key in merged_dict:
-      self.assertTrue(key in ['ratings', 'movies', 'users'], \
-        f"key expected to be one of 'ratings', 'movies', 'users', but is {key}")
-      self._assert_dict_1(merged_dict[key])
+    r = dict_formedness_error(merged_dict)
+    self.assertIsNone(r, r)
 
   def make_file_dict_test(self):
     ratings_uri = "../resources/ml-1m/ratings.dat"
@@ -47,19 +33,19 @@ class TestInfileDictUtils(unittest.TestCase):
 
     ratings_dict = make_file_dict(for_file='ratings',\
       uri=ratings_uri, col_names=ratings_col_names, \
-      col_types=ratings_col_types)
+      col_types=ratings_col_types, headers_present=False, delim="::")
 
     self._assert_dict_content(ratings_dict)
 
     movies_dict = make_file_dict(for_file='movies', \
       uri=movies_uri, col_names=movies_col_names, \
-      col_types=movies_col_types)
+      col_types=movies_col_types, headers_present=False, delim="::")
 
     self._assert_dict_content(movies_dict)
 
     users_dict = make_file_dict(for_file='users', \
       uri=users_uri,  col_names=users_col_names, \
-      col_types=users_col_types)
+      col_types=users_col_types, headers_present=False, delim="::")
 
     self._assert_dict_content(users_dict)
 
