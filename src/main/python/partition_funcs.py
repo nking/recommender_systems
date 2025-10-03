@@ -18,7 +18,7 @@ def _GeneratePartitionKey(record: Union[tf.train.Example,\
   if not split_config.HasField('partition_feature_name'):
     if isinstance(record, bytes):
       return record
-    if isinstance(record, dict):
+    if isinstance(record, dict) or isinstance(record, list):
       return pickle.dumps(record)
     return record.SerializeToString(deterministic=True)
 
