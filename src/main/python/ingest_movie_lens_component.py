@@ -1,9 +1,9 @@
 import os
 import absl
 from absl import logging
-import json
 import pprint
 import time
+import pickle
 
 import apache_beam as beam
 from tfx.types import standard_artifacts
@@ -11,6 +11,7 @@ from tfx.dsl.component.experimental import annotations
 from tfx.dsl.component.experimental.decorators import component
 #from tfx.dsl.components.component import component
 
+from infile_dict_utils import *
 from ingest_movie_lens_beam import ingest_and_join
 from partition_funcs import partitionFn
 from tfx.proto import example_gen_pb2
@@ -33,59 +34,64 @@ print(f"TFX version: {tfx.__version__}")
 @component(use_beam=True)
 def ingest_movie_lens_component( \
   #name: tfx.dsl.components.Parameter[str], \
-  ratings_uri: tfx.dsl.components.Parameter[str], \
-  movies_uri: tfx.dsl.components.Parameter[str], \
-  users_uri: tfx.dsl.components.Parameter[str], \
-  headers_present: tfx.dsl.components.Parameter[bool], \
-  delim: tfx.dsl.components.Parameter[str], \
-  ratings_key_col_dict: tfx.dsl.components.Parameter[str], \
-  movies_key_col_dict: tfx.dsl.components.Parameter[str], \
-  users_key_col_dict: tfx.dsl.components.Parameter[str], \
+  infiles_dict_ser: tfx.dsl.components.Parameter[str], \
   bucket_names: tfx.dsl.components.Parameter[str], \
   buckets: tfx.dsl.components.Parameter[str], \
-  output_examples: tfx.dsl.components.OutputArtifact[standard_artifacts.Examples],\
-  beam_pipeline: annotations.BeamComponentParameter[beam.Pipeline] = None) -> None:
+  output_examples: \
+  tfx.dsl.components.OutputArtifact[standard_artifacts.Examples],\
+  beam_pipeline: annotations.BeamComponentParameter[beam.Pipeline]=None) -> None:
   """
   ingest the ratings, movies, and users files, left join them on ratings,
   and split them into the given buckets by percentange and bucket_name.
   
   Args:
-    :param ratings_uri: uri of ratings.dat or equivalent
-    :param movies_uri: uri of movies.dat or equiv
-    :param users_uri: uri of users.dat or equiv
-    :param headers_present: whether or not a header line is present as first line
-    :param delim: the delimeter between columns in a row
-    :param ratings_key_col_dict: for ratings file, a dictionary with key:values
-      being header_column_name:column number.  
-      this is a string from json.dumps(the_dict)
-    :param movies_key_col_dict: for movies file, a dictionary with key:values
-      being header_column_name:column number.
-      this is a string from json.dumps(the_dict)
-    :param users_key_col_dict: for users file, a dictionary with key:values
-      being header_column_name:column number.
-      this is a string from json.dumps(the_dict)
+    :param infiles_dict_ser: a string created from using pickle.dumps()
+      on the infiles_dict created with 
+      infile_dict_util.merge_dicts where its input arguments are made
+      from infile_dict_util.make_file_dict
     :param buckets: list of partitions in percent.
-      this is a string from json.dumps(the_list)
-    :param bucket_names: list of partitions names corresponding to buckets.
-      this is a string from json.dumps(the_list)
-    :param output_examples: ChannelParameter(type=standard_artifacts.Examples),
+      this is a string from pickle.dumps(the_list)
+    :param bucket_names: list of partitions names corresponding to 
+      buckets.  this is a string from pickle.dumps(the_list)
+    :param output_examples: 
+      ChannelParameter(type=standard_artifacts.Examples),
     :param beam_pipeline: injected into method by TFX.  do not supply
-       this value
+      this value
   """
   logging.info("ingest_movie_lens_component")
 
-  ratings_key_col_dict = json.loads(ratings_key_col_dict)
-  movies_key_col_dict = json.loads(movies_key_col_dict)
-  users_key_col_dict = json.loads(users_key_col_dict)
-  buckets = json.loads(buckets)
-  bucket_names = json.loads(bucket_names)
+  try:
+    infiles_dict = pickle.loads(infiles_dict_ser)
+  except Exception as ex:
+    err = f"error using pickle.loads(infiles_dict_ser)"
+    logging.error(f'{err} : {ex}')
+    raise ValueError(f'{err} : {ex}')
+
+  err = dict_formedness_error(infiles_dict)
+  if err:
+    logging.error(err)
+    raise ValueError(err)
+    
+  try:
+    buckets = pickle.loads(buckets)
+  except Exception as ex:
+    err = f"error using pickle.loads(buckets)"
+    logging.error(err)
+    raise ValueError(err)
+
+  try:
+    bucket_names = pickle.loads(bucket_names)
+  except Exception as ex:
+    err = f"error using pickle.loads(bucket_namess)"
+    logging.error(err)
+    raise ValueError(err)
 
   if len(buckets) != len(bucket_names):
     err = (
-      f'deserialized buckets must be same length as deserialized bucket_names'
+      f'deserialized len(buckets) != deserialized len(bucket_names)'
       f' buckets={buckets}, bucket_names={bucket_names}')
-    logger.error(f'ERROR: {err}: {ex}')
-    raise ValueError(f'ERROR: {err}: {ex}')
+    logging.error(f'ERROR: {err}')
+    raise ValueError(f'ERROR: {err}')
 
   # see https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/proto/example_gen.proto#L146
   splits = [example_gen_pb2.SplitConfig.Split(name=n, hash_buckets=b) \
@@ -98,13 +104,10 @@ def ingest_movie_lens_component( \
   )
 
   with beam_pipeline as pipeline:
-    ratings = ingest_and_join(pipeline=pipeline, \
-      ratings_uri=ratings_uri, movies_uri=movies_uri, \
-      users_uri=users_uri, headers_present=headers_present, delim=delim, \
-      ratings_key_dict=ratings_key_col_dict, \
-      users_key_dict=users_key_col_dict, \
-      movies_key_dict=movies_key_col_dict)
+    ratings, schema_list = ingest_and_join(pipeline=pipeline, \
+      infiles_dict = infiles_dict)
 
+    #perform partitions
     total = sum(buckets)
     s = 0
     cumulative_buckets = []
@@ -113,15 +116,19 @@ def ingest_movie_lens_component( \
       cumulative_buckets.append(s)
 
     #type: apache_beam.pvalue.DoOutputsTuple
-    ratings_tuple = ratings \
-      | f'split_{time.time_ns()}' >> beam.Partition( \
-      partitionFn, len(buckets), cumulative_buckets, output_config.split_config)
+    ratings_tuple = ratings | f'split_{time.time_ns()}' >> beam.Partition( \
+      partitionFn, len(buckets), cumulative_buckets, \
+      output_config.split_config)
 
     logging.debug(f"have ratings_tuple.  type={type(ratings_tuple)}")
 
     logging.debug(f'output_examples.uri={output_examples.uri}')
+    # for a local test on kaggle, this was:
+    #output_examples.uri=/kaggle/working/bin/pipelines/movie_ens_ingest_test/ingest_movie_lens_component/output_examples/8
 
     """
+    TODO: finish here.  write tf.train.Examples, then TFRecords
+    
     # Create a TFRecord file path within the output artifact's URI
     output_path = os.path.join(output_examples.uri, 'data.tfrecord')
     # Write the data as TF Examples to the specified path
@@ -165,23 +172,46 @@ if __name__ == "__main__":
   movies_uri = f"{prefix}movies.dat"
   users_uri = f"{prefix}users.dat"
 
-  ratings_key_col_dict = {"user_id": 0, "movie_id": 1, "rating": 2,\
-                          "timestamp": 3}
-  ratings_key_col_dict = json.dumps(ratings_key_col_dict)
-  movies_key_col_dict = {"movie_id": 0, "title": 1, "genres": 2}
-  movies_key_col_dict = json.dumps(movies_key_col_dict)
-  users_key_col_dict = {"user_id": 0, "gender": 1, "age": 2, \
-                        "occupation": 3, "zipcode": 4}
-  users_key_col_dict = json.dumps(users_key_col_dict)
-  delim = "::"
+  ratings_col_names = ["user_id", "movie_id", "rating"]
+  ratings_col_types = [int, int,
+                       int]  # for some files, ratings are floats
+  movies_col_names = ["movie_id", "title", "genres"]
+  movies_col_types = [int, str, str]
+  users_col_names = ["user_id", "gender", "age", "occupation",
+                     "zipcode"]
+  users_col_types = [int, str, int, int, str]
 
-  #these might need to be serialized into strings for tfx,
-  # use json.dumps
-  headers_present = False
+  expected_schema_cols = [ \
+    ("user_id", int), ("movie_id", int), ("rating", int), \
+    ("gender", str), ("age", int), ("occupation", int), \
+    ("genres", str)]
+
+  ratings_dict = make_file_dict(for_file='ratings', \
+                                uri=ratings_uri,
+                                col_names=ratings_col_names, \
+                                col_types=ratings_col_types,
+                                headers_present=False, delim="::")
+
+  movies_dict = make_file_dict(for_file='movies', \
+                               uri=movies_uri,
+                               col_names=movies_col_names, \
+                               col_types=movies_col_types,
+                               headers_present=False, delim="::")
+
+  users_dict = make_file_dict(for_file='users', \
+                              uri=users_uri, col_names=users_col_names, \
+                              col_types=users_col_types,
+                              headers_present=False, delim="::")
+
+  infiles_dict = merge_dicts(ratings_dict=ratings_dict, \
+                             movies_dict=movies_dict, \
+                             users_dict=users_dict)
+
+  infiles_dict_ser = pickle.dumps(infiles_dict)
   buckets = [80, 10, 10]
-  buckets = json.dumps(buckets)
+  buckets = pickle.dumps(buckets)
   bucket_names = ['train', 'eval', 'test']
-  bucket_names = json.dumps(bucket_names)
+  bucket_names = pickle.dumps(bucket_names)
 
   name = "test_tfx_component"
 
@@ -196,18 +226,14 @@ if __name__ == "__main__":
   #context = InteractiveContext()
 
   ratings_example_gen = ingest_movie_lens_component( \
-    ratings_uri=ratings_uri, movies_uri=movies_uri, \
-    users_uri=users_uri, headers_present=headers_present, \
-    delim=delim, ratings_key_col_dict=ratings_key_col_dict, \
-    users_key_col_dict=users_key_col_dict, \
-    movies_key_col_dict=movies_key_col_dict, \
+    infiles_dict_ser=infiles_dict_ser, \
     bucket_names=bucket_names, buckets=buckets \
   )
 
   #statistics_gen = tfx.components.StatisticsGen(\
   #  examples=ratings_example_gen.outputs['output_examples'])
 
-  PIPELINE_NAME = "movie_ens_ingest_test"
+  PIPELINE_NAME = "movie_lens_ingest_test"
   PIPELINE_ROOT = os.path.join(output_dir, 'pipelines', PIPELINE_NAME)
   # Path to a SQLite DB file to use as an MLMD storage.
   METADATA_PATH = os.path.join(output_dir, 'metadata', PIPELINE_NAME, \

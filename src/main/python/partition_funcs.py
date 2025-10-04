@@ -49,18 +49,17 @@ def _GeneratePartitionKey(record: Union[tf.train.Example,\
 
 #from https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/components/example_gen/base_example_gen_executor.py#L72
 def partitionFn(\
-    record: Union[tf.train.Example, tf.train.SequenceExample, bytes, \
-    Dict[str,Any]], \
+    record: Union[tf.train.Example, tf.train.SequenceExample, bytes, Dict[str,Any]], \
     num_partitions: int, \
-    buckets: List[int], \
+    cumulative_buckets: List[int], \
     split_config: example_gen_pb2.SplitConfig,\
 ) -> int:
   """Partition function for the ExampleGen's output splits."""
-  assert num_partitions == len(buckets), 'Partitions do not match bucket number.'
+  assert num_partitions == len(cumulative_buckets), 'Partitions do not match bucket number.'
   partition_str = _GeneratePartitionKey(record, split_config)
-  bucket = int(hashlib.sha256(partition_str).hexdigest(), 16) % buckets[-1]
+  bucket = int(hashlib.sha256(partition_str).hexdigest(), 16) % cumulative_buckets[-1]
   # For example, if buckets is [10,50,80], there will be 3 splits:
   #   bucket >=0 && < 10, returns 0
   #   bucket >=10 && < 50, returns 1
   #   bucket >=50 && < 80, returns 2
-  return bisect.bisect(buckets, bucket)
+  return bisect.bisect(cumulative_buckets, bucket)

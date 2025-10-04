@@ -5,6 +5,7 @@ __pycache__/
 
 tt
 tt.sw?
+bin/
 
 # C extensions
 *.so

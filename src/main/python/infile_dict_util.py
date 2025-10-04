@@ -96,7 +96,7 @@ def create_namedtuple_schemas(infiles_dict: Dict[str, Union[str, Dict]]) -> Dict
       idx = infiles_dict[key]['cols'][col_name]['index']
       t = infiles_dict[key]['cols'][col_name]['type']
       s.append((col_name, idx, t))
-    s.sort(key=lambda x: x[0])
+    s.sort(key=lambda x: x[1])
     s2 = []
     for c, i, t in s:
       s2.append((c, t))

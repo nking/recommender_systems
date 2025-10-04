@@ -63,6 +63,13 @@ import json
 #tf.train.SequenceExample is for variable-length sequential data,
 #    such as sentences, time series, or videos.
 
+## TODO: edit for change in arguments.
+## TODO: edit to add PCollection -> tf.train.Example -> TFRecord
+## TODO: follow up on adding output splitconfig as input to the
+#        Component instead of using separate arguments for
+#        buckets and bucket_names.  MLMD will then handle registration
+#        and lineage of these steps?
+
 class IngestMovieLensExecutorSpec(ComponentSpec):
   """ComponentSpec for Custom TFX MovieLensExecutor Component."""
   PARAMETERS = {
