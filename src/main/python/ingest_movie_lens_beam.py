@@ -86,15 +86,19 @@ def merge_by_key(l_pc : beam.pvalue.PCollection, r_pc : beam.pvalue.PCollection,
 
   return joined_data
 
+@beam.ptransform_fn
+@beam.typehints.with_input_types(Dict[str, Union[str, Dict]])
+@beam.typehints.with_output_types(Dict[str, beam.pvalue.PCollection])
 def _read_files(infiles_dict: Dict[str, Union[str, Dict]]) -> \
   Dict[str, beam.pvalue.PCollection]:
   pc = {}
+
   for key in ['ratings', 'movies', 'users']:
     if infiles_dict[key]['headers_present']:
       skip = 1
     else:
       skip = 0
-    pc[key] = pipeline | f'read_{key}_{time.time_ns()}' >> beam.io.ReadFromText(\
+    pc[key] = beam.io.ReadFromText(\
       infiles_dict[key]['uri'], skip_header_lines=skip, coder=CustomUTF8Coder()) \
       | f'parse_{key}_{time.time_ns()}' >> beam.Map(lambda line: line.split(infiles_dict[key]['delim']))
   return pc
@@ -112,7 +116,7 @@ def write_to_csv(pcollection : beam.pvalue.PCollection, \
   column_names : str, prefix_path:str, delim:str='_') -> None:
   # format the lines into a delimiter separated string then write to
   # file
-  ratings | f"format_for_writing {time.time_ns()}" >> beam.Map( \
+  pcollection | f"format_for_writing {time.time_ns()}" >> beam.Map( \
     lambda x: delim.join(x)) \
     | f"write to text {time.time_ns()}"  >> beam.io.WriteToText( \
     file_path_prefix=prefix_path, file_name_suffix='.csv', \
