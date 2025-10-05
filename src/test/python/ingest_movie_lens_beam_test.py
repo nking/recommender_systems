@@ -99,7 +99,7 @@ class IngestMovieLensBeamTest(tf.test.TestCase):
     with beam.Pipeline(options=options) as pipeline:
 
       #test read files
-      pc = _read_files(self.infiles_dict)
+      pc = pipeline | f"read files {time.time_ns()}" >> _read_files(self.infiles_dict)
       #pc['ratings'] | f'ratings: {time.time_ns()}' >> \
       #  beam.Map(lambda x: print(f'ratings={x}'))
       r_count = pc['ratings']  | 'count' >> beam.combiners.Count.Globally()
