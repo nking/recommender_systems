@@ -191,22 +191,30 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
     write_to_tfrecords = True
 
     output_examples = output_dict['output_examples']
+    if output_examples is None:
+      logging.error("ERROR: fix coding error for missing output_examples")
+      raise ValueError("Error: fix coding error for missing output_examples")
+
+    output_examples.splits = bucket_names.copy()
 
     #output_examples.set_string_custom_property('description',\
     #  'ratings file created from left join of ratings, users, movies')
+
+    #https://www.tensorflow.org/tfx/api_docs/python/tfx/v1/types/standard_artifacts/Examples
+    # files should be written as {uri}/Split-{split_name1}
 
     if not write_to_tfrecords:
       #write to csv
       column_names = ",".join([t[0] for t in column_name_type_list])
       for i, part in enumerate(ratings_tuple):
-        prefix_path = f'{output_examples.uri}/{bucket_names[i]}'
+        prefix_path = f'{output_examples.uri}/Split-{bucket_names[i]}'
         write_to_csv(pcollection=part, \
           column_names=column_names, prefix_path=prefix_path, delim='_')
       logging.info('Examples written to output_examples as CSV.')
     else:
       #write to TFRecords
       for i, part in enumerate(ratings_tuple):
-          prefix_path = f'{output_examples.uri}/{bucket_names[i]}'
+          prefix_path = f'{output_examples.uri}/Split-{bucket_names[i]}'
           convert_to_tf_example(part, column_name_type_list) \
             | f"Serialize {time.time_ns()}" >> beam.Map(lambda x: x.SerializeToString()) \
             | f"write_to_tf {time.time_ns()}" >> beam.io.tfrecordio.WriteToTFRecord(\
@@ -253,7 +261,9 @@ class IngestMovieLensComponent(base_beam_component.BaseBeamComponent):
     print(f'DEBUG IngestMovieLensComponent init')
 
     if not output_examples:
-      output_examples = types.Channel(type=standard_artifacts.Examples)
+      examples_artifact = standard_artifacts.Examples()
+      examples_artifact.splits = bucket_names.copy()
+      output_examples = channel_utils.as_channel([examples_artifact])
 
     spec = IngestMovieLensExecutorSpec(
       name=name, infiles_dict_ser=infiles_dict_ser, \

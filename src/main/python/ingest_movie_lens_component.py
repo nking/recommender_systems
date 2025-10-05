@@ -126,6 +126,9 @@ def ingest_movie_lens_component( \
 
     write_to_tfrecords = True
 
+    # https://www.tensorflow.org/tfx/api_docs/python/tfx/v1/types/standard_artifacts/Examples
+    # files should be written as {uri}/Split-{split_name1}
+
     output_examples.set_string_custom_property('description',\
       'ratings file created from left join of ratings, users, movies')
 
@@ -133,13 +136,13 @@ def ingest_movie_lens_component( \
       #write to csv
       column_names = ",".join([t[0] for t in column_name_type_list])
       for i, part in enumerate(ratings_tuple):
-        prefix_path = f'{output_examples.uri}/{bucket_names[i]}'
+        prefix_path = f'{output_examples.uri}/Split-{bucket_names[i]}'
         write_to_csv(pcollection=part, \
           column_names=column_names, prefix_path=prefix_path, delim='_')
     else:
       #write to TFRecords
       for i, part in enumerate(ratings_tuple):
-          prefix_path = f'{output_examples.uri}/{bucket_names[i]}'
+          prefix_path = f'{output_examples.uri}/Split-{bucket_names[i]}'
           convert_to_tf_example(part, column_name_type_list) \
             | f"Serialize {time.time_ns()}" >> beam.Map(lambda x: x.SerializeToString()) \
             | f"write_to_tf {time.time_ns()}" >> beam.io.tfrecordio.WriteToTFRecord(\
