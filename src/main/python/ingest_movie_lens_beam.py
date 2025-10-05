@@ -120,7 +120,7 @@ def write_to_csv(pcollection : beam.pvalue.PCollection, \
 
 @beam.ptransform_fn
 @beam.typehints.with_input_types(Dict[str, Union[str, Dict]])
-@beam.typehints.with_output_types(Tuplr[beam.pvalue.PCollection, List[Tuple[str, Any]]])
+@beam.typehints.with_output_types(Tuple[beam.pvalue.PCollection, List[Tuple[str, Any]]])
 def ingest_and_join( \
   infiles_dict: Dict[str, Union[str, Dict]]) -> \
   Tuple[beam.pvalue.PCollection, List[Tuple[str, Any]]]:

@@ -32,7 +32,7 @@ from tfx.orchestration.launcher import in_process_component_launcher
 from tfx.proto import example_gen_pb2
 from tfx.utils import name_utils
 
-from ingest_movie_lens_tfx import IngestMovieLensComponent, IngestMovieLensExecutor
+from ingest_movie_lens_component import *
 
 from ml_metadata.proto import metadata_store_pb2
 
