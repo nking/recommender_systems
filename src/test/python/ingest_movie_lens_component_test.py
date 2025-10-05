@@ -95,7 +95,7 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
   @mock.patch.object(publisher, 'Publisher')
   def testRun(self, mock_publisher):
 
-    infiles_dict_ser = pickle.dumps(infiles_dict)
+    infiles_dict_ser = pickle.dumps(self.infiles_dict)
 
     mock_publisher.return_value.publish_execution.return_value = {}
 
