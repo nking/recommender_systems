@@ -34,7 +34,6 @@ from tfx.proto import example_gen_pb2
 
 from ingest_movie_lens_beam import ingest_and_join
 from movie_lens_utils import *
-from partition_funcs import partition_fn
 
 from tfx import v1 as tfx
 
