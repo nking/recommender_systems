@@ -1,0 +1,7 @@
+- consider whether it would be simpler to change design to:
+  - ingest, join, and write to tfrecord as is already done.
+    this can still be first step in a pipeline.
+  - then use tfx.v1.components.ImportExampleGen to
+    read in the tfrecords and handle the splits.
+- finish the rest of the pipeline
+  as agile stories and tasks and implement them...
