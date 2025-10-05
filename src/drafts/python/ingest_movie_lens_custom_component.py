@@ -33,7 +33,7 @@ from tfx.types import artifact_utils, standard_artifacts, standard_component_spe
 from tfx.proto import example_gen_pb2
 
 from ingest_movie_lens_beam import ingest_and_join
-from movie_lens_utilss import *
+from movie_lens_utils import *
 from partition_funcs import partition_fn
 
 from tfx import v1 as tfx
@@ -58,8 +58,10 @@ print(f"TFX version: {tfx.__version__}")
 
 ## TODO: follow up on adding output splitconfig as input to the
 #        Component instead of using separate arguments for
-#        buckets and bucket_names.  MLMD will then handle registration
-#        and lineage of these steps?
+#        buckets and bucket_names.
+#        it can only be placed in ComponentSpec Parameters
+#        not INPUTS, so no automatic MLMD registration unfortunately
+
 
 class IngestMovieLensExecutorSpec(ComponentSpec):
   """ComponentSpec for Custom TFX MovieLensExecutor Component."""
@@ -112,8 +114,6 @@ class IngestMovieLensExecutorSpec(ComponentSpec):
 # It might be simpler to extend
 # base_executor.BaseExecutor and override the Do method instead of
 # extending BaseExampleGenExecutor as is done here.
-
-#TODO: revist https://github.com/tensorflow/tfx/blob/master/tfx/components/example_gen/base_example_gen_executor.py
 
 class IngestMovieLensExecutor(BaseExampleGenExecutor):
   """executor to ingest movie lens data, join, and split into buckets"""

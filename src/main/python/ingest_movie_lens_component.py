@@ -11,7 +11,7 @@ from tfx.dsl.component.experimental import annotations
 from tfx.dsl.component.experimental.decorators import component
 #from tfx.dsl.components.component import component
 
-from movie_lens_utilss import *
+from movie_lens_utils import *
 from ingest_movie_lens_beam import ingest_and_join
 from tfx.proto import example_gen_pb2
 
@@ -145,105 +145,3 @@ def ingest_movie_lens_component( \
             | f"Serialize {time.time_ns()}" >> beam.Map(lambda x: x.SerializeToString()) \
             | f"write_to_tf {time.time_ns()}" >> beam.io.tfrecordio.WriteToTFRecord(\
             file_path_prefix=prefix_path, file_name_suffix='.tfrecord')
-
-
-if __name__ == "__main__":
-
-  from tfx.orchestration.local.local_dag_runner import LocalDagRunner
-
-  #TODO: move this out of source code and into test code
-  #  ... unittest.mock in Python
-  # see https://github.com/tensorflow/tfx/blob/master/tfx/components/example_gen/base_example_gen_executor_test.py
-
-  print(f'begin test')
-
-  kaggle = True
-  if kaggle:
-    prefix = '/kaggle/working/ml-1m/'
-    output_dir = '/kaggle/working/bin'
-  else:
-    prefix = "../resources/ml-1m/"
-    output_dir = '../../bin'
-  ratings_uri = f"{prefix}ratings.dat"
-  movies_uri = f"{prefix}movies.dat"
-  users_uri = f"{prefix}users.dat"
-
-  ratings_col_names = ["user_id", "movie_id", "rating"]
-  ratings_col_types = [int, int,
-                       int]  # for some files, ratings are floats
-  movies_col_names = ["movie_id", "title", "genres"]
-  movies_col_types = [int, str, str]
-  users_col_names = ["user_id", "gender", "age", "occupation",
-                     "zipcode"]
-  users_col_types = [int, str, int, int, str]
-
-  expected_schema_cols = [ \
-    ("user_id", int), ("movie_id", int), ("rating", int), \
-    ("gender", str), ("age", int), ("occupation", int), \
-    ("genres", str)]
-
-  ratings_dict = create_infile_dict(for_file='ratings', \
-                                uri=ratings_uri,
-                                col_names=ratings_col_names, \
-                                col_types=ratings_col_types,
-                                headers_present=False, delim="::")
-
-  movies_dict = create_infile_dict(for_file='movies', \
-                               uri=movies_uri,
-                               col_names=movies_col_names, \
-                               col_types=movies_col_types,
-                               headers_present=False, delim="::")
-
-  users_dict = create_infile_dict(for_file='users', \
-                              uri=users_uri, col_names=users_col_names, \
-                              col_types=users_col_types,
-                              headers_present=False, delim="::")
-
-  infiles_dict = create_infiles_dict(ratings_dict=ratings_dict, \
-                             movies_dict=movies_dict, \
-                             users_dict=users_dict)
-
-  infiles_dict_ser = pickle.dumps(infiles_dict)
-  buckets = [80, 10, 10]
-  buckets = pickle.dumps(buckets)
-  bucket_names = ['train', 'eval', 'test']
-  bucket_names = pickle.dumps(bucket_names)
-
-  name = "test_tfx_component"
-
-  #exec_properties = {ratings_uri:ratings_uri, movies_uri:movies_uri, \
-  #  users_uri:users_uri, ratings_key_col_dict:ratings_key_col_dict, \
-  #  movies_key_col_dict:movies_key_col_dict, \
-  #  users_key_col_dict:users_key_col_dict, \
-  #  headers_present:headers_present, delim:delim, buckets:buckets \
-  #}
-  #exec_properties = json.dumps(exec_properties)
-
-  #context = InteractiveContext()
-
-  ratings_example_gen = ingest_movie_lens_component( \
-    infiles_dict_ser=infiles_dict_ser, \
-    bucket_names=bucket_names, buckets=buckets \
-  )
-
-  #statistics_gen = tfx.components.StatisticsGen(\
-  #  examples=ratings_example_gen.outputs['output_examples'])
-
-  PIPELINE_NAME = "movie_lens_ingest_test"
-  PIPELINE_ROOT = os.path.join(output_dir, 'pipelines', PIPELINE_NAME)
-  # Path to a SQLite DB file to use as an MLMD storage.
-  METADATA_PATH = os.path.join(output_dir, 'metadata', PIPELINE_NAME, \
-    'metadata.db')
-
-  os.makedirs(os.path.join(output_dir, 'metadata'), exist_ok=True)
-  os.makedirs(PIPELINE_ROOT, exist_ok=True)
-
-  my_pipeline = tfx.dsl.Pipeline(\
-    pipeline_name=PIPELINE_NAME, \
-    pipeline_root=PIPELINE_ROOT,\
-    metadata_connection_config=tfx.orchestration.metadata.sqlite_metadata_connection_config(METADATA_PATH),\
-    components=[ratings_example_gen], enable_cache=True)
-
-  LocalDagRunner().run(my_pipeline)
-
-  print("tests done")
