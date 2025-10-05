@@ -87,9 +87,10 @@ def merge_by_key(l_pc : beam.pvalue.PCollection, r_pc : beam.pvalue.PCollection,
   return joined_data
 
 @beam.ptransform_fn
-@beam.typehints.with_input_types(Dict[str, Union[str, Dict]])
+@beam.typehints.with_input_types(beam.pvalue.Pipeline, Dict[str, Union[str, Dict]])
 @beam.typehints.with_output_types(Dict[str, beam.pvalue.PCollection])
-def _read_files(infiles_dict: Dict[str, Union[str, Dict]]) -> \
+def _read_files(pipeline : beam.pvalue.Pipeline, \
+  infiles_dict: Dict[str, Union[str, Dict]]) -> \
   Dict[str, beam.pvalue.PCollection]:
   pc = {}
 
@@ -98,7 +99,7 @@ def _read_files(infiles_dict: Dict[str, Union[str, Dict]]) -> \
       skip = 1
     else:
       skip = 0
-    pc[key] = beam.io.ReadFromText(\
+    pc[key] = pipeline | f"read_{key}_{time.time_ns()}" >> beam.io.ReadFromText(\
       infiles_dict[key]['uri'], skip_header_lines=skip, coder=CustomUTF8Coder()) \
       | f'parse_{key}_{time.time_ns()}' >> beam.Map(lambda line: line.split(infiles_dict[key]['delim']))
   return pc
@@ -123,9 +124,10 @@ def write_to_csv(pcollection : beam.pvalue.PCollection, \
     header=column_names)
 
 @beam.ptransform_fn
-@beam.typehints.with_input_types(Dict[str, Union[str, Dict]])
+@beam.typehints.with_input_types(beam.pvalue.Pipeline, Dict[str, Union[str, Dict]])
 @beam.typehints.with_output_types(Tuple[beam.pvalue.PCollection, List[Tuple[str, Any]]])
 def ingest_and_join( \
+  pipeline : beam.pvalue.Pipeline, \
   infiles_dict: Dict[str, Union[str, Dict]]) -> \
   Tuple[beam.pvalue.PCollection, List[Tuple[str, Any]]]:
   """
@@ -133,6 +135,7 @@ def ingest_and_join( \
   left joins of ratings with user information and movie genres to
   make a PCollection.  The PCollection has an associated schema in it.
 
+  :param pipeline:
   :param infiles_dict
     a dictionary of file information for each of the 3 files, that is
     the ratings file, movies file, and users file.
@@ -146,7 +149,7 @@ def ingest_and_join( \
   if err:
     raise ValueError(err)
 
-  pc = _read_files(infiles_dict)
+  pc = _read_files(pipeline, infiles_dict)
 
   # ratings: user_id,movie_id,rating
   # movie_id,title,genre
@@ -184,70 +187,3 @@ def ingest_and_join( \
   #    file_path_prefix=f'a_{i}_', file_name_suffix='.txt')
 
   return ratings, columns
-
-#@beam.ptransform_fn
-#@beam.typehints.with_input_types(beam.Pipeline, str, str, str,\
-#  Dict[str, int], Dict[str, int], Dict[str, int], \
-#  List[int])
-#@beam.typehints.with_output_types(Dict[str, beam.pvalue.PCollection])
-def ingest_join_and_split(\
-  infiles_dict: Dict[str, Union[str, Dict]], \
-  buckets : List[int], bucket_names : List[str]) -> \
-  Tuple[Dict[str, beam.pvalue.PCollection], List[Tuple[str, Any]]]:
-  """
-  reads in the 3 expected files from the uris given, and then uses
-  left joins of ratings with user information and movie genres to
-  make a PCollection, and then splits the PCollection into the
-  given buckets, randomly, returning a dictionary of the partitioned
-  PCollections.
-
-  :param infiles_dict
-    a dictionary of file information for each of the 3 files, that is
-    the ratings file, movies file, and users file.
-    the dictionary is made by using movie_lens_utils.create_infile_dict
-    for each file, then movie_lens_utils.create_infiles_dict.
-
-  :param buckets: list of partitions in percent
-  :param bucket_names: list of partition bucket names
-  :return: a tuple of PCollection of ratings with joined information from users and movies where each tuple is for a
-     partition specified in partition list
-  """
-
-  # user_id,movie_id,rating,gender,age,occupation,zipcode,genres
-  #beam.pvalue.PCollection, List[Tuple[str, Any]]
-  ratings, column_name_type_list = ingest_and_join(infiles_dict=infiles_dict)
-
-  if buckets is None or len(buckets)==0:
-    buckets = [100]
-    if bucket_names is None or len(bucket_names) == 0:
-      bucket_names = ['train']
-
-  #print(f'RATINGS type{type(ratings)}')
-  #ratings | f'ratings_{time.time_ns()}' >> beam.Map(print)
-  #['user_id', 'movie_id', 'rating', 'gender', 'age', 'occupation', 'genres']
-
-  #consider ways to handle this scatter gather more efficiently
-  def split_fn(row, ppartitions):
-    # Using a deterministic hash function ensures the splits are consistent
-    total = sum(ppartitions)
-    b = [p / total for p in ppartitions]
-    rand_num = random.random()
-    s = 0
-    for i, p in enumerate(b):
-      s += p
-      if rand_num < s:
-        return i
-    return len(ppartitions) - 1
-
-  #type: apache_beam.pvalue.DoOutputsTuple
-  ratings_parts = ratings \
-    | f'split_{time.time_ns()}' >> beam.Partition(split_fn, buckets)
-
-  #dictionary of PCollections:
-  output_dict = {f'{bucket_names[i]}]' : pc for i, pc in enumerate(ratings_parts)}
-
-  #for i, part in enumerate(ratings_parts):
-  #  part | f'PARTITIONED_{i}_{time.time_ns()}' >> beam.io.WriteToText(\
-  #    file_path_prefix=f'a_{i}_', file_name_suffix='.txt')
-
-  return output_dict, column_name_type_list

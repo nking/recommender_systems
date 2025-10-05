@@ -28,7 +28,7 @@ and want the transformations to be distributable.
   pros:
     - less code, simpler to maintain
   cons:
-    - by performing the transformation to featurees in the model, we are
+    - by performing the transformation to features in the model, we are
       repeating work, especially during the compute intensive hyper-parameter
       tuning phase.
     - features are not saved in a feature store, which might be a preference

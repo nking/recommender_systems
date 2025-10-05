@@ -16,6 +16,6 @@ consider putting the original transformations into a script that uses Polars
 consider improving the zipcodes to use ZCTA .. 
   census has a database of zip codes mapped to geographic boundaries 
   can get centroid of them and then time zone.
-  consider also using the 2010 database for the failied 2020 lookups.
+  consider also using the 2010 database for the failed 2020 lookups.
 
 

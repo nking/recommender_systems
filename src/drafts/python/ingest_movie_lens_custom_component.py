@@ -117,7 +117,9 @@ class IngestMovieLensExecutorSpec(ComponentSpec):
 class IngestMovieLensExecutor(BaseExampleGenExecutor):
   """executor to ingest movie lens data, join, and split into buckets"""
 
-  def GetInputSourceToExamplePTransform(self) -> beam.PTransform:
+  def GetInputSourceToExamplePTransform(self, \
+    pipeline : beam.pvalue.Pipeline, \
+    infiles_dict: Dict[str, Union[str, Dict]]) -> beam.PTransform:
     """Returns PTransform for ratings, movies, users joined to TF examples."""
     logging.debug("in IngestMovieLensExecutor.GetInputSourceToExamplePTransform")
     try:
@@ -125,7 +127,7 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
     except Exception as ex:
       logging.error(f'ERROR: {ex}')
       raise ValueError(f'ERROR: {ex}')
-    return ingest_and_join(infiles_dict=infiles_dict)
+    return ingest_and_join
 
   def GenerateExamplesByBeam(self, \
     pipeline: beam.Pipeline, \
@@ -152,8 +154,8 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
     logging.debug(\
       "in IngestMovieLensExecutor.GenerateExamplesByBeam")
 
-    ratings, column_name_type_list = pipeline \
-      | f"ingest to pc {time.time_ns()}" >> self.GetInputSourceToExamplePTransform()
+    ratings, column_name_type_list = \
+      self.GetInputSourceToExamplePTransform(pipeline=pipelne, infiles_dict=infiles_dict)
 
     bucket_names = exec_properties['bucket_names']
     buckets = exec_properties['buckets']

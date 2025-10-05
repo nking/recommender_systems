@@ -105,8 +105,7 @@ def ingest_movie_lens_component( \
   with beam_pipeline as pipeline:
     #beam.pvalue.PCollection, List[Tuple[str, Any]
     ratings, column_name_type_list = \
-      pipeline | f'ingest_and_join_{time.time_ns()}'>> \
-      ingest_and_join(infiles_dict = infiles_dict)
+      ingest_and_join(pipeline=pipeline, infiles_dict = infiles_dict)
 
     #perform partitions
     total = sum(buckets)

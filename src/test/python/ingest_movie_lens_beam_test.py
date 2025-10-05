@@ -99,7 +99,7 @@ class IngestMovieLensBeamTest(tf.test.TestCase):
     with beam.Pipeline(options=options) as pipeline:
 
       #test read files
-      pc = pipeline | f"read files {time.time_ns()}" >> _read_files(self.infiles_dict)
+      pc =  _read_files(pipeline, self.infiles_dict)
       #pc['ratings'] | f'ratings: {time.time_ns()}' >> \
       #  beam.Map(lambda x: print(f'ratings={x}'))
       r_count = pc['ratings']  | 'count' >> beam.combiners.Count.Globally()
@@ -113,13 +113,8 @@ class IngestMovieLensBeamTest(tf.test.TestCase):
 
       #beam.pvalue.PCollection, List[Tuple[str, Any]]
       ratings, column_name_type_list = \
-        pipeline | f"ingest_and_join {time.time_ns()}" >> \
-        ingest_and_join(infiles_dict=self.infiles_dict)
+        ingest_and_join(pipeline, infiles_dict=self.infiles_dict)
 
       assert expected_schema_cols == column_name_type_list
-
-      #ratings_tuple, schema_list = ingest_join_and_split(
-      #  pipeline=pipeline, infiles_dict=self.infiles_dict, buckets=buckets,
-      #  bucket_names=bucket_names)
 
       assert_that(ratings, is_not_empty(), label=f'Assert Non-Empty ratings PCollection')
