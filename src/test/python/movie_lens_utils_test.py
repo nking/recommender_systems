@@ -17,9 +17,8 @@ class TestInfileDictUtils(unittest.TestCase):
     r = _assert_dict_1(ml_dict[key])
     self.assertIsNone(r, r)
 
-  def _assert_merged_dict_content(self,
-    merged_dict: Dict[str, Union[str, Dict]]) -> None:
-    r = dict_formedness_error(merged_dict)
+  def _assert_merged_dict_content(self, merged_dict: Dict[str, Union[str, Dict]]) -> None:
+    r = infiles_dict_formedness_error(merged_dict)
     self.assertIsNone(r, r)
 
   def test_make_file_dict(self):
