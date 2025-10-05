@@ -33,6 +33,7 @@ from tfx.proto import example_gen_pb2
 from tfx.utils import name_utils
 
 from ingest_movie_lens_component import *
+from movie_lens_utils import *
 
 from ml_metadata.proto import metadata_store_pb2
 

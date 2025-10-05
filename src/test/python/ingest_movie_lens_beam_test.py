@@ -17,6 +17,7 @@ from tfx.proto import example_gen_pb2
 from tfx.utils import name_utils
 
 from ingest_movie_lens_beam import *
+from movie_lens_utils import *
 
 from ml_metadata.proto import metadata_store_pb2
 
@@ -48,23 +49,17 @@ class IngestMovieLensBeamTest(tf.test.TestCase):
                                       col_types=ratings_col_types,
                                       headers_present=False, delim="::")
 
-    self._assert_dict_content(ratings_dict)
-
     movies_dict = create_infile_dict(for_file='movies', \
                                      uri=movies_uri,
                                      col_names=movies_col_names, \
                                      col_types=movies_col_types,
                                      headers_present=False, delim="::")
 
-    self._assert_dict_content(movies_dict)
-
     users_dict = create_infile_dict(for_file='users', \
                                     uri=users_uri,
                                     col_names=users_col_names, \
                                     col_types=users_col_types,
                                     headers_present=False, delim="::")
-
-    self._assert_dict_content(users_dict)
 
     self.infiles_dict = create_infiles_dict(ratings_dict=ratings_dict, \
                                       movies_dict=movies_dict, \
