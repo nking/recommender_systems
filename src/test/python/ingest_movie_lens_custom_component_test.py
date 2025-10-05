@@ -19,6 +19,8 @@
 
 import os
 
+import pickle
+
 from unittest import mock
 import tensorflow as tf
 from tfx.dsl.components.base import executor_spec
@@ -30,11 +32,11 @@ from tfx.orchestration.launcher import in_process_component_launcher
 from tfx.proto import example_gen_pb2
 from tfx.utils import name_utils
 
-from ingest_movie_lens_tfx import IngestMovieLensComponent, IngestMovieLensExecutor
+from ingest_movie_lens_custom_component import *
 
 from ml_metadata.proto import metadata_store_pb2
 
-class IngestMovieLensComponentTest(tf.test.TestCase):
+class IngestMovieLensTFXTest(tf.test.TestCase):
 
   def setUp(self):
     super().setUp()
@@ -43,20 +45,47 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
       prefix = '/kaggle/working/ml-1m/'
     else:
       prefix = "../resources/ml-1m/"
-    self.ratings_uri = f"{prefix}ratings.dat"
-    self.movies_uri = f"{prefix}movies.dat"
-    self.users_uri = f"{prefix}users.dat"
+    ratings_uri = f"{prefix}ratings.dat"
+    movies_uri = f"{prefix}movies.dat"
+    users_uri = f"{prefix}users.dat"
 
-    self.ratings_key_col_dict = {"user_id": 0, "movie_id": 1, "rating": 2, \
-                            "timestamp": 3}
-    self.movies_key_col_dict = {"movie_id": 0, "title": 1, "genres": 2}
-    self.users_key_col_dict = {"user_id": 0, "gender": 1, "age": 2, \
-                          "occupation": 3, "zipcode": 4}
-    self.delim = "::"
+    ratings_col_names = ["user_id", "movie_id", "rating"]
+    ratings_col_types = [int, int,
+                         int]  # for some files, ratings are floats
+    movies_col_names = ["movie_id", "title", "genres"]
+    movies_col_types = [int, str, str]
+    users_col_names = ["user_id", "gender", "age", "occupation",
+                       "zipcode"]
+    users_col_types = [int, str, int, int, str]
 
-    # these might need to be serialized into strings for tfx,
-    # use json.dumps
-    self.headers_present = False
+    ratings_dict = create_infile_dict(for_file='ratings', \
+                                      uri=ratings_uri,
+                                      col_names=ratings_col_names, \
+                                      col_types=ratings_col_types,
+                                      headers_present=False, delim="::")
+
+    self._assert_dict_content(ratings_dict)
+
+    movies_dict = create_infile_dict(for_file='movies', \
+                                     uri=movies_uri,
+                                     col_names=movies_col_names, \
+                                     col_types=movies_col_types,
+                                     headers_present=False, delim="::")
+
+    self._assert_dict_content(movies_dict)
+
+    users_dict = create_infile_dict(for_file='users', \
+                                    uri=users_uri,
+                                    col_names=users_col_names, \
+                                    col_types=users_col_types,
+                                    headers_present=False, delim="::")
+
+    self._assert_dict_content(users_dict)
+
+    self.infiles_dict = create_infiles_dict(ratings_dict=ratings_dict, \
+                                      movies_dict=movies_dict, \
+                                      users_dict=users_dict)
+
     self.buckets = [80, 10, 10]
     self.bucket_names = ['train', 'eval', 'test']
 
@@ -65,16 +94,13 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
   @mock.patch.object(publisher, 'Publisher')
   def testRun(self, mock_publisher):
 
+    infiles_dict_ser = pickle.dumps(infiles_dict)
+
     mock_publisher.return_value.publish_execution.return_value = {}
 
-    ratings_example_gen = IngestMovieLensComponent( \
-      name=self.name, ratings_uri=self.ratings_uri, movies_uri=self.movies_uri, \
-      users_uri=self.users_uri, headers_present=self.headers_present, \
-      delim=self.delim, ratings_key_col_dict=self.ratings_key_col_dict, \
-      users_key_col_dict=self.users_key_col_dict, \
-      movies_key_col_dict=self.movies_key_col_dict, \
-      bucket_names=self.bucket_names, buckets=self.buckets \
-    )
+    ratings_example_gen = (IngestMovieLensComponent( \
+      infiles_dict_ser=infiles_dict_ser, bucket_names=self.bucket_names, \
+      buckets=self.buckets))
 
     output_data_dir = os.path.join('/kaggle/working/bin/', self._testMethodName)
     pipeline_root = os.path.join(output_data_dir, 'Test')

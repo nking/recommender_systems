@@ -2,8 +2,8 @@ import unittest
 from typing import  Dict, Union
 #from ... main.python.infile_dict_util import *
 #from ... main.python.infile_dict_util import _assert_dict_1
-from infile_dict_util import *
-from infile_dict_util import _assert_dict_1
+from movie_lens_utils import *
+from movie_lens_utils import _assert_dict_1
 
 class TestInfileDictUtils(unittest.TestCase):
 
@@ -23,9 +23,15 @@ class TestInfileDictUtils(unittest.TestCase):
     self.assertIsNone(r, r)
 
   def test_make_file_dict(self):
-    ratings_uri = "../resources/ml-1m/ratings.dat"
-    movies_uri = "../resources/ml-1m/movies.dat"
-    users_uri = "../resources/ml-1m/users.dat"
+    kaggle = True
+    if kaggle:
+      prefix = '/kaggle/working/ml-1m/'
+    else:
+      prefix = "../resources/ml-1m/"
+    ratings_uri = f"{prefix}ratings.dat"
+    movies_uri = f"{prefix}movies.dat"
+    users_uri = f"{prefix}users.dat"
+
     ratings_col_names = ["user_id", "movie_id", "rating"]
     ratings_col_types = [int, int, int] #for some files, ratings are floats
     movies_col_names = ["movie_id", "title", "genres"]
@@ -33,25 +39,25 @@ class TestInfileDictUtils(unittest.TestCase):
     users_col_names = ["user_id", "gender", "age",  "occupation", "zipcode"]
     users_col_types = [int, str, int, int, str]
 
-    ratings_dict = make_file_dict(for_file='ratings',\
+    ratings_dict = create_infile_dict(for_file='ratings',\
       uri=ratings_uri, col_names=ratings_col_names, \
       col_types=ratings_col_types, headers_present=False, delim="::")
 
     self._assert_dict_content(ratings_dict)
 
-    movies_dict = make_file_dict(for_file='movies', \
+    movies_dict = create_infile_dict(for_file='movies', \
       uri=movies_uri, col_names=movies_col_names, \
       col_types=movies_col_types, headers_present=False, delim="::")
 
     self._assert_dict_content(movies_dict)
 
-    users_dict = make_file_dict(for_file='users', \
+    users_dict = create_infile_dict(for_file='users', \
       uri=users_uri,  col_names=users_col_names, \
       col_types=users_col_types, headers_present=False, delim="::")
 
     self._assert_dict_content(users_dict)
 
-    merged_dict = merge_dicts(ratings_dict=ratings_dict, \
+    merged_dict = create_infiles_dict(ratings_dict=ratings_dict, \
                               movies_dict=movies_dict, \
                               users_dict=users_dict)
 

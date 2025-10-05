@@ -5,11 +5,13 @@ import time
 import random
 
 from typing import Any, Dict, List, Union, Tuple
-from infile_dict_util import *
-from apache_beam.pvalue import TaggedOutput
+from movie_lens_utils import *
+#from apache_beam.pvalue import TaggedOutput
 
 from CustomUTF8Coder import CustomUTF8Coder
 
+@beam.typehints.with_input_types(beam.pvalue.PCollection)
+@beam.typehints.with_output_types(beam.pvalue.PCollection)
 class LeftJoinFn(beam.DoFn):
   """
   left join of left PCollection rows with right PCollection row.
@@ -97,14 +99,29 @@ def _read_files(infiles_dict: Dict[str, Union[str, Dict]]) -> \
       | f'parse_{key}_{time.time_ns()}' >> beam.Map(lambda line: line.split(infiles_dict[key]['delim']))
   return pc
 
-#@beam.ptransform_fn
-#@beam.typehints.with_input_types(beam.Pipeline, str, str, str,\
-#  Dict[str, int], Dict[str, int], Dict[str, int], \
-#  List[int])
-#@beam.typehints.with_output_types(Dict[str, beam.pvalue.PCollection])
-def ingest_and_join(\
-  #pipeline: BeamComponentParameter[beam.Pipeline],
-  pipeline : beam.pipeline.Pipeline, \
+@beam.ptransform_fn
+@beam.typehints.with_input_types(beam.pvalue.PCollection, List[Tuple[str, Any]])
+@beam.typehints.with_output_types(tf.train.Example)
+def convert_to_tf_example(pcollection: beam.PCollection, column_name_type_list) -> beam.PCollection:
+    return pcollection | f'ToTFExample {time.time_ns()}' >> beam.Map(create_example, column_name_type_list)
+
+@beam.ptransform_fn
+@beam.typehints.with_input_types(beam.pvalue.PCollection, str, str, str)
+@beam.typehints.with_output_types(None)
+def write_to_csv(pcollection : beam.pvalue.PCollection, \
+  column_names : str, prefix_path:str, delim:str='_') -> None:
+  # format the lines into a delimiter separated string then write to
+  # file
+  ratings | f"format_for_writing {time.time_ns()}" >> beam.Map( \
+    lambda x: delim.join(x)) \
+    | f"write to text {time.time_ns()}"  >> beam.io.WriteToText( \
+    file_path_prefix=prefix_path, file_name_suffix='.csv', \
+    header=column_names)
+
+@beam.ptransform_fn
+@beam.typehints.with_input_types(Dict[str, Union[str, Dict]])
+@beam.typehints.with_output_types(beam.pvalue.PCollection, List[Tuple[str, Any]])
+def ingest_and_join( \
   infiles_dict: Dict[str, Union[str, Dict]]) -> \
   Tuple[beam.pvalue.PCollection, List[Tuple[str, Any]]]:
   """
@@ -112,17 +129,16 @@ def ingest_and_join(\
   left joins of ratings with user information and movie genres to
   make a PCollection.  The PCollection has an associated schema in it.
 
-  :param pipeline:
   :param infiles_dict
     a dictionary of file information for each of the 3 files, that is
     the ratings file, movies file, and users file.
-    the dictionary is made by using infile_dict_util.make_file_dict
-    for each file, then infile_dict_util.merge_dicts.
+    the dictionary is made by using movie_lens_utils.create_infile_dict
+    for each file, then movie_lens_utils.create_infiles_dict.
   :return: a tuple of PCollection of ratings with joined information from users and movies where each tuple is for a
      partition specified in partition list.  The PCollection has an associated schema
   """
 
-  err = dict_formedness_error(infiles_dict)
+  err = infiles_dict_formedness_error(infiles_dict)
   if err:
     raise ValueError(err)
 
@@ -159,6 +175,10 @@ def ingest_and_join(\
     if _name != 'title' and _name != 'movie_id':
       columns.append((_name, _type))
 
+  # for i, part in enumerate(ratings_parts):
+  #  part | f'PARTITIONED_{i}_{time.time_ns()}' >> beam.io.WriteToText(\
+  #    file_path_prefix=f'a_{i}_', file_name_suffix='.txt')
+
   return ratings, columns
 
 #@beam.ptransform_fn
@@ -167,8 +187,6 @@ def ingest_and_join(\
 #  List[int])
 #@beam.typehints.with_output_types(Dict[str, beam.pvalue.PCollection])
 def ingest_join_and_split(\
-  #pipeline: BeamComponentParameter[beam.Pipeline],
-  pipeline : beam.pipeline.Pipeline, \
   infiles_dict: Dict[str, Union[str, Dict]], \
   buckets : List[int], bucket_names : List[str]) -> \
   Tuple[Dict[str, beam.pvalue.PCollection], List[Tuple[str, Any]]]:
@@ -179,13 +197,11 @@ def ingest_join_and_split(\
   given buckets, randomly, returning a dictionary of the partitioned
   PCollections.
 
-  :param pipeline:
-
   :param infiles_dict
     a dictionary of file information for each of the 3 files, that is
     the ratings file, movies file, and users file.
-    the dictionary is made by using infile_dict_util.make_file_dict
-    for each file, then infile_dict_util.merge_dicts.
+    the dictionary is made by using movie_lens_utils.create_infile_dict
+    for each file, then movie_lens_utils.create_infiles_dict.
 
   :param buckets: list of partitions in percent
   :param bucket_names: list of partition bucket names
@@ -194,8 +210,8 @@ def ingest_join_and_split(\
   """
 
   # user_id,movie_id,rating,gender,age,occupation,zipcode,genres
-  ratings, schema_list = ingest_and_join(pipeline=pipeline, \
-    infiles_dict=infiles_dict)
+  #beam.pvalue.PCollection, List[Tuple[str, Any]]
+  ratings, column_name_type_list = ingest_and_join(infiles_dict=infiles_dict)
 
   if buckets is None or len(buckets)==0:
     buckets = [100]
@@ -230,136 +246,4 @@ def ingest_join_and_split(\
   #  part | f'PARTITIONED_{i}_{time.time_ns()}' >> beam.io.WriteToText(\
   #    file_path_prefix=f'a_{i}_', file_name_suffix='.txt')
 
-  return output_dict, schema_list
-
-if __name__ == "__main__":
-
-  #TODO: move this out of source code and into test code
-
-  import apache_beam as beam
-  from apache_beam.testing.util import assert_that, is_not_empty, \
-    equal_to
-
-  kaggle = False
-  if kaggle:
-    prefix = '/kaggle/working/ml-1m/'
-  else:
-    prefix = "../resources/ml-1m/"
-  ratings_uri = f"{prefix}ratings.dat"
-  movies_uri = f"{prefix}movies.dat"
-  users_uri = f"{prefix}users.dat"
-
-  ratings_col_names = ["user_id", "movie_id", "rating"]
-  ratings_col_types = [int, int, int]  # for some files, ratings are floats
-  movies_col_names = ["movie_id", "title", "genres"]
-  movies_col_types = [int, str, str]
-  users_col_names = ["user_id", "gender", "age", "occupation","zipcode"]
-  users_col_types = [int, str, int, int, str]
-
-  expected_schema_cols = [ \
-    ("user_id", int), ("movie_id", int), ("rating", int), \
-    ("gender", str), ("age", int), ("occupation", int), \
-    ("genres", str)]
-
-  ratings_dict = make_file_dict(for_file='ratings', \
-                                uri=ratings_uri,
-                                col_names=ratings_col_names, \
-                                col_types=ratings_col_types,
-                                headers_present=False, delim="::")
-
-  movies_dict = make_file_dict(for_file='movies', \
-                               uri=movies_uri,
-                               col_names=movies_col_names, \
-                               col_types=movies_col_types,
-                               headers_present=False, delim="::")
-
-  users_dict = make_file_dict(for_file='users', \
-                              uri=users_uri, col_names=users_col_names, \
-                              col_types=users_col_types,
-                              headers_present=False, delim="::")
-
-  infiles_dict = merge_dicts(ratings_dict=ratings_dict, \
-                            movies_dict=movies_dict, \
-                            users_dict=users_dict)
-
-  buckets = [80, 10, 10]
-  bucket_names = ['train', 'eval', 'test']
-
-  #DirectRunner is default pipeline if options is not specified
-  from apache_beam.options.pipeline_options import PipelineOptions
-
-  #apache-beam 2.59.0 - 2.68.0 with SparkRunner supports pyspark 3.2.x
-  #but not 4.0.0
-  #pyspark 3.2.4 is compatible with java >= 8 and <= 11 and python >= 3.6 and <= 3.9
-  # start Docker, then use portable SparkRunner
-  # https://beam.apache.org/documentation/runners/spark/
-  #from pyspark import SparkConf
-  options = PipelineOptions(\
-    #runner='SparkRunner',\
-    #runner='PortableRunner',\
-    runner='DirectRunner',\
-    #spark_conf=spark_conf_list,\
-  )
-
-  with beam.Pipeline(options=options) as pipeline:
-
-    #test read files
-    pc = _read_files(infiles_dict)
-    #pc['ratings'] | f'ratings: {time.time_ns()}' >> \
-    #  beam.Map(lambda x: print(f'ratings={x}'))
-    r_count = pc['ratings']  | 'count' >> beam.combiners.Count.Globally()
-    #r_count | 'count ratings' >> beam.Map(lambda x: print(f'len={x}'))
-    assert_that(r_count, equal_to([1000209]))
-
-    assert_that(pc['movies']  | f'count {time.time_ns()}' >> beam.combiners.Count.Globally(), \
-      equal_to([3883]))
-    assert_that(pc['users'] | f'count {time.time_ns()}' >> beam.combiners.Count.Globally(), \
-      equal_to([6040]))
-
-    ratings, schema_list = ingest_and_join(pipeline=pipeline, \
-      infiles_dict=infiles_dict)
-
-    assert expected_schema_cols == schema_list
-
-    #ratings_tuple, schema_list = ingest_join_and_split(
-    #  pipeline=pipeline, infiles_dict=infiles_dict, buckets=buckets,
-    #  bucket_names=bucket_names)
-
-    assert_that(ratings, is_not_empty(), label=f'Assert Non-Empty ratings PCollection')
-
-    if False:
-      pre = f'../../../bin/ml1m_ingest_'
-      import os
-      import glob
-      for file_path in glob.glob(os.path.join("../../../bin", "ml1m_ingest_*")):
-        try:
-          os.remove(file_path)
-          print(f"Removed: {file_path}")
-        except OSError as e:
-          print(f"Error removing {file_path}: {e}")
-      ratings | f'write_{time.time_ns()}' >> beam.io.WriteToText(\
-        file_path_prefix=f'{pre}_ratings', file_name_suffix='.txt')
-
-    if False:
-      ratings_tuple, schema_list = ingest_join_and_split(
-        pipeline=pipeline, infiles_dict=infiles_dict, buckets=buckets,
-        bucket_names=bucket_names)
-
-      for k, v in ratings_tuple.items():
-        assert_that(v, is_not_empty(), label=f'Assert Non-Empty {k} PCollection')
-
-      if False:
-        pre = f'../../../bin/ml1m_ingest_'
-        import os
-        import glob
-        for file_path in glob.glob(os.path.join("../../../bin", "ml1m_ingest_*")):
-          try:
-            os.remove(file_path)
-            print(f"Removed: {file_path}")
-          except OSError as e:
-            print(f"Error removing {file_path}: {e}")
-        for k, v in ratings_tuple.items():
-          v | k >> beam.io.WriteToText(\
-          file_path_prefix=f'{pre}_{k}', file_name_suffix='.txt')
-
-    print(f'tests done')
+  return output_dict, column_name_type_list

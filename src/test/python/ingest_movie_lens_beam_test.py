@@ -1,0 +1,129 @@
+import os
+
+import pickle
+
+from unittest import mock
+import apache_beam as beam
+from apache_beam.testing.util import assert_that, is_not_empty, equal_to
+
+import tensorflow as tf
+from tfx.dsl.components.base import executor_spec
+from tfx.dsl.io import fileio
+from tfx.orchestration import data_types
+from tfx.orchestration import metadata
+from tfx.orchestration import publisher
+from tfx.orchestration.launcher import in_process_component_launcher
+from tfx.proto import example_gen_pb2
+from tfx.utils import name_utils
+
+from ingest_movie_lens_beam import *
+
+from ml_metadata.proto import metadata_store_pb2
+
+class IngestMovieLensBeamTest(tf.test.TestCase):
+
+  def setUp(self):
+    super().setUp()
+    kaggle = True
+    if kaggle:
+      prefix = '/kaggle/working/ml-1m/'
+    else:
+      prefix = "../resources/ml-1m/"
+    ratings_uri = f"{prefix}ratings.dat"
+    movies_uri = f"{prefix}movies.dat"
+    users_uri = f"{prefix}users.dat"
+
+    ratings_col_names = ["user_id", "movie_id", "rating"]
+    ratings_col_types = [int, int,
+                         int]  # for some files, ratings are floats
+    movies_col_names = ["movie_id", "title", "genres"]
+    movies_col_types = [int, str, str]
+    users_col_names = ["user_id", "gender", "age", "occupation",
+                       "zipcode"]
+    users_col_types = [int, str, int, int, str]
+
+    ratings_dict = create_infile_dict(for_file='ratings', \
+                                      uri=ratings_uri,
+                                      col_names=ratings_col_names, \
+                                      col_types=ratings_col_types,
+                                      headers_present=False, delim="::")
+
+    self._assert_dict_content(ratings_dict)
+
+    movies_dict = create_infile_dict(for_file='movies', \
+                                     uri=movies_uri,
+                                     col_names=movies_col_names, \
+                                     col_types=movies_col_types,
+                                     headers_present=False, delim="::")
+
+    self._assert_dict_content(movies_dict)
+
+    users_dict = create_infile_dict(for_file='users', \
+                                    uri=users_uri,
+                                    col_names=users_col_names, \
+                                    col_types=users_col_types,
+                                    headers_present=False, delim="::")
+
+    self._assert_dict_content(users_dict)
+
+    self.infiles_dict = create_infiles_dict(ratings_dict=ratings_dict, \
+                                      movies_dict=movies_dict, \
+                                      users_dict=users_dict)
+
+    self.buckets = [80, 10, 10]
+    self.bucket_names = ['train', 'eval', 'test']
+
+    self.name = 'test run of ingest with tfx'
+
+  @mock.patch.object(publisher, 'Publisher')
+  def testRun2(self, mock_publisher):
+
+    expected_schema_cols = [ \
+      ("user_id", int), ("movie_id", int), ("rating", int), \
+      ("gender", str), ("age", int), ("occupation", int), \
+      ("genres", str)]
+
+    #DirectRunner is default pipeline if options is not specified
+    from apache_beam.options.pipeline_options import PipelineOptions
+
+    #apache-beam 2.59.0 - 2.68.0 with SparkRunner supports pyspark 3.2.x
+    #but not 4.0.0
+    #pyspark 3.2.4 is compatible with java >= 8 and <= 11 and python >= 3.6 and <= 3.9
+    # start Docker, then use portable SparkRunner
+    # https://beam.apache.org/documentation/runners/spark/
+    #from pyspark import SparkConf
+    options = PipelineOptions(\
+      #runner='SparkRunner',\
+      #runner='PortableRunner',\
+      runner='DirectRunner',\
+      #spark_conf=spark_conf_list,\
+    )
+
+    from ingest_movie_lens_beam import _read_files
+
+    with beam.Pipeline(options=options) as pipeline:
+
+      #test read files
+      pc = _read_files(infiles_dict)
+      #pc['ratings'] | f'ratings: {time.time_ns()}' >> \
+      #  beam.Map(lambda x: print(f'ratings={x}'))
+      r_count = pc['ratings']  | 'count' >> beam.combiners.Count.Globally()
+      #r_count | 'count ratings' >> beam.Map(lambda x: print(f'len={x}'))
+      assert_that(r_count, equal_to([1000209]))
+
+      assert_that(pc['movies']  | f'count {time.time_ns()}' >> beam.combiners.Count.Globally(), \
+        equal_to([3883]))
+      assert_that(pc['users'] | f'count {time.time_ns()}' >> beam.combiners.Count.Globally(), \
+        equal_to([6040]))
+
+      #beam.pvalue.PCollection, List[Tuple[str, Any]]
+      ratings, column_name_type_list = \
+        pipeline | f"ingest_and_join {time.time_ns()}" >> ingest_and_join(infiles_dict=infiles_dict)
+
+      assert expected_schema_cols == column_name_type_list
+
+      #ratings_tuple, schema_list = ingest_join_and_split(
+      #  pipeline=pipeline, infiles_dict=infiles_dict, buckets=buckets,
+      #  bucket_names=bucket_names)
+
+      assert_that(ratings, is_not_empty(), label=f'Assert Non-Empty ratings PCollection')
