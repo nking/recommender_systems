@@ -93,7 +93,9 @@ class IngestMovieLensTFXTest(tf.test.TestCase):
 
     mock_publisher.return_value.publish_execution.return_value = {}
 
+    name = "test_fully_custom_component"
     ratings_example_gen = (IngestMovieLensComponent( \
+      name=name,\
       infiles_dict_ser=infiles_dict_ser, bucket_names=self.bucket_names, \
       buckets=self.buckets))
 
