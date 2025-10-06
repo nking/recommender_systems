@@ -126,7 +126,7 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
 
     self.assertEqual(
         launcher._component_info.component_type,
-        name_utils.get_full_name(IngestMovieLensComponent))
+        name_utils.get_full_name(ingest_movie_lens_component))
 
     launcher.launch()
     mock_publisher.return_value.publish_execution.assert_called_once()
