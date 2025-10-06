@@ -2,6 +2,7 @@ import apache_beam as beam
 #from apache_beam.coders import coders
 
 import time
+import random
 
 from typing import Any, Dict, List, Union, Tuple
 from movie_lens_utils import *
@@ -85,22 +86,30 @@ def merge_by_key(l_pc : beam.PCollection, r_pc : beam.PCollection, \
 
   return joined_data
 
-#@beam.ptransform_fn #performing multiple PTransforms
-@beam.typehints.with_input_types(beam.Pipeline, Dict[str, Union[str, Dict]])
-@beam.typehints.with_output_types(Dict[str, beam.PCollection])
-def _read_files(pipeline : beam.Pipeline, \
-  infiles_dict: Dict[str, Union[str, Dict]]) -> \
-  Dict[str, beam.PCollection]:
-  pc = {}
-  for key in ['ratings', 'movies', 'users']:
-    if infiles_dict[key]['headers_present']:
-      skip = 1
-    else:
-      skip = 0
-    pc[key] = pipeline | f"read_{key}_{time.time_ns()}" >> beam.io.ReadFromText(\
-      infiles_dict[key]['uri'], skip_header_lines=skip, coder=CustomUTF8Coder()) \
-      | f'parse_{key}_{time.time_ns()}' >> beam.Map(lambda line: line.split(infiles_dict[key]['delim']))
-  return pc
+@beam.typehints.with_input_types(Dict[str, Union[str, Dict]])
+class ReadFiles(beam.PTransform):
+  """
+  read ratings, movies, and users independently
+  """
+  def __init__(self, infiles_dict):
+    super().__init__()
+    self.infiles_dict = infiles_dict
+
+  def expand(self, pcoll=None):
+    pc = {}
+    for key in ['ratings', 'movies', 'users']:
+      if self.infiles_dict[key]['headers_present']:
+        skip = 1
+      else:
+        skip = 0
+      # class 'apache_beam.transforms.ptransform._ChainedPTransform
+      pc[key] = pcoll | f"r{random.randint(0,10000000000)}" >> \
+        beam.io.ReadFromText(\
+        self.infiles_dict[key]['uri'], skip_header_lines=skip,
+        coder=CustomUTF8Coder()) \
+        | f'parse_{key}_{time.time_ns()}' >> \
+        beam.Map(lambda line: line.split(self.infiles_dict[key]['delim']))
+    return pc
 
 @beam.ptransform_fn
 @beam.typehints.with_input_types(beam.PCollection, List[Tuple[str, Any]])
@@ -147,7 +156,7 @@ def ingest_and_join( \
   if err:
     raise ValueError(err)
 
-  pc = _read_files(pipeline, infiles_dict)
+  pc = pipeline | f"read {time.time_ns()}" >> ReadFiles(infiles_dict)
 
   # ratings: user_id,movie_id,rating
   # movie_id,title,genre

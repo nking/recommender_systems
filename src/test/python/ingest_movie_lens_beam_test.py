@@ -15,6 +15,8 @@ from tfx.utils import name_utils
 from ingest_movie_lens_beam import *
 from movie_lens_utils import *
 
+import random
+
 from ml_metadata.proto import metadata_store_pb2
 
 import absl
@@ -105,22 +107,17 @@ class IngestMovieLensBeamTest(tf.test.TestCase):
       #test read files
       pc =  _read_files(pipeline, self.infiles_dict)
 
-      print(f"TYPE pc={type(pc)}")
-      logging.debug(f"TYPE ratings={type(pc)}")
-
       #pc['ratings'] | f'ratings: {time.time_ns()}' >> \
       #  beam.Map(lambda x: print(f'ratings={x}'))
       ratings_pc = pc['ratings']
-      print(f"TYPE ratings={type(ratings_pc)}")
-      logging.debug(f"TYPE ratings={type(ratings_pc)}")
 
-      r_count = ratings_pc  | f'count {time.time_ns()}' >> beam.combiners.Count.Globally()
+      r_count = ratings_pc  | f'count {random.randint(0, 1000000000000)}' >> beam.combiners.Count.Globally()
       #r_count | 'count ratings' >> beam.Map(lambda x: print(f'len={x}'))
       assert_that(r_count, equal_to([1000209]))
 
-      assert_that(pc['movies']  | f'count {time.time_ns()}' >> beam.combiners.Count.Globally(), \
+      assert_that(pc['movies']  | f'count {random.randint(0, 1000000000000)}' >> beam.combiners.Count.Globally(), \
         equal_to([3883]))
-      assert_that(pc['users'] | f'count {time.time_ns()}' >> beam.combiners.Count.Globally(), \
+      assert_that(pc['users'] | f'count {random.randint(0, 1000000000000)}' >> beam.combiners.Count.Globally(), \
         equal_to([6040]))
 
       #beam.pvalue.PCollection, List[Tuple[str, Any]]
