@@ -158,7 +158,7 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       raise ValueError(f'ERROR: {ex}')
 
     ratings, column_name_type_list = \
-      self.GetInputSourceToExamplePTransform(pipeline=pipelne, infiles_dict=infiles_dict)
+      self.GetInputSourceToExamplePTransform(pipeline=pipeline, infiles_dict=infiles_dict)
 
     bucket_names = exec_properties['bucket_names']
     buckets = exec_properties['buckets']
