@@ -39,7 +39,7 @@ from movie_lens_utils import *
 from ml_metadata.proto import metadata_store_pb2
 
 
-class IngestMovieLensTFXTest(tf.test.TestCase):
+class IngestMovieLensCustomComponentTest(tf.test.TestCase):
 
   def setUp(self):
     super().setUp()
