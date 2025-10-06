@@ -30,12 +30,14 @@ print(f"TFX version: {tfx.__version__}")
 # Beam orchestrator, TFX automatically injects a Beam pipeline into
 # that argument, there is no need to supply it directly.
 
+#A parameter is an argument (int, float, bytes, or unicode string)
+
 @component(use_beam=True)
 def ingest_movie_lens_component( \
   #name: tfx.dsl.components.Parameter[str], \
   infiles_dict_ser: tfx.dsl.components.Parameter[str], \
-  bucket_names: tfx.dsl.components.Parameter[str], \
-  buckets: tfx.dsl.components.Parameter[str], \
+  bucket_names_ser: tfx.dsl.components.Parameter[str], \
+  buckets_ser: tfx.dsl.components.Parameter[str], \
   output_examples: tfx.dsl.components.OutputArtifact[standard_artifacts.Examples], \
   #output_split_config: tfx.dsl.components.OutputArtifact[standard_artifacts.SplitConfig],\
   beam_pipeline: annotations.BeamComponentParameter[beam.Pipeline]=None) -> None:
@@ -71,14 +73,14 @@ def ingest_movie_lens_component( \
     raise ValueError(err)
     
   try:
-    buckets = pickle.loads(base64.b64decode(buckets.encode('utf-8')))
+    buckets = pickle.loads(base64.b64decode(buckets_ser.encode('utf-8')))
   except Exception as ex:
     err = f"error using pickle and base64, {ex}"
     logging.error(err)
     raise ValueError(err)
 
   try:
-    bucket_names = pickle.loads(base64.b64decode(bucket_names.encode('utf-8')))
+    bucket_names = pickle.loads(base64.b64decode(bucket_names_ser.encode('utf-8')))
   except Exception as ex:
     err = f"error using pickle and base64, {ex}"
     logging.error(err)

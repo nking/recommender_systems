@@ -98,6 +98,7 @@ class IngestMovieLensBeamTest(tf.test.TestCase):
       pc =  _read_files(pipeline, self.infiles_dict)
       #pc['ratings'] | f'ratings: {time.time_ns()}' >> \
       #  beam.Map(lambda x: print(f'ratings={x}'))
+      print(f"TYPE ratings={type(pc['ratings'])}")
       r_count = pc['ratings']  | 'count' >> beam.combiners.Count.Globally()
       #r_count | 'count ratings' >> beam.Map(lambda x: print(f'len={x}'))
       assert_that(r_count, equal_to([1000209]))

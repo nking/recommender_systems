@@ -21,6 +21,7 @@ import os
 
 import pickle
 import base64
+import pprint
 
 from unittest import mock
 import tensorflow as tf
@@ -84,6 +85,8 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
 
     self.buckets = [80, 10, 10]
     self.bucket_names = ['train', 'eval', 'test']
+    self.buckets_ser = base64.b64encode(pickle.dumps(self.buckets)).decode('utf-8')
+    self.bucket_names_ser = base64.b64encode(pickle.dumps(self.bucket_names)).decode('utf-8')
 
     self.name = 'test run of ingest with tfx'
 
@@ -95,9 +98,11 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     mock_publisher.return_value.publish_execution.return_value = {}
 
     ratings_example_gen = (ingest_movie_lens_component( \
-      infiles_dict_ser=infiles_dict_ser, bucket_names=self.bucket_names, \
-      buckets=self.buckets))
+      infiles_dict_ser=self.infiles_dict_ser, \
+      bucket_names_ser=self.bucket_names_ser, \
+      buckets_ser=self.buckets_ser))
 
+    #output_data_dir = os.path.join(os.environ.get('TEST_UNDECLARED_OUTPUTS_DIR',self.get_temp_dir()),self._testMethodName)
     output_data_dir = os.path.join('/kaggle/working/bin/', self._testMethodName)
     pipeline_root = os.path.join(output_data_dir, 'Test')
     fileio.makedirs(pipeline_root, exist_ok=True)

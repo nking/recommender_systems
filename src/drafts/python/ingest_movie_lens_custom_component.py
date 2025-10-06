@@ -161,7 +161,7 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
     bucket_names = exec_properties['bucket_names']
     buckets = exec_properties['buckets']
     if len(buckets) != len(bucket_names):
-      err = (f'deserialized buckets must be same length as deserialized bucket_names'
+      err = (f' buckets must be same length as deserialized bucket_names'
              f' buckets={buckets}, bucket_names={bucket_names}')
       logging.error(f'ERROR: {err}')
       raise ValueError(f'ERROR: {err}')

@@ -92,7 +92,6 @@ def _read_files(pipeline : beam.Pipeline, \
   infiles_dict: Dict[str, Union[str, Dict]]) -> \
   Dict[str, beam.PCollection]:
   pc = {}
-
   for key in ['ratings', 'movies', 'users']:
     if infiles_dict[key]['headers_present']:
       skip = 1
