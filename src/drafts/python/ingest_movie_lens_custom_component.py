@@ -7,7 +7,7 @@ import apache_beam as beam
 import absl
 import pprint
 import time
-import pickle
+import json
 
 from typing import Any, Dict, List, Text, Optional, Union, Tuple
 
@@ -130,7 +130,7 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
     """
     :param pipeline:
     :param exec_properties: is a json string serialized dictionary holding:
-      key = infiles_dict_ser which is a pickle serialization of the
+      key = infiles_dict_ser which is a json serialization of the
         infiles_dict
       key = buckets, value = a list of integers as percents of the whole,
         e.g. [80, 10, 10]
@@ -149,7 +149,7 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       "in IngestMovieLensExecutor.GenerateExamplesByBeam")
 
     try:
-      infiles_dict = pickle.loads(exec_properties['infiles_dict_ser'])
+      infiles_dict = json.loads(infiles_dict_ser.decode('utf-8'))
     except Exception as ex:
       logging.error(f'ERROR: {ex}')
       raise ValueError(f'ERROR: {ex}')

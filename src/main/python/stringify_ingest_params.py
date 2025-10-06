@@ -30,7 +30,7 @@ def stringify_ingest_params(ratings_uri : str, movies_uri : str, users_uri : str
     "users_key_dict" : users_key_col_dict, \
     "partitions" : partitions}
 
-  serialized = json.dumps(params)
+  serialized = json.dumps(params, ensure_ascii=False).encode('utf-8')
 
   return serialized
 
@@ -46,13 +46,13 @@ if __name__ == "__main__":
     "occupation":3,"zipcode":4}
   _partitions=[80, 10, 10]
 
-  input_dict_ser = stringify(_ratings_uri, _movies_uri, _users_uri, \
+  input_dict_ser = stringify_ingest_params(_ratings_uri, _movies_uri, _users_uri, \
     _ratings_key_col_dict, \
     _movies_key_col_dict, \
     _users_key_col_dict, \
     _partitions)
 
-  input_dict = json.loads(input_dict_ser)
+  input_dict = json.loads(input_dict_ser.decode('utf-8'))
 
   ratings_uri = input_dict['ratings_uri']
   movies_uri = input_dict['ratings_uri']

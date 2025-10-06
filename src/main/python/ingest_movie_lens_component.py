@@ -2,7 +2,7 @@ import absl
 from absl import logging
 import pprint
 import time
-import pickle
+import json
 
 import apache_beam as beam
 from tfx.types import standard_artifacts
@@ -43,14 +43,14 @@ def ingest_movie_lens_component( \
   and split them into the given buckets by percentange and bucket_name.
   
   Args:
-    :param infiles_dict_ser: a string created from using pickle.dumps()
+    :param infiles_dict_ser: a string created from using json.dumps().encode('utf-8')
       on the infiles_dict created with 
       movie_lens_utils.create_infiles_dict where its input arguments are made
       from movie_lens_utils.create_infile_dict
     :param buckets: list of partitions in percent.
-      this is a string from pickle.dumps(the_list)
+      this is a string from json.dumps(the_list,ensure_ascii=False).encode('utf-8')
     :param bucket_names: list of partitions names corresponding to 
-      buckets.  this is a string from pickle.dumps(the_list)
+      buckets.  this is a string from dumps.json(the_list).encode('utf-8')
     :param output_examples: 
       ChannelParameter(type=standard_artifacts.Examples),
     :param beam_pipeline: injected into method by TFX.  do not supply
@@ -59,9 +59,9 @@ def ingest_movie_lens_component( \
   logging.info("ingest_movie_lens_component")
 
   try:
-    infiles_dict = pickle.loads(infiles_dict_ser)
+    infiles_dict = json.loads(infiles_dict_ser.decode('utf-8'))
   except Exception as ex:
-    err = f"error using pickle.loads(infiles_dict_ser)"
+    err = f"error using json.loads(infiles_dict_ser.decode(utf-8))"
     logging.error(f'{err} : {ex}')
     raise ValueError(f'{err} : {ex}')
 
@@ -71,16 +71,16 @@ def ingest_movie_lens_component( \
     raise ValueError(err)
     
   try:
-    buckets = pickle.loads(buckets)
+    buckets = json.loads(buckets.decode('utf-8'))
   except Exception as ex:
-    err = f"error using pickle.loads(buckets), {ex}"
+    err = f"error using json.loads(buckets.decode('utf-8')), {ex}"
     logging.error(err)
     raise ValueError(err)
 
   try:
-    bucket_names = pickle.loads(bucket_names)
+    bucket_names = json.loads(bucket_names.decode('utf-8'))
   except Exception as ex:
-    err = f"error using pickle.loads(bucket_namess), {ex}"
+    err = f"error using json.loads(bucket_names.decode('utf-8')), {ex}"
     logging.error(err)
     raise ValueError(err)
 

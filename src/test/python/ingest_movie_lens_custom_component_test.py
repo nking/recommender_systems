@@ -19,7 +19,7 @@
 
 import os
 
-import pickle
+import json
 
 from unittest import mock
 import tensorflow as tf
@@ -89,7 +89,7 @@ class IngestMovieLensTFXTest(tf.test.TestCase):
   @mock.patch.object(publisher, 'Publisher')
   def testRun(self, mock_publisher):
 
-    infiles_dict_ser = pickle.dumps(self.infiles_dict)
+    infiles_dict_ser = json.dumps(self.infiles_dict, ensure_ascii=False).encode('utf-8')
 
     mock_publisher.return_value.publish_execution.return_value = {}
 

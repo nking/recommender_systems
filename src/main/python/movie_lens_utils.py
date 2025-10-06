@@ -124,6 +124,7 @@ def create_namedtuple_schemas(infiles_dict: Dict[str, Union[str, Dict]]) -> Dict
   :return: a dictionary of list of tuples of column name and types,
   useable with coders.registry.register_coder
   """
+  print(f'infiles_dict={infiles_dict}')
   out = {}
   for key in infiles_dict:
     s = []
