@@ -104,6 +104,10 @@ class IngestMovieLensBeamTest(tf.test.TestCase):
 
       #test read files
       pc =  _read_files(pipeline, self.infiles_dict)
+
+      print(f"TYPE pc={type(pc)}")
+      logging.debug(f"TYPE ratings={type(pc)}")
+
       #pc['ratings'] | f'ratings: {time.time_ns()}' >> \
       #  beam.Map(lambda x: print(f'ratings={x}'))
       ratings_pc = pc['ratings']

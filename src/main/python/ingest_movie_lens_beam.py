@@ -85,7 +85,7 @@ def merge_by_key(l_pc : beam.PCollection, r_pc : beam.PCollection, \
 
   return joined_data
 
-@beam.ptransform_fn
+#@beam.ptransform_fn #performing multiple PTransforms
 @beam.typehints.with_input_types(beam.Pipeline, Dict[str, Union[str, Dict]])
 @beam.typehints.with_output_types(Dict[str, beam.PCollection])
 def _read_files(pipeline : beam.Pipeline, \
