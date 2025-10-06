@@ -10,8 +10,6 @@ from movie_lens_utils import *
 
 from CustomUTF8Coder import CustomUTF8Coder
 
-@beam.typehints.with_input_types(beam.PCollection)
-@beam.typehints.with_output_types(beam.PCollection)
 class LeftJoinFn(beam.DoFn):
   """
   left join of left PCollection rows with right PCollection row.
@@ -43,48 +41,44 @@ class LeftJoinFn(beam.DoFn):
           row.append(right)
       yield row
 
-#@beam.ptransform_fn
-#@beam.typehints.with_input_types(beam.PCollection,\
-#  beam.PCollection, Dict[str, int], Dict[str, int], List[int])
-#@beam.typehints.with_output_types(Dict[str, beam.PCollection])
-def merge_by_key(l_pc : beam.PCollection, r_pc : beam.PCollection, \
-  l_key_col : int, r_key_col : int, \
-  filter_cols : List[int], debug_tag : str = "") -> beam.PCollection:
+class MergeByKey(beam.PTransform):
   """
-  merges PCollection l_pc with PCollection r_pc on the columns given by
-  l_key_col and r_key_col.  While merging, it excludes any columns
-  in the right dataset given by filter_cols.
+  the PTransform operates on 1 PCollection, but we can add the other
+  as a side input by giving it to the constructor.
 
-  if there is an error in columns or more than one row in r_pc, a
-  ValueError is thrown.
+  Merge the left and right PCollections on the given key columns,
+  and exclude filter_cols of the right PCollection from entering
+  the output left joined rows.
 
-  :param l_pc:
-  :param r_pc:
-  :param l_key_col:
-  :param r_key_col:
-  :param filter_cols:
-  :param debug_tag:
-  :return: a merged PCollection
-  """
-  # need unique names for each beam process, so adding a timestamp
-  ts = time.time_ns()
-  l_keyed = l_pc | f'kv_l_{ts}' >> beam.Map(lambda x: (x[l_key_col], x))
-  r_keyed = r_pc | f'kv_r_{ts}' >> beam.Map(lambda x: (x[r_key_col], x))
+  The left PCollection is the main PCollection piped to the PTransform
+  while the right PCollection is given as side input to the
+  constructor, along with the other parameters"""
+  def __init__(self, r_pc : beam.PCollection, \
+    l_key_col : int, r_key_col : int, \
+    filter_cols : List[int], debug_tag : str = ""):
+    super().__init__()
+    self.r_pc = r_pc
+    self.l_key_col = l_key_col
+    self.r_key_col = r_key_col
+    self.filter_cols = filter_cols
+    self.debug_tag = ""
 
-  #l_keyed | f'Left keyed: {time.time_ns()}' >> \
-  #  beam.Map(lambda x: print(f'{debug_tag} l_key_col={l_key_col}, row={x}'))
-  # r_keyed | f'Right keyed: {time.time_ns()}' >> 'beam.Map(print)
+  def expand(self, l_pc):
+    l_keyed = l_pc | f'kv_l_{random.randint(0,1000000000)}' \
+      >> beam.Map(lambda x: (x[self.l_key_col], x))
+    r_keyed = self.r_pc | f'kv_r_{random.randint(0,1000000000)}' \
+      >> beam.Map(lambda x: (x[self.r_key_col], x))
 
-  # multiple lefts on one line, and one in right's list:
-  grouped_data = ({'left': l_keyed, 'right': r_keyed} \
-                  | f'group_by_key_{ts}' >> beam.CoGroupByKey())
+    # multiple lefts on one line, and one in right's list:
+    grouped_data = ({'left': l_keyed, 'right': r_keyed} \
+      | f'group_by_key_{random.randint(0,1000000000)}' \
+      >> beam.CoGroupByKey())
 
-  #grouped_data | f'{time.time_ns()}' >> beam.Map(lambda x: print(f'{debug_tag}:::{x}'))
+    joined_data = grouped_data \
+      | f'left_join_values_{random.randint(0,1000000000)}' \
+      >> beam.ParDo(LeftJoinFn(self.filter_cols))
 
-  joined_data = grouped_data \
-      | f'left_join_values_{ts}' >> beam.ParDo(LeftJoinFn(filter_cols))
-
-  return joined_data
+    return joined_data
 
 @beam.typehints.with_input_types(Dict[str, Union[str, Dict]])
 class ReadFiles(beam.PTransform):
@@ -162,19 +156,24 @@ def ingest_and_join( \
   # movie_id,title,genre
   # user_id::gender::age::occupation::zipcode
 
-  # user_id,movie_id,rating,timestamp,geder,age,occupation,zipcode
-  ratings_1 = merge_by_key( pc['ratings'], pc['users'], \
+  # user_id,movie_id,rating,timestamp,gender,age,occupation,zipcode
+  ratings_1 = pc['ratings'] | \
+    f"left join ratings,users {random.randint(0,1000000000)}" \
+    >> MergeByKey(pc['users'], \
     infiles_dict['ratings']['cols']['user_id']['index'], \
     infiles_dict['users']['cols']['user_id']['index'], \
     filter_cols=[infiles_dict['users']['cols']['zipcode']['index'],\
     infiles_dict['users']['cols']['user_id']['index']], debug_tag="R-U")
 
   # user_id,movie_id,rating,gender,age,occupation,zipcode,genres
-  ratings = merge_by_key(ratings_1, pc['movies'], \
+  ratings = ratings_1 | \
+    f"left join ratings+users,movies {random.randint(0,1000000000)}" \
+    >> MergeByKey(pc['movies'], \
     infiles_dict['ratings']['cols']['movie_id']['index'], \
     infiles_dict['movies']['cols']['movie_id']['index'], \
     filter_cols=[infiles_dict['movies']['cols']['title']['index'], \
-    infiles_dict['movies']['cols']['movie_id']['index']], debug_tag="R-M")
+    infiles_dict['movies']['cols']['movie_id']['index']], \
+    debug_tag="R-M")
 
   schemas = create_namedtuple_schemas(infiles_dict)
   #format, compatible with apache_beam.coders.registry.

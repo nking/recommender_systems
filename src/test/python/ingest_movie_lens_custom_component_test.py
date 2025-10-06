@@ -133,7 +133,5 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
     # Check output paths.
     self.assertTrue(fileio.exists(os.path.join(pipeline_root, ratings_example_gen.id)))
 
-
-
   def testDo(self):
     pass
