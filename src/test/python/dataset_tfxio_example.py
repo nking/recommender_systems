@@ -67,7 +67,7 @@ def main(args):
                     _preprocessing_fn, output_record_batches=True
                 )
             )
-            #beam.pvalue.PCollection
+            #beam.PCollection
             transformed_data = transformed_data | "ExtractRecordBatch" >> beam.Keys()
             _ = transformed_data | "PrintTransformedData" >> beam.Map(
                 _print_record_batch

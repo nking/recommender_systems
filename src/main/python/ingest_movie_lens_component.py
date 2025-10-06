@@ -102,7 +102,7 @@ def ingest_movie_lens_component( \
   )
 
   with beam_pipeline as pipeline:
-    #beam.pvalue.PCollection, List[Tuple[str, Any]
+    #beam.PCollection, List[Tuple[str, Any]
     ratings, column_name_type_list = \
       ingest_and_join(pipeline=pipeline, infiles_dict = infiles_dict)
 
@@ -114,7 +114,7 @@ def ingest_movie_lens_component( \
       s += int(100*(b/total))
       cumulative_buckets.append(s)
 
-    #type: apache_beam.pvalue.DoOutputsTuple
+    #type: apache_beam.DoOutputsTuple
     ratings_tuple = ratings | f'split_{time.time_ns()}' >> beam.Partition( \
       partition_fn, len(buckets), cumulative_buckets, \
       output_config.split_config)

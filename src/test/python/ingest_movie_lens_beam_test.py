@@ -107,7 +107,7 @@ class IngestMovieLensBeamTest(tf.test.TestCase):
       assert_that(pc['users'] | f'count {time.time_ns()}' >> beam.combiners.Count.Globally(), \
         equal_to([6040]))
 
-      #beam.pvalue.PCollection, List[Tuple[str, Any]]
+      #beam.PCollection, List[Tuple[str, Any]]
       ratings, column_name_type_list = \
         ingest_and_join(pipeline, infiles_dict=self.infiles_dict)
 

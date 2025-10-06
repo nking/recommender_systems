@@ -118,7 +118,7 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
   """executor to ingest movie lens data, join, and split into buckets"""
 
   def GetInputSourceToExamplePTransform(self, \
-    pipeline : beam.pvalue.Pipeline, \
+    pipeline : beam.Pipeline, \
     infiles_dict: Dict[str, Union[str, Dict]]) -> beam.PTransform:
     """Returns PTransform for ratings, movies, users joined to TF examples."""
     return ingest_and_join
@@ -126,7 +126,7 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
   def GenerateExamplesByBeam(self, \
     pipeline: beam.Pipeline, \
     exec_properties: Dict[str, Any], output_dict: Dict[str, List[types.Artifact]]\
-  ) -> Tuple[Dict[str, beam.pvalue.PCollection], List[Tuple[str, Any]]]:
+  ) -> Tuple[Dict[str, beam.PCollection], List[Tuple[str, Any]]]:
     """
     :param pipeline:
     :param exec_properties: is a json string serialized dictionary holding:
@@ -183,7 +183,7 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       s += int(100 * (b / total))
       cumulative_buckets.append(s)
 
-    #type: apache_beam.pvalue.DoOutputsTuple
+    #type: apache_beam.DoOutputsTuple
     ratings_tuple = ratings | f'split_{time.time_ns()}' >> beam.Partition( \
       partition_fn, len(buckets), cumulative_buckets, \
       output_config.split_config)
@@ -215,7 +215,7 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
     logging.debug("in IngestMovieLensExecutor.Do")
     #https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/components/example_gen/base_example_gen_executor.py#L281
     with self._make_beam_pipeline() as pipeline:
-      # apache_beam.pvalue.DoOutputsTuple
+      # apache_beam.DoOutputsTuple
       ratings_dict, column_name_type_list = \
         self.GenerateExamplesByBeam(pipeline, exec_properties, output_dict)
 

@@ -9,8 +9,8 @@ from movie_lens_utils import *
 
 from CustomUTF8Coder import CustomUTF8Coder
 
-@beam.typehints.with_input_types(beam.pvalue.PCollection)
-@beam.typehints.with_output_types(beam.pvalue.PCollection)
+@beam.typehints.with_input_types(beam.PCollection)
+@beam.typehints.with_output_types(beam.PCollection)
 class LeftJoinFn(beam.DoFn):
   """
   left join of left PCollection rows with right PCollection row.
@@ -43,12 +43,12 @@ class LeftJoinFn(beam.DoFn):
       yield row
 
 #@beam.ptransform_fn
-#@beam.typehints.with_input_types(beam.pvalue.PCollection,\
-#  beam.pvalue.PCollection, Dict[str, int], Dict[str, int], List[int])
-#@beam.typehints.with_output_types(Dict[str, beam.pvalue.PCollection])
-def merge_by_key(l_pc : beam.pvalue.PCollection, r_pc : beam.pvalue.PCollection, \
+#@beam.typehints.with_input_types(beam.PCollection,\
+#  beam.PCollection, Dict[str, int], Dict[str, int], List[int])
+#@beam.typehints.with_output_types(Dict[str, beam.PCollection])
+def merge_by_key(l_pc : beam.PCollection, r_pc : beam.PCollection, \
   l_key_col : int, r_key_col : int, \
-  filter_cols : List[int], debug_tag : str = "") -> beam.pvalue.PCollection:
+  filter_cols : List[int], debug_tag : str = "") -> beam.PCollection:
   """
   merges PCollection l_pc with PCollection r_pc on the columns given by
   l_key_col and r_key_col.  While merging, it excludes any columns
@@ -86,11 +86,11 @@ def merge_by_key(l_pc : beam.pvalue.PCollection, r_pc : beam.pvalue.PCollection,
   return joined_data
 
 @beam.ptransform_fn
-@beam.typehints.with_input_types(beam.pvalue.Pipeline, Dict[str, Union[str, Dict]])
-@beam.typehints.with_output_types(Dict[str, beam.pvalue.PCollection])
-def _read_files(pipeline : beam.pvalue.Pipeline, \
+@beam.typehints.with_input_types(beam.Pipeline, Dict[str, Union[str, Dict]])
+@beam.typehints.with_output_types(Dict[str, beam.PCollection])
+def _read_files(pipeline : beam.Pipeline, \
   infiles_dict: Dict[str, Union[str, Dict]]) -> \
-  Dict[str, beam.pvalue.PCollection]:
+  Dict[str, beam.PCollection]:
   pc = {}
 
   for key in ['ratings', 'movies', 'users']:
@@ -104,15 +104,15 @@ def _read_files(pipeline : beam.pvalue.Pipeline, \
   return pc
 
 @beam.ptransform_fn
-@beam.typehints.with_input_types(beam.pvalue.PCollection, List[Tuple[str, Any]])
+@beam.typehints.with_input_types(beam.PCollection, List[Tuple[str, Any]])
 @beam.typehints.with_output_types(tf.train.Example)
 def convert_to_tf_example(pcollection: beam.PCollection, column_name_type_list) -> beam.PCollection:
     return pcollection | f'ToTFExample {time.time_ns()}' >> beam.Map(create_example, column_name_type_list)
 
 @beam.ptransform_fn
-@beam.typehints.with_input_types(beam.pvalue.PCollection, str, str, str)
+@beam.typehints.with_input_types(beam.PCollection, str, str, str)
 @beam.typehints.with_output_types(None)
-def write_to_csv(pcollection : beam.pvalue.PCollection, \
+def write_to_csv(pcollection : beam.PCollection, \
   column_names : str, prefix_path:str, delim:str='_') -> None:
   # format the lines into a delimiter separated string then write to
   # file
@@ -123,12 +123,12 @@ def write_to_csv(pcollection : beam.pvalue.PCollection, \
     header=column_names)
 
 @beam.ptransform_fn
-@beam.typehints.with_input_types(beam.pvalue.Pipeline, Dict[str, Union[str, Dict]])
-@beam.typehints.with_output_types(Tuple[beam.pvalue.PCollection, List[Tuple[str, Any]]])
+@beam.typehints.with_input_types(beam.Pipeline, Dict[str, Union[str, Dict]])
+@beam.typehints.with_output_types(Tuple[beam.PCollection, List[Tuple[str, Any]]])
 def ingest_and_join( \
-  pipeline : beam.pvalue.Pipeline, \
+  pipeline : beam.Pipeline, \
   infiles_dict: Dict[str, Union[str, Dict]]) -> \
-  Tuple[beam.pvalue.PCollection, List[Tuple[str, Any]]]:
+  Tuple[beam.PCollection, List[Tuple[str, Any]]]:
   """
   reads in the 3 expected files from the uris given in infiles_dict, and then uses
   left joins of ratings with user information and movie genres to
