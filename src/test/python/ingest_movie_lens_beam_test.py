@@ -19,6 +19,7 @@ from ml_metadata.proto import metadata_store_pb2
 
 import absl
 from absl import logging
+import pprint
 
 absl.logging.set_verbosity(absl.logging.DEBUG)
 pp = pprint.PrettyPrinter()
