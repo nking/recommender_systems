@@ -127,6 +127,7 @@ def create_namedtuple_schemas(infiles_dict: Dict[str, Union[str, Dict]]) -> Dict
   print(f'infiles_dict={infiles_dict}')
   out = {}
   for key in infiles_dict:
+    if key == "version" continue
     s = []
     for col_name in infiles_dict[key]['cols']:
       idx = infiles_dict[key]['cols'][col_name]['index']
@@ -261,4 +262,5 @@ def partition_fn(\
   #   bucket >=10 && < 50, returns 1
   #   bucket >=50 && < 80, returns 2
   return bisect.bisect(cumulative_buckets, bucket)
+
 
