@@ -2,7 +2,6 @@ import apache_beam as beam
 #from apache_beam.coders import coders
 
 import time
-import random
 
 from typing import Any, Dict, List, Union, Tuple
 from movie_lens_utils import *

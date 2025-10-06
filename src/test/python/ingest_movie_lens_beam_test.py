@@ -1,7 +1,3 @@
-import os
-
-import pickle
-
 from unittest import mock
 import apache_beam as beam
 from apache_beam.testing.util import assert_that, is_not_empty, equal_to
@@ -63,7 +59,7 @@ class IngestMovieLensBeamTest(tf.test.TestCase):
 
     self.infiles_dict = create_infiles_dict(ratings_dict=ratings_dict, \
                                       movies_dict=movies_dict, \
-                                      users_dict=users_dict)
+                                      users_dict=users_dict, version=1)
 
     self.buckets = [80, 10, 10]
     self.bucket_names = ['train', 'eval', 'test']

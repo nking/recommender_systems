@@ -2,14 +2,14 @@ import apache_beam as beam
 
 #NOTE: this component is not correct yet.
 #TODO: consider building the output_config outside of classes and passing
-# the arugment in.
+# the argument in.
 
 import absl
 import pprint
 import time
 import pickle
 
-from typing import Any, Dict, List, Text, Optional, Union
+from typing import Any, Dict, List, Text, Optional, Union, Tuple
 
 import tensorflow as tf
 
@@ -98,13 +98,13 @@ class IngestMovieLensExecutorSpec(ComponentSpec):
 # for a TFX pipeline, we want the ingestion to be performed by
 # an ExampleGen component that accepts input data and formats it as tf.Examples
 
-# we're extending BaseExampleGenExecutor. it invokes it's own Do method.
+# we're extending BaseExampleGenExecutor. it invokes its own Do method.
 # see https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/components/example_gen/base_example_gen_executor.py#L222
 # the Do method invokes GenerateExamplesByBeam.
 # GenerateExamplesByBeam uses GetInputSourcesToExamplePTransform.
 # The later is abstract in BaseExampleGenExecutor so must be implemented.
 #
-# The reason for overrriding the Do method of BaseExampleGenExecutor here
+# The reason for overriding the Do method of BaseExampleGenExecutor here
 # is because using a split (data partitions by directory or file name)
 # naively, seems like it might be more complicated for uris that are
 # not file sources, and writing an input_config example_gen_pb2.Input.Split
@@ -121,18 +121,12 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
     pipeline : beam.pvalue.Pipeline, \
     infiles_dict: Dict[str, Union[str, Dict]]) -> beam.PTransform:
     """Returns PTransform for ratings, movies, users joined to TF examples."""
-    logging.debug("in IngestMovieLensExecutor.GetInputSourceToExamplePTransform")
-    try:
-      infiles_dict = pickle.loads(exec_properties['infiles_dict_ser'])
-    except Exception as ex:
-      logging.error(f'ERROR: {ex}')
-      raise ValueError(f'ERROR: {ex}')
     return ingest_and_join
 
   def GenerateExamplesByBeam(self, \
     pipeline: beam.Pipeline, \
     exec_properties: Dict[str, Any], output_dict: Dict[str, List[types.Artifact]]\
-  ):
+  ) -> Tuple[Dict[str, beam.pvalue.PCollection], List[Tuple[str, Any]]]:
     """
     :param pipeline:
     :param exec_properties: is a json string serialized dictionary holding:
@@ -143,16 +137,22 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       key = bucket_names, value = a list of strings of names for the
         buckets,  e.g. ['train', 'eval', test']
     :param output_dict:
-    :return:  a dictionary of the merged, split data as keys=name, values
-      = PCollection for a partition
+    :return:  tuple of :
+      a dictionary of the merged, split data as keys=name, values
+         = PCollection for a partition,
+      and a list of tuple of the column names and types
     """
 
-    #https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/components/example_gen/base_example_gen_executor.py#L120
-    #line 200-ish
-    #split the data
+    #following https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/components/example_gen/base_example_gen_executor.py#L103
 
     logging.debug(\
       "in IngestMovieLensExecutor.GenerateExamplesByBeam")
+
+    try:
+      infiles_dict = pickle.loads(exec_properties['infiles_dict_ser'])
+    except Exception as ex:
+      logging.error(f'ERROR: {ex}')
+      raise ValueError(f'ERROR: {ex}')
 
     ratings, column_name_type_list = \
       self.GetInputSourceToExamplePTransform(pipeline=pipelne, infiles_dict=infiles_dict)
@@ -188,39 +188,11 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       partition_fn, len(buckets), cumulative_buckets, \
       output_config.split_config)
 
-    write_to_tfrecords = True
-
-    output_examples = output_dict['output_examples']
-    if output_examples is None:
-      logging.error("ERROR: fix coding error for missing output_examples")
-      raise ValueError("Error: fix coding error for missing output_examples")
-
-    output_examples.splits = bucket_names.copy()
-
-    #output_examples.set_string_custom_property('description',\
-    #  'ratings file created from left join of ratings, users, movies')
-
-    #https://www.tensorflow.org/tfx/api_docs/python/tfx/v1/types/standard_artifacts/Examples
-    # files should be written as {uri}/Split-{split_name1}
-
-    if not write_to_tfrecords:
-      #write to csv
-      column_names = ",".join([t[0] for t in column_name_type_list])
-      for i, part in enumerate(ratings_tuple):
-        prefix_path = f'{output_examples.uri}/Split-{bucket_names[i]}'
-        write_to_csv(pcollection=part, \
-          column_names=column_names, prefix_path=prefix_path, delim='_')
-      logging.info('Examples written to output_examples as CSV.')
-    else:
-      #write to TFRecords
-      for i, part in enumerate(ratings_tuple):
-          prefix_path = f'{output_examples.uri}/Split-{bucket_names[i]}'
-          convert_to_tf_example(part, column_name_type_list) \
-            | f"Serialize {time.time_ns()}" >> beam.Map(lambda x: x.SerializeToString()) \
-            | f"write_to_tf {time.time_ns()}" >> beam.io.tfrecordio.WriteToTFRecord(\
-            file_path_prefix=prefix_path, file_name_suffix='.tfrecord')
-      logging.info('Examples written to output_examples as TFRecords.')
-    #no return
+    result = {}
+    for index, example_split in enumerate(ratings_tuple):
+      result[bucket_names[index]] = example_split
+    # pass to Do method
+    return result, column_name_type_list
 
   def Do(
     self,
@@ -243,7 +215,56 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
     logging.debug("in IngestMovieLensExecutor.Do")
     #https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/components/example_gen/base_example_gen_executor.py#L281
     with self._make_beam_pipeline() as pipeline:
-      self.GenerateExamplesByBeam(pipeline, exec_properties, output_dict)
+      # apache_beam.pvalue.DoOutputsTuple
+      ratings_dict, column_name_type_list = \
+        self.GenerateExamplesByBeam(pipeline, exec_properties, output_dict)
+
+      write_to_tfrecords = True
+      output_examples = output_dict['output_examples']
+      if output_examples is None:
+        logging.error(
+          "ERROR: fix coding error for missing output_examples")
+        raise ValueError(
+          "Error: fix coding error for missing output_examples")
+
+      bucket_names = exec_properties['bucket_names']
+
+      output_examples.splits = bucket_names.copy()
+
+      # https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/proto/example_gen.proto#L44
+      # If VERSION is specified, but not SPAN, an error will be thrown.
+      # output_examples.version = infiles_dict['version']
+
+      # output_examples.set_string_custom_property('description',\
+      #  'ratings file created from left join of ratings, users, movies')
+
+      # https://www.tensorflow.org/tfx/api_docs/python/tfx/v1/types/standard_artifacts/Examples
+      # files should be written as {uri}/Split-{split_name1}
+
+      #could use WriteSplit method instead:
+      #https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/components/example_gen/base_example_gen_executor.py#L281
+
+      if not write_to_tfrecords:
+        # write to csv
+        column_names = ",".join([t[0] for t in column_name_type_list])
+        for name, example in enumerate(ratings_dict):
+          prefix_path = f'{output_examples.uri}/Split-{name}'
+          write_to_csv(pcollection=example, \
+                       column_names=column_names,
+                       prefix_path=prefix_path, delim='_')
+        logging.info('Examples written to output_examples as CSV.')
+      else:
+        # write to TFRecords
+        for name, example in enumerate(ratings_dict):
+          prefix_path = f'{output_examples.uri}/Split-{name}'
+          convert_to_tf_example(example, column_name_type_list) \
+            | f"Serialize {time.time_ns()}" >> beam.Map(
+            lambda x: x.SerializeToString()) \
+            | f"write_to_tf {time.time_ns()}" >> beam.io.tfrecordio.WriteToTFRecord( \
+            file_path_prefix=prefix_path, file_name_suffix='.tfrecord')
+        logging.info(
+          'Examples written to output_examples as TFRecords.')
+      # no return
 
 #class IngestMovieLensComponent(base_component.BaseComponent):
 class IngestMovieLensComponent(base_beam_component.BaseBeamComponent):

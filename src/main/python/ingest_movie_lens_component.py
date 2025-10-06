@@ -1,4 +1,3 @@
-import os
 import absl
 from absl import logging
 import pprint
@@ -129,8 +128,13 @@ def ingest_movie_lens_component( \
     # https://www.tensorflow.org/tfx/api_docs/python/tfx/v1/types/standard_artifacts/Examples
     # files should be written as {uri}/Split-{split_name1}
 
-    output_examples.set_string_custom_property('description',\
-      'ratings file created from left join of ratings, users, movies')
+    output_examples.splits = bucket_names.copy()
+    # https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/proto/example_gen.proto#L44
+    # If VERSION is specified, but not SPAN, an error will be thrown.
+    # output_examples.version = infiles_dict['version']
+
+    #output_examples.set_string_custom_property('description',\
+    #  'ratings file created from left join of ratings, users, movies')
 
     if not write_to_tfrecords:
       #write to csv

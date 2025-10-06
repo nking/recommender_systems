@@ -52,17 +52,19 @@ def create_infile_dict(for_file: Literal['ratings', 'movies', 'users'], \
 
 def create_infiles_dict(ratings_dict: Dict[str, Union[str, Dict]], \
   movies_dict: Dict[str, Union[str, Dict]], \
-  users_dict: Dict[str, Union[str, Dict]]) -> Dict[str, Union[str, Dict]]:
+  users_dict: Dict[str, Union[str, Dict]], version:int=1) \
+  -> Dict[str, Union[str, Dict]]:
   """
   merge the 3 dictionaries, each created by create_infile_dict, into single
   output dictionary
   :param ratings_dict:
   :param movies_dict:
   :param users_dict:
+  :param version: version for output tf.train.Examples artifact
   :return: a merge of the 3 dictionaries
   """
 
-  return {**ratings_dict, **movies_dict, **users_dict}
+  return {**ratings_dict, **movies_dict, **users_dict, 'version': version}
 
 def _assert_dict_1(ml_dict: Dict) -> Union[str, None]:
   """test contents of dict[key]"""

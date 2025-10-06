@@ -56,13 +56,13 @@ class TestInfileDictUtils(unittest.TestCase):
 
     self._assert_dict_content(users_dict)
 
-    merged_dict = create_infiles_dict(ratings_dict=ratings_dict, \
+    self.infiles_dict = create_infiles_dict(ratings_dict=ratings_dict, \
                               movies_dict=movies_dict, \
-                              users_dict=users_dict)
+                              users_dict=users_dict, version=1)
 
-    self._assert_merged_dict_content(merged_dict)
+    self._assert_merged_dict_content(self.infiles_dict)
 
-    schema_dict = create_namedtuple_schemas(merged_dict)
+    schema_dict = create_namedtuple_schemas(self.infiles_dict)
     for k in schema_dict:
       self.assertTrue(k in ['ratings', 'movies', 'users'], f"key {k} not recognized")
       file_cols = schema_dict[k]
