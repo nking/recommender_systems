@@ -38,6 +38,7 @@ from movie_lens_utils import *
 
 from ml_metadata.proto import metadata_store_pb2
 
+
 class IngestMovieLensTFXTest(tf.test.TestCase):
 
   def setUp(self):
@@ -90,7 +91,7 @@ class IngestMovieLensTFXTest(tf.test.TestCase):
   @mock.patch.object(publisher, 'Publisher')
   def testRun(self, mock_publisher):
 
-    infiles_dict_ser = base64.b64encode(pickle.dumps(infiles_dict)).decode('utf-8')
+    infiles_dict_ser = base64.b64encode(pickle.dumps(self.infiles_dict)).decode('utf-8')
 
     mock_publisher.return_value.publish_execution.return_value = {}
 

@@ -17,6 +17,13 @@ from movie_lens_utils import *
 
 from ml_metadata.proto import metadata_store_pb2
 
+import absl
+from absl import logging
+
+absl.logging.set_verbosity(absl.logging.DEBUG)
+pp = pprint.PrettyPrinter()
+
+
 class IngestMovieLensBeamTest(tf.test.TestCase):
 
   def setUp(self):
@@ -98,7 +105,7 @@ class IngestMovieLensBeamTest(tf.test.TestCase):
       pc =  _read_files(pipeline, self.infiles_dict)
       #pc['ratings'] | f'ratings: {time.time_ns()}' >> \
       #  beam.Map(lambda x: print(f'ratings={x}'))
-      print(f"TYPE ratings={type(pc['ratings'])}")
+      logging.debug(f"TYPE ratings={type(pc['ratings'])}")
       r_count = pc['ratings']  | 'count' >> beam.combiners.Count.Globally()
       #r_count | 'count ratings' >> beam.Map(lambda x: print(f'len={x}'))
       assert_that(r_count, equal_to([1000209]))

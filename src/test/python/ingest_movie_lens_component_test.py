@@ -98,7 +98,7 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     mock_publisher.return_value.publish_execution.return_value = {}
 
     ratings_example_gen = (ingest_movie_lens_component( \
-      infiles_dict_ser=self.infiles_dict_ser, \
+      infiles_dict_ser=infiles_dict_ser, \
       bucket_names_ser=self.bucket_names_ser, \
       buckets_ser=self.buckets_ser))
 
