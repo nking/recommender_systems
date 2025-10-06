@@ -127,7 +127,8 @@ def create_namedtuple_schemas(infiles_dict: Dict[str, Union[str, Dict]]) -> Dict
   print(f'infiles_dict={infiles_dict}')
   out = {}
   for key in infiles_dict:
-    if key == "version" continue
+    if key == "version":
+      continue
     s = []
     for col_name in infiles_dict[key]['cols']:
       idx = infiles_dict[key]['cols'][col_name]['index']

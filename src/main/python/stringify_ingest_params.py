@@ -1,4 +1,5 @@
-import json
+import pickle
+import base64
 
 def stringify_ingest_params(ratings_uri : str, movies_uri : str, users_uri : str, \
   ratings_key_col_dict : dict[str, int], \
@@ -15,8 +16,8 @@ def stringify_ingest_params(ratings_uri : str, movies_uri : str, users_uri : str
   :param movies_key_col_dict:
   :param users_key_col_dict:
   :param partitions:
-  :return: json serialized string of a dictionary, which after
-    json.loads will have keys:
+  :return: pickle and base64 serialized string of a dictionary, which after
+    deserialization will have keys:
     "ratings_uri", "ratings_uri", "ratings_uri",
     "ratings_key_dict", "movies_key_dict", "users_key_dict",
     "partitions"
@@ -30,7 +31,7 @@ def stringify_ingest_params(ratings_uri : str, movies_uri : str, users_uri : str
     "users_key_dict" : users_key_col_dict, \
     "partitions" : partitions}
 
-  serialized = json.dumps(params, ensure_ascii=False).encode('utf-8')
+  serialized = base64.b64encode(pickle.dumps(params)).decode('utf-8')
 
   return serialized
 
@@ -52,7 +53,7 @@ if __name__ == "__main__":
     _users_key_col_dict, \
     _partitions)
 
-  input_dict = json.loads(input_dict_ser.decode('utf-8'))
+  input_dict = pickle.loads(base64.b64decode(input_dict_ser.encode('utf-8')))
 
   ratings_uri = input_dict['ratings_uri']
   movies_uri = input_dict['ratings_uri']

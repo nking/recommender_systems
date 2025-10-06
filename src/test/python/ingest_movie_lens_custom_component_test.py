@@ -19,7 +19,8 @@
 
 import os
 
-import json
+import pickle
+import base64
 
 from unittest import mock
 import tensorflow as tf
@@ -89,7 +90,7 @@ class IngestMovieLensTFXTest(tf.test.TestCase):
   @mock.patch.object(publisher, 'Publisher')
   def testRun(self, mock_publisher):
 
-    infiles_dict_ser = json.dumps(self.infiles_dict, ensure_ascii=False).encode('utf-8')
+    infiles_dict_ser = base64.b64encode(pickle.dumps(infiles_dict)).decode('utf-8')
 
     mock_publisher.return_value.publish_execution.return_value = {}
 
