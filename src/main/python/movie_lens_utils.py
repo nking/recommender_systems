@@ -98,24 +98,21 @@ def _assert_dict_1(ml_dict: Dict) -> Union[str, None]:
   return None
 
 def create_example(row, column_name_type_list: List[Tuple[str, Any]]):
-  """Creates a tf.train.Example from given feature values."""
+  """Creates a tf.train.Example from given feature values.
+  row were created from beam.io.ReadFromText so are all strings.
+  """
   feature_map = {}
   for i, value in enumerate(row):
     element_type = column_name_type_list[i][1]
     name = column_name_type_list[i][0]
-    if isinstance(element_type, float):
-      f = tf.train.Feature(float_list=tf.train.FloatList(value=[value]))
-    elif isinstance(element_type, int) or isinstance(element_type, bool):
-      f = tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
-    elif isinstance(element_type, str):
+    if element_type == float:
+      f = tf.train.Feature(float_list=tf.train.FloatList(value=[float(value)]))
+    elif element_type == int or element_type == bool:
+      f = tf.train.Feature(int64_list=tf.train.Int64List(value=[int(value)]))
+    elif element_type == str:
       f = tf.train.Feature(int64_list=tf.train.BytesList(value=[value.encode('utf-8')]))
     else:
-      #  bytes
-      try:
-        f = tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
-      except TypeError as ex:
-        logging.debug(f"ERROR:{ex}:\nelement_type={element_type}, value={value}"
-                      f"\bcolumn_name_type_list={column_name_type_list}")
+      raise ValueError(f"element_type={element_type}, but only float, int, and str classes are handled.")
     feature_map[name] = f
   return tf.train.Example(features=tf.train.Features(feature=feature_map))
 
