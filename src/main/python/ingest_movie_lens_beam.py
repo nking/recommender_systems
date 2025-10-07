@@ -124,19 +124,12 @@ def write_to_csv(pcollection : beam.PCollection, \
     file_path_prefix=prefix_path, file_name_suffix='.csv', \
     header=column_names)
 
-@beam.ptransform_fn
-@beam.typehints.with_input_types(beam.Pipeline, Dict[str, Union[str, Dict]])
-@beam.typehints.with_output_types(Tuple[beam.PCollection, List[Tuple[str, Any]]])
-def ingest_and_join( \
-  pipeline : beam.Pipeline, \
-  infiles_dict: Dict[str, Union[str, Dict]]) -> \
-  Tuple[beam.PCollection, List[Tuple[str, Any]]]:
+class IngestAndJoin(beam.PTransform):
   """
   reads in the 3 expected files from the uris given in infiles_dict, and then uses
   left joins of ratings with user information and movie genres to
   make a PCollection.  The PCollection has an associated schema in it.
 
-  :param pipeline:
   :param infiles_dict
     a dictionary of file information for each of the 3 files, that is
     the ratings file, movies file, and users file.
@@ -145,51 +138,51 @@ def ingest_and_join( \
   :return: a tuple of PCollection of ratings with joined information from users and movies where each tuple is for a
      partition specified in partition list.  The PCollection has an associated schema
   """
+  def __init__(self, infiles_dict):
+    super().__init__()
+    self.infiles_dict = infiles_dict
 
-  err = infiles_dict_formedness_error(infiles_dict)
-  if err:
-    raise ValueError(err)
+  def expand(self, pcoll=None):
+    err = self.infiles_dict(self.infiles_dict)
+    if err:
+      raise ValueError(err)
 
-  pc = pipeline | f"read {time.time_ns()}" >> ReadFiles(infiles_dict)
+    pc = pcoll | f"read {time.time_ns()}" >> ReadFiles(self.infiles_dict)
 
-  # ratings: user_id,movie_id,rating
-  # movie_id,title,genre
-  # user_id::gender::age::occupation::zipcode
+    # ratings: user_id,movie_id,rating
+    # movie_id,title,genre
+    # user_id::gender::age::occupation::zipcode
 
-  # user_id,movie_id,rating,timestamp,gender,age,occupation,zipcode
-  ratings_1 = pc['ratings'] | \
-    f"left join ratings,users {random.randint(0,1000000000)}" \
-    >> MergeByKey(pc['users'], \
-    infiles_dict['ratings']['cols']['user_id']['index'], \
-    infiles_dict['users']['cols']['user_id']['index'], \
-    filter_cols=[infiles_dict['users']['cols']['zipcode']['index'],\
-    infiles_dict['users']['cols']['user_id']['index']], debug_tag="R-U")
+    # user_id,movie_id,rating,timestamp,gender,age,occupation,zipcode
+    ratings_1 = pc['ratings'] | \
+      f"left join ratings,users {random.randint(0,1000000000)}" \
+      >> MergeByKey(pc['users'], \
+      self.infiles_dict['ratings']['cols']['user_id']['index'], \
+      self.infiles_dict['users']['cols']['user_id']['index'], \
+      filter_cols=[self.infiles_dict['users']['cols']['zipcode']['index'],\
+      self.infiles_dict['users']['cols']['user_id']['index']], debug_tag="R-U")
 
-  # user_id,movie_id,rating,gender,age,occupation,zipcode,genres
-  ratings = ratings_1 | \
-    f"left join ratings+users,movies {random.randint(0,1000000000)}" \
-    >> MergeByKey(pc['movies'], \
-    infiles_dict['ratings']['cols']['movie_id']['index'], \
-    infiles_dict['movies']['cols']['movie_id']['index'], \
-    filter_cols=[infiles_dict['movies']['cols']['title']['index'], \
-    infiles_dict['movies']['cols']['movie_id']['index']], \
-    debug_tag="R-M")
+    # user_id,movie_id,rating,gender,age,occupation,zipcode,genres
+    ratings = ratings_1 | \
+      f"left join ratings+users,movies {random.randint(0,1000000000)}" \
+      >> MergeByKey(pc['movies'], \
+      self.infiles_dict['ratings']['cols']['movie_id']['index'], \
+      self.infiles_dict['movies']['cols']['movie_id']['index'], \
+      filter_cols=[self.infiles_dict['movies']['cols']['title']['index'], \
+      self.infiles_dict['movies']['cols']['movie_id']['index']], \
+      debug_tag="R-M")
 
-  schemas = create_namedtuple_schemas(infiles_dict)
-  #format, compatible with apache_beam.coders.registry.
-  # list of tuples of column_name, column_type
-  columns = schemas['ratings'].copy()
-  #append users, skipping infiles_dict['users']['cols']['zipcode']
-  for _name, _type in schemas['users']:
-    if _name != 'zipcode' and _name != 'user_id':
-      columns.append((_name, _type))
-  # append movies, skipping title
-  for _name, _type in schemas['movies']:
-    if _name != 'title' and _name != 'movie_id':
-      columns.append((_name, _type))
+    schemas = create_namedtuple_schemas(self.infiles_dict)
+    #format, compatible with apache_beam.coders.registry.
+    # list of tuples of column_name, column_type
+    columns = schemas['ratings'].copy()
+    #append users, skipping infiles_dict['users']['cols']['zipcode']
+    for _name, _type in schemas['users']:
+      if _name != 'zipcode' and _name != 'user_id':
+        columns.append((_name, _type))
+    # append movies, skipping title
+    for _name, _type in schemas['movies']:
+      if _name != 'title' and _name != 'movie_id':
+        columns.append((_name, _type))
 
-  # for i, part in enumerate(ratings_parts):
-  #  part | f'PARTITIONED_{i}_{time.time_ns()}' >> beam.io.WriteToText(\
-  #    file_path_prefix=f'a_{i}_', file_name_suffix='.txt')
-
-  return ratings, columns
+    return ratings, columns

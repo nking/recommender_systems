@@ -33,11 +33,12 @@ from tfx.orchestration.launcher import in_process_component_launcher
 from tfx.proto import example_gen_pb2
 from tfx.utils import name_utils
 
+import pprint
+
 from ingest_movie_lens_custom_component import *
 from movie_lens_utils import *
 
 from ml_metadata.proto import metadata_store_pb2
-
 
 class IngestMovieLensCustomComponentTest(tf.test.TestCase):
 
@@ -134,4 +135,8 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
     self.assertTrue(fileio.exists(os.path.join(pipeline_root, ratings_example_gen.id)))
 
   def testDo(self):
+    EXECUTOR_SPEC = executor_spec.BeamExecutorSpec(IngestMovieLensExecutor)
+    pprint(EXECUTOR_SPEC)
+    #ratings_example_gen = IngestMovieLensExecutor()
+    #ratings_example_gen.Do({}, output_dict, exec_properties)
     pass

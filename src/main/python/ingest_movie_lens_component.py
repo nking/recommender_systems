@@ -12,7 +12,7 @@ from tfx.dsl.component.experimental.decorators import component
 #from tfx.dsl.components.component import component
 
 from movie_lens_utils import *
-from ingest_movie_lens_beam import ingest_and_join
+from ingest_movie_lens_beam import IngestAndJoin
 from tfx.proto import example_gen_pb2
 
 from tfx import v1 as tfx
@@ -106,7 +106,7 @@ def ingest_movie_lens_component( \
   with beam_pipeline as pipeline:
     #beam.PCollection, List[Tuple[str, Any]
     ratings, column_name_type_list = \
-      ingest_and_join(pipeline=pipeline, infiles_dict = infiles_dict)
+      IngestAndJoin(pipeline=pipeline, infiles_dict = infiles_dict)
 
     #perform partitions
     total = sum(buckets)

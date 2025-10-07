@@ -34,7 +34,7 @@ from tfx.types import artifact_utils, standard_artifacts, \
 
 from tfx.proto import example_gen_pb2
 
-from ingest_movie_lens_beam import ingest_and_join
+from ingest_movie_lens_beam import IngestAndJoin
 from movie_lens_utils import *
 
 from tfx import v1 as tfx
@@ -123,7 +123,7 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
     pipeline : beam.Pipeline, \
     infiles_dict: Dict[str, Union[str, Dict]]) -> beam.PTransform:
     """Returns PTransform for ratings, movies, users joined to TF examples."""
-    return ingest_and_join
+    return IngestAndJoin
 
   def GenerateExamplesByBeam(self, \
     pipeline: beam.Pipeline, \

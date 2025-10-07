@@ -100,12 +100,10 @@ class IngestMovieLensBeamTest(tf.test.TestCase):
       #spark_conf=spark_conf_list,\
     )
 
-    from ingest_movie_lens_beam import _read_files
-
     with beam.Pipeline(options=options) as pipeline:
 
       #test read files
-      pc =  _read_files(pipeline, self.infiles_dict)
+      pc = pipeline | f"read {time.time_ns()}" >> ReadFiles(self.infiles_dict)
 
       #pc['ratings'] | f'ratings: {time.time_ns()}' >> \
       #  beam.Map(lambda x: print(f'ratings={x}'))
@@ -122,7 +120,7 @@ class IngestMovieLensBeamTest(tf.test.TestCase):
 
       #beam.pvalue.PCollection, List[Tuple[str, Any]]
       ratings, column_name_type_list = \
-        ingest_and_join(pipeline, infiles_dict=self.infiles_dict)
+        IngestAndJoin(pipeline, infiles_dict=self.infiles_dict)
 
       assert expected_schema_cols == column_name_type_list
 
