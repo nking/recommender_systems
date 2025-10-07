@@ -236,6 +236,13 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
         self.GenerateExamplesByBeam(pipeline, exec_properties, output_dict)
 
       output_examples = output_dict['output_examples']
+      logging.debug(f"output_examples TYPE={type(output_examples)}")
+      logging.debug(f"output_examples={output_examples}")
+
+      output_examples2 = artifact_utils.get_single_instance(output_dict['output_examples'])
+      logging.debug(f"output_examples2 TYPE={type(output_examples2)}")
+      logging.debug(f"output_examples2={output_examples2}")
+
       if output_examples is None:
         logging.error(
           "ERROR: fix coding error for missing output_examples")
@@ -244,7 +251,7 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
 
       bucket_names = exec_properties['bucket_names']
 
-      output_examples.splits = bucket_names.copy()
+      #bucket names are already set in IngestMovieLensComponent.init
 
       # https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/proto/example_gen.proto#L44
       # If VERSION is specified, but not SPAN, an error will be thrown.
@@ -260,8 +267,8 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       #https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/components/example_gen/base_example_gen_executor.py#L281
 
       # write to TFRecords
-      for name, example in enumerate(ratings_dict):
-        prefix_path = f'{output_examples.uri}/Split-{name}'
+      for name, example in ratings_dict.items():
+        prefix_path = f'{output_examples2.uri}/Split-{name}'
 
         example | f"Serialize_{random.randint(0, 1000000000000)}" \
           >> beam.Map(lambda x: x.SerializeToString()) \
