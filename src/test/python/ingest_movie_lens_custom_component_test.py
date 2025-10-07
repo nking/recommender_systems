@@ -193,6 +193,16 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
       return pd.DataFrame(data=table)
 
     display_types(store.get_artifact_types())
+    
+    execution_type = store.get_execution_type('IngestMovieLensComponent')
+    # Get the latest execution of this type
+    executions = store.get_executions_by_type(execution_type.name)
+    ingestion_execution = executions[-1] # Assuming the latest run is the one to check
+    
+    # Assert the execution is complete
+    assert ingestion_execution.last_known_state == metadata_store_pb2.Execution.State.COMPLETE
+
+
     """
 
   #def testDo(self):

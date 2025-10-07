@@ -137,7 +137,7 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
 
       (ratings_pc, column_name_type_list) = \
         pipeline | f"IngestAndJoin_{random.randint(0, 1000000000000)}" \
-        >> InjestAndJoin(infiles_dict=infiles_dict)
+        >> IngestAndJoin(infiles_dict=infiles_dict)
 
       ratings_example = ratings_pc \
         | f'ToTFExample_{random.randint(0, 1000000000000)}' \
