@@ -111,12 +111,12 @@ class IngestMovieLensBeamTest(tf.test.TestCase):
 
       r_count = ratings_pc  | f'ratings_count_{random.randint(0, 1000000000000)}' >> beam.combiners.Count.Globally()
       #r_count | 'count ratings' >> beam.Map(lambda x: print(f'len={x}'))
-      assert_that(r_count, equal_to([1000209]))
+      assert_that(r_count, equal_to([1000209]), label=f"assert_that_{random.randint(0, 1000000000000)}")
 
       assert_that(pc['movies']  | f'movies_count_{random.randint(0, 1000000000000)}' >> beam.combiners.Count.Globally(), \
-        equal_to([3883]))
+        equal_to([3883]), label=f"assert_that_{random.randint(0, 1000000000000)}")
       assert_that(pc['users'] | f'users_count_{random.randint(0, 1000000000000)}' >> beam.combiners.Count.Globally(), \
-        equal_to([6040]))
+        equal_to([6040]), label=f"assert_that_{random.randint(0, 1000000000000)}")
 
       #beam.pvalue.PCollection, List[Tuple[str, Any]]
       ratings, column_name_type_list = \
@@ -124,4 +124,4 @@ class IngestMovieLensBeamTest(tf.test.TestCase):
 
       assert expected_schema_cols == column_name_type_list
 
-      assert_that(ratings, is_not_empty(), label=f'Assert Non-Empty ratings PCollection')
+      assert_that(ratings, is_not_empty(), label=f'assert_that_{random.randint(0, 1000000000000)}')
