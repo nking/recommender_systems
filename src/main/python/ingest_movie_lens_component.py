@@ -13,7 +13,7 @@ from tfx.dsl.component.experimental.decorators import component
 #from tfx.dsl.components.component import component
 
 from movie_lens_utils import *
-from ingest_movie_lens_beam import IngestAndJoin
+from ingest_movie_lens_beam import *
 from tfx.proto import example_gen_pb2
 
 from tfx import v1 as tfx

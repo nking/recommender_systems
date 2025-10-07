@@ -35,7 +35,7 @@ from tfx.types import artifact_utils, standard_artifacts, \
 
 from tfx.proto import example_gen_pb2
 
-from ingest_movie_lens_beam import IngestAndJoin
+from ingest_movie_lens_beam import *
 from movie_lens_utils import *
 
 from tfx import v1 as tfx

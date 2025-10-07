@@ -80,7 +80,6 @@ class MergeByKey(beam.PTransform):
 
     return joined_data
 
-@beam.typehints.with_input_types(Dict[str, Union[str, Dict]])
 class ReadFiles(beam.PTransform):
   """
   read ratings, movies, and users independently
