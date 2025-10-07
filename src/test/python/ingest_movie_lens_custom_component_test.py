@@ -93,7 +93,7 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
   @mock.patch.object(publisher, 'Publisher')
   def testRun(self, mock_publisher):
 
-    test_num = 100
+    test_num = "100"
     infiles_dict_ser = base64.b64encode(pickle.dumps(self.infiles_dict)).decode('utf-8')
 
     mock_publisher.return_value.publish_execution.return_value = {}
