@@ -143,7 +143,7 @@ class IngestAndJoin(beam.PTransform):
     self.infiles_dict = infiles_dict
 
   def expand(self, pcoll=None):
-    err = self.infiles_dict(self.infiles_dict)
+    err = infiles_dict_formedness_error(self.infiles_dict)
     if err:
       raise ValueError(err)
 
