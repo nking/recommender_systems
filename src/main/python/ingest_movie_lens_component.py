@@ -7,7 +7,7 @@ import base64
 import random
 
 import apache_beam as beam
-from tfx.types import standard_artifacts
+from tfx.types import standard_artifacts, artifact_utils
 from tfx.dsl.component.experimental import annotations
 from tfx.dsl.component.experimental.decorators import component
 #from tfx.dsl.components.component import component
