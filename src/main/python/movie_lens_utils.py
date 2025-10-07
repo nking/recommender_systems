@@ -110,8 +110,12 @@ def create_example(row, column_name_type_list: List[Tuple[str, Any]]):
     elif isinstance(element_type, str):
       f = tf.train.Feature(int64_list=tf.train.BytesList(value=[value.encode('utf-8')]))
     else:
-      # str or bytes
-      f = tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
+      #  bytes
+      try:
+        f = tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
+      except TypeError as ex:
+        logging.debug(f"ERROR:{ex}:\nelement_type={element_type}, value={value}"
+                      f"\bcolumn_name_type_list={column_name_type_list}")
     feature_map[name] = f
   return tf.train.Example(features=tf.train.Features(feature=feature_map))
 

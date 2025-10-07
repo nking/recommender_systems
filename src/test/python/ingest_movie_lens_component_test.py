@@ -156,7 +156,7 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
 
     artifact_types = store.get_artifact_types()
     logging.debug(f"MLMD store artifact_types={artifact_types}")
-    artifact_types = store.get_artifacts()
+    artifacts = store.get_artifacts()
     logging.debug(f"MLMD store artifacts={artifacts}")
     executions = store.get_executions()
     logging.debug(f"MLMD store executions={executions}")
