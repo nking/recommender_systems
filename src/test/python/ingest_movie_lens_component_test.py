@@ -94,6 +94,8 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
   @mock.patch.object(publisher, 'Publisher')
   def testRun(self, mock_publisher):
 
+    test_num = 1
+
     infiles_dict_ser = base64.b64encode(pickle.dumps(self.infiles_dict)).decode('utf-8')
 
     mock_publisher.return_value.publish_execution.return_value = {}
@@ -104,14 +106,19 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
       buckets_ser=self.buckets_ser))
 
     #output_data_dir = os.path.join(os.environ.get('TEST_UNDECLARED_OUTPUTS_DIR',self.get_temp_dir()),self._testMethodName)
-    output_data_dir = os.path.join('/kaggle/working/bin/', self._testMethodName)
-    pipeline_root = os.path.join(output_data_dir, 'Test')
+    output_data_dir = os.path.join('/kaggle/working/bin/', test_num, self._testMethodName)
+    pipeline_root = os.path.join(output_data_dir, 'TestPythonFuncCustomCompPipeline')
     os.makedirs(pipeline_root, exist_ok=True)
 
-    pipeline_info = data_types.PipelineInfo(
-        pipeline_name='Test', pipeline_root=pipeline_root, run_id='123')
+    alt_output_data_dir = os.path.join(
+      os.environ.get('TEST_UNDECLARED_OUTPUTS_DIR',
+                     self.get_temp_dir()), self._testMethodName)
+    print(f'alt_output_data_dir={alt_output_data_dir}')
 
-    driver_args = data_types.DriverArgs(enable_cache=True)
+    pipeline_info = data_types.PipelineInfo(
+        pipeline_name='TestPythonFuncCustomCompPipeline', pipeline_root=pipeline_root, run_id=test_num)
+
+    driver_args = data_types.DriverArgs(enable_cache=False)
 
     connection_config = metadata_store_pb2.ConnectionConfig()
     connection_config.sqlite.SetInParent()
@@ -134,3 +141,10 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
 
     # Check output paths.
     self.assertTrue(fileio.exists(os.path.join(pipeline_root, ratings_example_gen.id)))
+
+    for key, value in ratings_example_gen.outputs.items():
+      print(f'key={key}, value={value}')
+
+    self.assertIsNotNone(ratings_example_gen.outputs['output'].get()[0])
+    output_path = ratings_example_gen.outputs['output'].get()[0].uri
+    self.assertTrue(fileio.exists(output_path))

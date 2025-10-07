@@ -93,6 +93,7 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
   @mock.patch.object(publisher, 'Publisher')
   def testRun(self, mock_publisher):
 
+    test_num = 100
     infiles_dict_ser = base64.b64encode(pickle.dumps(self.infiles_dict)).decode('utf-8')
 
     mock_publisher.return_value.publish_execution.return_value = {}
@@ -104,12 +105,12 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
       bucket_names=self.bucket_names, \
       buckets=self.buckets))
 
-    output_data_dir = os.path.join('/kaggle/working/bin/', self._testMethodName)
-    pipeline_root = os.path.join(output_data_dir, 'Test')
+    output_data_dir = os.path.join('/kaggle/working/bin/', test_num, self._testMethodName)
+    pipeline_root = os.path.join(output_data_dir, 'TestFullyCustomCompPipeline')
     os.makedirs(pipeline_root, exist_ok=True)
 
     pipeline_info = data_types.PipelineInfo(
-        pipeline_name='Test', pipeline_root=pipeline_root, run_id='123')
+        pipeline_name='TestFullyCustomCompPipeline', pipeline_root=pipeline_root, run_id=test_num)
 
     driver_args = data_types.DriverArgs(enable_cache=True)
 
@@ -135,8 +136,15 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
     # Check output paths.
     self.assertTrue(fileio.exists(os.path.join(pipeline_root, ratings_example_gen.id)))
 
-  def testDo(self):
-    #EXECUTOR_SPEC = executor_spec.BeamExecutorSpec(IngestMovieLensExecutor)
-    #ratings_example_gen = IngestMovieLensExecutor()
-    #ratings_example_gen.Do({}, output_dict, exec_properties)
-    pass
+    for key, value in ratings_example_gen.outputs.items():
+      print(f'key={key}, value={value}')
+
+    self.assertIsNotNone(ratings_example_gen.outputs['output'].get()[0])
+    output_path = ratings_example_gen.outputs['output'].get()[0].uri
+    self.assertTrue(fileio.exists(output_path))
+
+  #def testDo(self):
+  #  #EXECUTOR_SPEC = executor_spec.BeamExecutorSpec(IngestMovieLensExecutor)
+  #  #ratings_example_gen = IngestMovieLensExecutor()
+  #  #ratings_example_gen.Do({}, output_dict, exec_properties)
+  #  pass
