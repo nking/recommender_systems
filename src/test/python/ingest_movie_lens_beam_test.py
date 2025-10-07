@@ -126,3 +126,6 @@ class IngestMovieLensBeamTest(tf.test.TestCase):
       assert expected_schema_cols == column_name_type_list
 
       assert_that(ratings, is_not_empty(), label=f'assert_that_{random.randint(0, 1000000000000)}')
+
+      retrieved_root = pipeline.pipeline_info.pipeline_root
+      print(f"The pipeline root is: {retrieved_root}")
