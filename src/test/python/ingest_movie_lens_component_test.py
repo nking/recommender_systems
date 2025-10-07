@@ -88,8 +88,8 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
 
     self.buckets = [80, 10, 10]
     self.bucket_names = ['train', 'eval', 'test']
-    self.buckets_ser = base64.b64encode(pickle.dumps(self.buckets))
-    self.bucket_names_ser = base64.b64encode(pickle.dumps(self.bucket_names))
+    self.buckets_ser = (base64.b64encode(pickle.dumps(self.buckets))).decode('utf-8')
+    self.bucket_names_ser = (base64.b64encode(pickle.dumps(self.bucket_names))).decode('utf-8')
 
     self.name = 'test run of ingest with tfx'
 
@@ -98,7 +98,7 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
 
     test_num = "1"
 
-    infiles_dict_ser = base64.b64encode(pickle.dumps(self.infiles_dict))
+    infiles_dict_ser = (base64.b64encode(pickle.dumps(self.infiles_dict))).decode('utf-8')
 
     mock_publisher.return_value.publish_execution.return_value = {}
 

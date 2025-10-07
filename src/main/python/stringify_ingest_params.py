@@ -31,7 +31,7 @@ def stringify_ingest_params(ratings_uri : str, movies_uri : str, users_uri : str
     "users_key_dict" : users_key_col_dict, \
     "partitions" : partitions}
 
-  serialized = base64.b64encode(pickle.dumps(params))
+  serialized = (base64.b64encode(pickle.dumps(params))).decode('utf-8')
 
   return serialized
 
@@ -53,7 +53,7 @@ if __name__ == "__main__":
     _users_key_col_dict, \
     _partitions)
 
-  input_dict = pickle.loads(base64.b64decode(input_dict_ser))
+  input_dict = pickle.loads(base64.b64decode(input_dict_ser.encode('utf-8')))
 
   ratings_uri = input_dict['ratings_uri']
   movies_uri = input_dict['ratings_uri']
