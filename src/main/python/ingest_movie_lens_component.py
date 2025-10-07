@@ -41,7 +41,7 @@ def ingest_movie_lens_component( \
   buckets_ser: tfx.dsl.components.Parameter[str], \
   output_examples: tfx.dsl.components.OutputArtifact[standard_artifacts.Examples], \
   #output_split_config: tfx.dsl.components.OutputArtifact[standard_artifacts.SplitConfig],\
-  beam_pipeline: annotations.BeamComponentParameter[beam.Pipeline]=None) -> None:
+  beam_pipeline: annotations.BeamComponentParameter[beam.Pipeline]=None):
   """
   ingest the ratings, movies, and users files, left join them on ratings,
   and split them into the given buckets by percentange and bucket_name.
@@ -50,9 +50,9 @@ def ingest_movie_lens_component( \
     :param infiles_dict_ser: a string created from using base64 and pickle on the infiles_dict created with
       movie_lens_utils.create_infiles_dict where its input arguments are made
       from movie_lens_utils.create_infile_dict
-    :param buckets: list of partitions in percent.
+    :param buckets_ser: string serialized list of partitions in percent.
       this is a string from pickle and base64
-    :param bucket_names: list of partitions names corresponding to 
+    :param bucket_names_ser: string serialized list of partitions names corresponding to
       buckets.  this is a string from pickle and base64
     :param output_examples: 
       ChannelParameter(type=standard_artifacts.Examples),
