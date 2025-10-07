@@ -121,7 +121,6 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
   """executor to ingest movie lens data, join, and split into buckets"""
 
   def GetInputSourceToExamplePTransform(self, \
-    pipeline : beam.Pipeline, \
     infiles_dict: Dict[str, Union[str, Dict]]) -> beam.PTransform:
     """Returns PTransform for ratings, movies, users joined to TF examples."""
     return IngestAndJoin
@@ -159,7 +158,8 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       raise ValueError(f'ERROR: {ex}')
 
     ratings, column_name_type_list = \
-      self.GetInputSourceToExamplePTransform(pipeline=pipeline, infiles_dict=infiles_dict)
+      pipeline | f"IngestAndJoin_{random.randint(0, 1000000000000)}" \
+      >> self.GetInputSourceToExamplePTransform(infiles_dict=infiles_dict)
 
     bucket_names = exec_properties['bucket_names']
     buckets = exec_properties['buckets']
