@@ -156,6 +156,15 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
 
     artifact_types = store.get_artifact_types()
     logging.debug(f"MLMD store artifact_types={artifact_types}")
+    artifact_types = store.get_artifacts()
+    logging.debug(f"MLMD store artifacts={artifacts}")
+    executions = store.get_executions()
+    logging.debug(f"MLMD store executions={executions}")
+    for execution in executions:
+      logging.debug(f"execution.properties={execution.properties}")
+    artifact_count = len(artifacts)
+    execution_count = len(executions)
+    self.assertGreaterEqual(artifact_count, execution_count)
 
     #self.assertIsNotNone(ratings_example_gen.outputs['output'].get()[0])
     #output_path = ratings_example_gen.outputs['output'].get()[0].uri
