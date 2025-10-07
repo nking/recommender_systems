@@ -120,7 +120,8 @@ class IngestMovieLensBeamTest(tf.test.TestCase):
 
       #beam.pvalue.PCollection, List[Tuple[str, Any]]
       ratings, column_name_type_list = \
-        IngestAndJoin(pipeline, infiles_dict=self.infiles_dict)
+        pipeline | f"IngestAndJoin_{random.randint(0,1000000000)}" \
+        >> IngestAndJoin(infiles_dict = self.infiles_dict)
 
       assert expected_schema_cols == column_name_type_list
 
