@@ -261,9 +261,9 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
         for name, example in enumerate(ratings_dict):
           prefix_path = f'{output_examples.uri}/Split-{name}'
           convert_to_tf_example(example, column_name_type_list) \
-            | f"Serialize {time.time_ns()}" >> beam.Map(
+            | f"Serialize_{random.randint(0, 1000000000000)}" >> beam.Map(
             lambda x: x.SerializeToString()) \
-            | f"write_to_tf {time.time_ns()}" >> beam.io.tfrecordio.WriteToTFRecord( \
+            | f"write_to_tf_{random.randint(0, 1000000000000)}" >> beam.io.tfrecordio.WriteToTFRecord( \
             file_path_prefix=prefix_path, file_name_suffix='.tfrecord')
         logging.info(
           'Examples written to output_examples as TFRecords.')

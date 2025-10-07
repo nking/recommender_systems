@@ -101,7 +101,7 @@ class ReadFiles(beam.PTransform):
         beam.io.ReadFromText(\
         self.infiles_dict[key]['uri'], skip_header_lines=skip,
         coder=CustomUTF8Coder()) \
-        | f'parse_{key}_{time.time_ns()}' >> \
+        | f'parse_{key}_{random.randint(0, 1000000000000)}' >> \
         beam.Map(lambda line: line.split(self.infiles_dict[key]['delim']))
     return pc
 
@@ -109,7 +109,7 @@ class ReadFiles(beam.PTransform):
 @beam.typehints.with_input_types(beam.PCollection, List[Tuple[str, Any]])
 @beam.typehints.with_output_types(tf.train.Example)
 def convert_to_tf_example(pcollection: beam.PCollection, column_name_type_list) -> beam.PCollection:
-    return pcollection | f'ToTFExample {time.time_ns()}' >> beam.Map(create_example, column_name_type_list)
+    return pcollection | f'ToTFExample_{random.randint(0, 1000000000000)}' >> beam.Map(create_example, column_name_type_list)
 
 @beam.ptransform_fn
 @beam.typehints.with_input_types(beam.PCollection, str, str, str)
@@ -118,16 +118,16 @@ def write_to_csv(pcollection : beam.PCollection, \
   column_names : str, prefix_path:str, delim:str='_') -> None:
   # format the lines into a delimiter separated string then write to
   # file
-  pcollection | f"format_for_writing {time.time_ns()}" >> beam.Map( \
+  pcollection | f"format_for_writing_{random.randint(0, 1000000000000)}" >> beam.Map( \
     lambda x: delim.join(x)) \
-    | f"write to text {time.time_ns()}"  >> beam.io.WriteToText( \
+    | f"write_to_text_{random.randint(0, 1000000000000)}"  >> beam.io.WriteToText( \
     file_path_prefix=prefix_path, file_name_suffix='.csv', \
     header=column_names)
 
 class IngestAndJoin(beam.PTransform):
   """
-  reads in the 3 expected files from the uris given in infiles_dict, and then uses
-  left joins of ratings with user information and movie genres to
+  reads in the 3 expected files from the uris given in infiles_dict, and then
+  left joins on ratings with user information and movie genres to
   make a PCollection.  The PCollection has an associated schema in it.
 
   :param infiles_dict
@@ -147,7 +147,7 @@ class IngestAndJoin(beam.PTransform):
     if err:
       raise ValueError(err)
 
-    pc = pcoll | f"read {time.time_ns()}" >> ReadFiles(self.infiles_dict)
+    pc = pcoll | f"read_{random.randint(0, 1000000000000)}" >> ReadFiles(self.infiles_dict)
 
     # ratings: user_id,movie_id,rating
     # movie_id,title,genre
@@ -155,7 +155,7 @@ class IngestAndJoin(beam.PTransform):
 
     # user_id,movie_id,rating,timestamp,gender,age,occupation,zipcode
     ratings_1 = pc['ratings'] | \
-      f"left join ratings,users {random.randint(0,1000000000)}" \
+      f"left_join_ratings_users_{random.randint(0,1000000000)}" \
       >> MergeByKey(pc['users'], \
       self.infiles_dict['ratings']['cols']['user_id']['index'], \
       self.infiles_dict['users']['cols']['user_id']['index'], \
@@ -164,7 +164,7 @@ class IngestAndJoin(beam.PTransform):
 
     # user_id,movie_id,rating,gender,age,occupation,zipcode,genres
     ratings = ratings_1 | \
-      f"left join ratings+users,movies {random.randint(0,1000000000)}" \
+      f"left_join_ratings_users_movies_{random.randint(0,1000000000)}" \
       >> MergeByKey(pc['movies'], \
       self.infiles_dict['ratings']['cols']['movie_id']['index'], \
       self.infiles_dict['movies']['cols']['movie_id']['index'], \

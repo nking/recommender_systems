@@ -103,19 +103,19 @@ class IngestMovieLensBeamTest(tf.test.TestCase):
     with beam.Pipeline(options=options) as pipeline:
 
       #test read files
-      pc = pipeline | f"read {time.time_ns()}" >> ReadFiles(self.infiles_dict)
+      pc = pipeline | f"read_{time.time_ns()}" >> ReadFiles(self.infiles_dict)
 
       #pc['ratings'] | f'ratings: {time.time_ns()}' >> \
       #  beam.Map(lambda x: print(f'ratings={x}'))
       ratings_pc = pc['ratings']
 
-      r_count = ratings_pc  | f'count {random.randint(0, 1000000000000)}' >> beam.combiners.Count.Globally()
+      r_count = ratings_pc  | f'ratings_count_{random.randint(0, 1000000000000)}' >> beam.combiners.Count.Globally()
       #r_count | 'count ratings' >> beam.Map(lambda x: print(f'len={x}'))
       assert_that(r_count, equal_to([1000209]))
 
-      assert_that(pc['movies']  | f'count {random.randint(0, 1000000000000)}' >> beam.combiners.Count.Globally(), \
+      assert_that(pc['movies']  | f'movies_count_{random.randint(0, 1000000000000)}' >> beam.combiners.Count.Globally(), \
         equal_to([3883]))
-      assert_that(pc['users'] | f'count {random.randint(0, 1000000000000)}' >> beam.combiners.Count.Globally(), \
+      assert_that(pc['users'] | f'users_count_{random.randint(0, 1000000000000)}' >> beam.combiners.Count.Globally(), \
         equal_to([6040]))
 
       #beam.pvalue.PCollection, List[Tuple[str, Any]]

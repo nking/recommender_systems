@@ -117,7 +117,7 @@ def ingest_movie_lens_component( \
       cumulative_buckets.append(s)
 
     #type: apache_beam.DoOutputsTuple
-    ratings_tuple = ratings | f'split_{time.time_ns()}' >> beam.Partition( \
+    ratings_tuple = ratings | f'split_{random.randint(0, 1000000000000)}' >> beam.Partition( \
       partition_fn, len(buckets), cumulative_buckets, \
       output_config.split_config)
 
@@ -150,6 +150,6 @@ def ingest_movie_lens_component( \
       for i, part in enumerate(ratings_tuple):
           prefix_path = f'{output_examples.uri}/Split-{bucket_names[i]}'
           convert_to_tf_example(part, column_name_type_list) \
-            | f"Serialize {time.time_ns()}" >> beam.Map(lambda x: x.SerializeToString()) \
-            | f"write_to_tf {time.time_ns()}" >> beam.io.tfrecordio.WriteToTFRecord(\
+            | f"Serialize_{random.randint(0, 1000000000000)}" >> beam.Map(lambda x: x.SerializeToString()) \
+            | f"write_to_tf_{random.randint(0, 1000000000000)}" >> beam.io.tfrecordio.WriteToTFRecord(\
             file_path_prefix=prefix_path, file_name_suffix='.tfrecord')
