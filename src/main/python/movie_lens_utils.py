@@ -110,7 +110,7 @@ def create_example(row, column_name_type_list: List[Tuple[str, Any]]):
     elif element_type == int or element_type == bool:
       f = tf.train.Feature(int64_list=tf.train.Int64List(value=[int(value)]))
     elif element_type == str:
-      f = tf.train.Feature(int64_list=tf.train.BytesList(value=[value.encode('utf-8')]))
+      f = tf.train.Feature(bytes_list=tf.train.BytesList(value=[value.encode('utf-8')]))
     else:
       raise ValueError(f"element_type={element_type}, but only float, int, and str classes are handled.")
     feature_map[name] = f
