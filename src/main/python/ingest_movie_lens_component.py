@@ -62,7 +62,7 @@ def ingest_movie_lens_component( \
   logging.info("ingest_movie_lens_component")
 
   try:
-    infiles_dict = pickle.loads(base64.b64decode(infiles_dict_ser.encode('utf-8')))
+    infiles_dict = pickle.loads(base64.b64decode(infiles_dict_ser))
   except Exception as ex:
     err = f"error using pickle and base64"
     logging.error(f'{err} : {ex}')
@@ -74,14 +74,14 @@ def ingest_movie_lens_component( \
     raise ValueError(err)
     
   try:
-    buckets = pickle.loads(base64.b64decode(buckets_ser.encode('utf-8')))
+    buckets = pickle.loads(base64.b64decode(buckets_ser))
   except Exception as ex:
     err = f"error using pickle and base64, {ex}"
     logging.error(err)
     raise ValueError(err)
 
   try:
-    bucket_names = pickle.loads(base64.b64decode(bucket_names_ser.encode('utf-8')))
+    bucket_names = pickle.loads(base64.b64decode(bucket_names_ser))
   except Exception as ex:
     err = f"error using pickle and base64, {ex}"
     logging.error(err)

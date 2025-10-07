@@ -130,7 +130,8 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       -> Tuple[tf.train.Example, List[Tuple[str, Any]]]:
       try:
         infiles_dict_ser = exec_properties['infiles_dict_ser']
-        infiles_dict = base64.b64encode(pickle.dumps(infiles_dict_ser)).decode('utf-8')
+        infiles_dict = base64.b64encode(pickle.dumps(infiles_dict_ser))
+        logging.debug(f'infiles_dict_ser={infiles_dict_ser}\ninfiles_dict={infiles_dict}')
       except Exception as ex:
         logging.error(f'ERROR: {ex}')
         raise ValueError(f'ERROR: {ex}')
