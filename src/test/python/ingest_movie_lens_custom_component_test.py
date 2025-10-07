@@ -149,6 +149,8 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
       for filename in filenames:
         print(os.path.join(dirname, filename))
 
+    artifact_types = store.get_artifact_types()
+    logging.debug(f"MLMD store artifact_types={artifact_types}")
     """
     #self.assertIsNotNone(ratings_example_gen.outputs['output'].get()[0])
     #output_path = ratings_example_gen.outputs['output'].get()[0].uri
