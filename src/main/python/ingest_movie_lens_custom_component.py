@@ -171,13 +171,6 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
     logging.debug(\
       "in IngestMovieLensExecutor.GenerateExamplesByBeam")
 
-    try:
-      infiles_dict_ser = exec_properties['infiles_dict_ser']
-      infiles_dict = base64.b64encode(pickle.dumps(infiles_dict_ser)).decode('utf-8')
-    except Exception as ex:
-      logging.error(f'ERROR: {ex}')
-      raise ValueError(f'ERROR: {ex}')
-
     input_to_examples = self.GetInputSourceToExamplePTransform()
 
     ratings_examples, column_name_type_list = \

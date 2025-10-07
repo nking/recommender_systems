@@ -112,12 +112,12 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
     os.makedirs(pipeline_root, exist_ok=True)
 
     pipeline_info = data_types.PipelineInfo(
-        pipeline_name='TestFullyCustomCompPipeline', pipeline_root=pipeline_root, run_id=test_num)
+      pipeline_name='TestFullyCustomCompPipeline', pipeline_root=pipeline_root, run_id=test_num)
 
     driver_args = data_types.DriverArgs(enable_cache=True)
 
     connection_config = metadata_store_pb2.ConnectionConfig()
-    connection_config.sqlite.SetInParent()
+    connection_config.sqlite.SetInParent() #uses in-memory database
     metadata_connection = metadata.Metadata(connection_config)
     store = metadata_store.MetadataStore(connection_config)
 

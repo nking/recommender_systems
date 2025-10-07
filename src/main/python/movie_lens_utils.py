@@ -151,7 +151,9 @@ def infiles_dict_formedness_error(ml_dict: Dict[str, Union[str, Dict]]) -> Union
   """
   for key in ml_dict:
     if key not in ['ratings', 'movies', 'users', 'version']:
-      return f"key expected to be one of 'ratings', 'movies', 'users', but is {key}"
+      err = (f"key expected to be one of 'ratings', 'movies', 'users', but is {key}"
+             f" ml_dict={ml_dict}")
+      return err
     if key != "version":
       r = _assert_dict_1(ml_dict[key])
       if r:
