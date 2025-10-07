@@ -4,6 +4,7 @@ import pprint
 import time
 import pickle
 import base64
+import random
 
 import apache_beam as beam
 from tfx.types import standard_artifacts

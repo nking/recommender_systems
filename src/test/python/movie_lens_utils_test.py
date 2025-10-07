@@ -4,6 +4,7 @@ from typing import  Dict, Union
 #from ... main.python.infile_dict_util import _assert_dict_1
 from movie_lens_utils import *
 from movie_lens_utils import _assert_dict_1
+import random
 
 class TestInfileDictUtils(unittest.TestCase):
 

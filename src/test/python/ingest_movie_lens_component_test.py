@@ -22,6 +22,7 @@ import os
 import pickle
 import base64
 import pprint
+import random
 
 from unittest import mock
 import tensorflow as tf
