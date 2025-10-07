@@ -135,8 +135,7 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
     self.assertTrue(fileio.exists(os.path.join(pipeline_root, ratings_example_gen.id)))
 
   def testDo(self):
-    EXECUTOR_SPEC = executor_spec.BeamExecutorSpec(IngestMovieLensExecutor)
-    pprint(EXECUTOR_SPEC)
+    #EXECUTOR_SPEC = executor_spec.BeamExecutorSpec(IngestMovieLensExecutor)
     #ratings_example_gen = IngestMovieLensExecutor()
     #ratings_example_gen.Do({}, output_dict, exec_properties)
     pass
