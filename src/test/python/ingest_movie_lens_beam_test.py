@@ -127,5 +127,5 @@ class IngestMovieLensBeamTest(tf.test.TestCase):
 
       assert_that(ratings, is_not_empty(), label=f'assert_that_{random.randint(0, 1000000000000)}')
 
-      retrieved_root = pipeline.pipeline_info.pipeline_root
-      print(f"The pipeline root is: {retrieved_root}")
+      #retrieved_root = pipeline.pipeline_info.pipeline_root
+      #print(f"The pipeline root is: {retrieved_root}")

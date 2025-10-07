@@ -39,7 +39,9 @@ import pprint
 from ingest_movie_lens_custom_component import *
 from movie_lens_utils import *
 
+import ml_metadata as mlmd
 from ml_metadata.proto import metadata_store_pb2
+from ml_metadata.metadata_store import metadata_store
 
 class IngestMovieLensCustomComponentTest(tf.test.TestCase):
 
@@ -117,6 +119,7 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
     connection_config = metadata_store_pb2.ConnectionConfig()
     connection_config.sqlite.SetInParent()
     metadata_connection = metadata.Metadata(connection_config)
+    store = metadata_store.MetadataStore(connection_config)
 
     launcher = in_process_component_launcher.InProcessComponentLauncher.create(
         component=ratings_example_gen,
@@ -146,9 +149,51 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
       for filename in filenames:
         print(os.path.join(dirname, filename))
 
+    """
     #self.assertIsNotNone(ratings_example_gen.outputs['output'].get()[0])
     #output_path = ratings_example_gen.outputs['output'].get()[0].uri
     #self.assertTrue(fileio.exists(output_path))
+
+    #following https://www.tensorflow.org/tfx/tutorials/mlmd/mlmd_tutorial#query_the_mlmd_database
+    
+    # Query all registered Artifact types.
+    artifact_types = store.get_artifact_types()
+    # All TFX artifacts are stored in the base directory
+    base_dir = \
+      connection_config.sqlite.filename_uri.split('metadata.sqlite')[0]
+    def display_types(types):
+      # Helper function to render dataframes for the artifact and execution types
+      table = {'id': [], 'name': []}
+      for a_type in types:
+        table['id'].append(a_type.id)
+        table['name'].append(a_type.name)
+      return pd.DataFrame(data=table)
+
+    def display_artifacts(store, artifacts):
+      # Helper function to render dataframes for the input artifacts
+      table = {'artifact id': [], 'type': [], 'uri': []}
+      for a in artifacts:
+        table['artifact id'].append(a.id)
+        artifact_type = store.get_artifact_types_by_id([a.type_id])[0]
+        table['type'].append(artifact_type.name)
+        table['uri'].append(a.uri.replace(base_dir, './'))
+      return pd.DataFrame(data=table)
+
+    def display_properties(store, node):
+      # Helper function to render dataframes for artifact and execution properties
+      table = {'property': [], 'value': []}
+      for k, v in node.properties.items():
+        table['property'].append(k)
+        table['value'].append(
+            v.string_value if v.HasField('string_value') else v.int_value)
+      for k, v in node.custom_properties.items():
+        table['property'].append(k)
+        table['value'].append(
+            v.string_value if v.HasField('string_value') else v.int_value)
+      return pd.DataFrame(data=table)
+
+    display_types(store.get_artifact_types())
+    """
 
   #def testDo(self):
   #  #EXECUTOR_SPEC = executor_spec.BeamExecutorSpec(IngestMovieLensExecutor)

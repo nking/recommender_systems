@@ -38,7 +38,9 @@ from tfx.utils import name_utils
 from ingest_movie_lens_component import *
 from movie_lens_utils import *
 
+import ml_metadata as mlmd
 from ml_metadata.proto import metadata_store_pb2
+from ml_metadata.metadata_store import metadata_store
 
 class IngestMovieLensComponentTest(tf.test.TestCase):
 
@@ -123,6 +125,7 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     connection_config = metadata_store_pb2.ConnectionConfig()
     connection_config.sqlite.SetInParent()
     metadata_connection = metadata.Metadata(connection_config)
+    store = metadata_store.MetadataStore(connection_config)
 
     launcher = in_process_component_launcher.InProcessComponentLauncher.create(
         component=ratings_example_gen,
