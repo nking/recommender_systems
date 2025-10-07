@@ -120,15 +120,36 @@ class IngestMovieLensExecutorSpec(ComponentSpec):
 class IngestMovieLensExecutor(BaseExampleGenExecutor):
   """executor to ingest movie lens data, join, and split into buckets"""
 
-  def GetInputSourceToExamplePTransform(self, \
-    infiles_dict: Dict[str, Union[str, Dict]]) -> beam.PTransform:
+  def GetInputSourceToExamplePTransform(self) -> beam.PTransform:
     """Returns PTransform for ratings, movies, users joined to TF examples."""
-    return IngestAndJoin
+
+    @beam.ptransform_fn
+    @beam.typehints.with_input_types(beam.Pipeline, Dict[str, Union[str, Dict]])
+    @beam.typehints.with_output_types(Tuple[tf.train.Example, List[Tuple[str, Any]]])
+    def ingest_to_examples(pipeline: beam.Pipeline, exec_properties: Dict[str, Any]) \
+      -> Tuple[tf.train.Example, List[Tuple[str, Any]]]:
+      try:
+        infiles_dict_ser = exec_properties['infiles_dict_ser']
+        infiles_dict = base64.b64encode(pickle.dumps(infiles_dict_ser)).decode('utf-8')
+      except Exception as ex:
+        logging.error(f'ERROR: {ex}')
+        raise ValueError(f'ERROR: {ex}')
+
+      (ratings_pc, column_name_type_list) = \
+        pipeline | f"IngestAndJoin_{random.randint(0, 1000000000000)}" \
+        >> InjestAndJoin(infiles_dict=infiles_dict)
+
+      ratings_example = ratings_pc \
+        | f'ToTFExample_{random.randint(0, 1000000000000)}' \
+        >> beam.Map(create_example, column_name_type_list)
+      return ratings_example, column_name_type_list
+
+    return ingest_to_examples
 
   def GenerateExamplesByBeam(self, \
     pipeline: beam.Pipeline, \
     exec_properties: Dict[str, Any], output_dict: Dict[str, List[types.Artifact]]\
-  ) -> Tuple[Dict[str, beam.PCollection], List[Tuple[str, Any]]]:
+  ) -> Tuple[Dict[str, tf.train.Example], List[Tuple[str, Any]]]:
     """
     :param pipeline:
     :param exec_properties: is a json string serialized dictionary holding:
@@ -157,9 +178,11 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       logging.error(f'ERROR: {ex}')
       raise ValueError(f'ERROR: {ex}')
 
-    ratings, column_name_type_list = \
-      pipeline | f"IngestAndJoin_{random.randint(0, 1000000000000)}" \
-      >> self.GetInputSourceToExamplePTransform(infiles_dict=infiles_dict)
+    input_to_examples = self.GetInputSourceToExamplePTransform()
+
+    ratings_examples, column_name_type_list = \
+      pipeline | f"GetInputSource{random.randint(0, 1000000000000)}" \
+      >> input_to_examples(exec_properties)
 
     bucket_names = exec_properties['bucket_names']
     buckets = exec_properties['buckets']
@@ -169,14 +192,10 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       logging.error(f'ERROR: {err}')
       raise ValueError(f'ERROR: {err}')
 
-    splits = []
-    for n, b in zip(bucket_names, buckets):
-      #see https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/proto/example_gen.proto#L146
-      splits.append(example_gen_pb2.SplitConfig.Split(name=n, hash_buckets=b))
-
     output_config = example_gen_pb2.Output(
       split_config=example_gen_pb2.SplitConfig(
-        splits=splits
+        splits = [example_gen_pb2.SplitConfig.Split(name=n, hash_buckets=b) \
+          for n, b in zip(bucket_names, buckets)]
       )
     )
 
@@ -188,9 +207,8 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       cumulative_buckets.append(s)
 
     #type: apache_beam.DoOutputsTuple
-    ratings_tuple = ratings | f'split_{time.time_ns()}' >> beam.Partition( \
-      partition_fn, len(buckets), cumulative_buckets, \
-      output_config.split_config)
+    ratings_tuple = ratings_examples | f'split_{time.time_ns()}' >> beam.Partition( \
+      partition_fn, len(buckets), cumulative_buckets, output_config.split_config)
 
     result = {}
     for index, example_split in enumerate(ratings_tuple):
@@ -223,7 +241,6 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       ratings_dict, column_name_type_list = \
         self.GenerateExamplesByBeam(pipeline, exec_properties, output_dict)
 
-      write_to_tfrecords = True
       output_examples = output_dict['output_examples']
       if output_examples is None:
         logging.error(
@@ -248,26 +265,17 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       #could use WriteSplit method instead:
       #https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/components/example_gen/base_example_gen_executor.py#L281
 
-      if not write_to_tfrecords:
-        # write to csv
-        column_names = ",".join([t[0] for t in column_name_type_list])
-        for name, example in enumerate(ratings_dict):
-          prefix_path = f'{output_examples.uri}/Split-{name}'
-          write_to_csv(pcollection=example, \
-                       column_names=column_names,
-                       prefix_path=prefix_path, delim='_')
-        logging.info('Examples written to output_examples as CSV.')
-      else:
-        # write to TFRecords
-        for name, example in enumerate(ratings_dict):
-          prefix_path = f'{output_examples.uri}/Split-{name}'
-          convert_to_tf_example(example, column_name_type_list) \
-            | f"Serialize_{random.randint(0, 1000000000000)}" >> beam.Map(
-            lambda x: x.SerializeToString()) \
-            | f"write_to_tf_{random.randint(0, 1000000000000)}" >> beam.io.tfrecordio.WriteToTFRecord( \
-            file_path_prefix=prefix_path, file_name_suffix='.tfrecord')
-        logging.info(
-          'Examples written to output_examples as TFRecords.')
+      # write to TFRecords
+      for name, example in enumerate(ratings_dict):
+        prefix_path = f'{output_examples.uri}/Split-{name}'
+
+        example | f"Serialize_{random.randint(0, 1000000000000)}" \
+          >> beam.Map(lambda x: x.SerializeToString()) \
+          | f"write_to_tf_{random.randint(0, 1000000000000)}" \
+          >> beam.io.tfrecordio.WriteToTFRecord( \
+          file_path_prefix=prefix_path, file_name_suffix='.tfrecord')
+      logging.info(
+        'Examples written to output_examples as TFRecords.')
       # no return
 
 #class IngestMovieLensComponent(base_component.BaseComponent):
