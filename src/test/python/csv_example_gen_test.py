@@ -48,13 +48,14 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
     os.makedirs(prefix2, exist_ok=True)
     users_uri = f"{prefix2}users2.dat"
 
-    if not os.path.exists(users_uri):
-      #replace delimiters in users2.dat '_'
-      _fln = f"{prefix}users.dat"
-      _fln2 = users_uri
-      command = "LC_ALL=UTF8 sed 's/::/_/g' " + _fln + " > " + _fln2
-      os.system(command)
-      shutil.copy(_fln2, _fln)
+    #users.dat delimeter is ::
+    #the moview.dat title field has commas
+     #replace delimiters in users2.dat '_'
+    _fln = f"{prefix}users.dat"
+    _fln2 = users_uri
+    command = "LC_ALL=UTF8 sed 's/::/,/g' " + _fln + " > " + _fln2
+    os.system(command)
+    shutil.copy(_fln2, _fln)
     self.assertTrue(os.path.exists(users_uri))
 
     mock_publisher.return_value.publish_execution.return_value = {}
@@ -77,7 +78,6 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
     store = metadata_store.MetadataStore(connection_config)
 
     input_config = example_gen_pb2.Input()
-    input_config.csv_options.delimiter = '_'
     output_config = proto.Output(
       split_config=proto.SplitConfig(splits=[
         proto.SplitConfig.Split(name='train', hash_buckets=8),
