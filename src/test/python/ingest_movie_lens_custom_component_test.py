@@ -35,6 +35,9 @@ from tfx.proto import example_gen_pb2
 from tfx.utils import name_utils
 
 import pprint
+import absl
+from absl import logging
+absl.logging.set_verbosity(absl.logging.DEBUG)
 
 from ingest_movie_lens_custom_component import *
 from movie_lens_utils import *
@@ -57,12 +60,10 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
     users_uri = f"{prefix}users.dat"
 
     ratings_col_names = ["user_id", "movie_id", "rating"]
-    ratings_col_types = [int, int,
-                         int]  # for some files, ratings are floats
+    ratings_col_types = [int, int, int]  # for some files, ratings are floats
     movies_col_names = ["movie_id", "title", "genres"]
     movies_col_types = [int, str, str]
-    users_col_names = ["user_id", "gender", "age", "occupation",
-                       "zipcode"]
+    users_col_names = ["user_id", "gender", "age", "occupation", "zipcode"]
     users_col_types = [int, str, int, int, str]
 
     ratings_dict = create_infile_dict(for_file='ratings', \

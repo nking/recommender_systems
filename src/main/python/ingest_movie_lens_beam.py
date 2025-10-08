@@ -10,6 +10,10 @@ from movie_lens_utils import *
 
 from CustomUTF8Coder import CustomUTF8Coder
 
+import absl
+from absl import logging
+absl.logging.set_verbosity(absl.logging.DEBUG)
+
 class LeftJoinFn(beam.DoFn):
   """
   left join of left PCollection rows with right PCollection row.
@@ -183,5 +187,7 @@ class IngestAndJoin(beam.PTransform):
     for _name, _type in schemas['movies']:
       if _name != 'title' and _name != 'movie_id':
         columns.append((_name, _type))
+
+    logging.debug(f"columns={columns}")
 
     return ratings, columns
