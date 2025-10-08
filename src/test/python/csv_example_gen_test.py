@@ -28,7 +28,7 @@ import ml_metadata as mlmd
 from ml_metadata.proto import metadata_store_pb2
 from ml_metadata.metadata_store import metadata_store
 
-class IngestMovieLensCustomComponentTest(tf.test.TestCase):
+class CSVExampleGenTest(tf.test.TestCase):
 
   def setUp(self):
     super().setUp()
@@ -77,7 +77,6 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
     metadata_connection = metadata.Metadata(connection_config)
     store = metadata_store.MetadataStore(connection_config)
 
-    input_config = example_gen_pb2.Input()
     output_config = example_gen_pb2.Output(
       split_config=example_gen_pb2.SplitConfig(
         splits=[
@@ -88,7 +87,6 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
 
     users_example_gen = tfx.components.CsvExampleGen(\
       input_base=prefix2,\
-      input_config = input_config, \
       output_config = output_config)
 
     #statistics_gen = StatisticsGen(examples=users_example_gen.outputs['examples'])
