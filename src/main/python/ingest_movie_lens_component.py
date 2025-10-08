@@ -98,8 +98,13 @@ def ingest_movie_lens_component( \
     examples_artifact = standard_artifacts.Examples()
     examples_artifact.splits = bucket_names.copy()
     output_examples = channel_utils.as_channel([examples_artifact])
+    output_examples2 = artifact_utils.get_single_instance(output_examples)
+  else:
+    logging.debug(f"output_examples was passed in to component")
+    output_examples2 = output_examples
 
-  output_examples2 = artifact_utils.get_single_instance(output_examples)
+  logging.debug(f"output_examples TYPE={type(output_examples)}")
+  logging.debug(f"output_examples={output_examples}")
 
   output_config = example_gen_pb2.Output(
     split_config=example_gen_pb2.SplitConfig(

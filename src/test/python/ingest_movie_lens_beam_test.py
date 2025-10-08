@@ -41,12 +41,10 @@ class IngestMovieLensBeamTest(tf.test.TestCase):
     users_uri = f"{prefix}users.dat"
 
     ratings_col_names = ["user_id", "movie_id", "rating"]
-    ratings_col_types = [int, int,
-                         int]  # for some files, ratings are floats
+    ratings_col_types = [int, int,int]  # for some files, ratings are floats
     movies_col_names = ["movie_id", "title", "genres"]
     movies_col_types = [int, str, str]
-    users_col_names = ["user_id", "gender", "age", "occupation",
-                       "zipcode"]
+    users_col_names = ["user_id", "gender", "age", "occupation", "zipcode"]
     users_col_types = [int, str, int, int, str]
 
     ratings_dict = create_infile_dict(for_file='ratings', \
