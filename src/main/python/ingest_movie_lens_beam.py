@@ -23,9 +23,10 @@ class LeftJoinFn(beam.DoFn):
 
   :return returns merged rows
   """
-  def __init__(self, right_filter_cols):
+  def __init__(self, right_filter_cols, debug_tag:str=""):
     super().__init__()
     self.right_filter_cols = right_filter_cols
+    self.debug_tag = debug_tag
 
   #TODO: consider also implementing def process_batch
   def process(self, kv):
@@ -33,7 +34,7 @@ class LeftJoinFn(beam.DoFn):
     # grouped_elements is a dictionary with keys 'left' and 'right'
     # both are lists of lists.
     if len(grouped_elements['right']) != 1:
-      raise ValueError(f"in join, right list length != 1: key={key}, grouped_elements={grouped_elements}")
+      raise ValueError(f"{self.debug_tag}: in join, right list length != 1: key={key}, grouped_elements={grouped_elements}")
 
     right_row = grouped_elements['right'][0]
 
@@ -133,7 +134,8 @@ class IngestAndJoin(beam.PTransform):
         | f'left_join_values_1_{random.randint(0, 1000000000)}' \
         >> beam.ParDo(LeftJoinFn(\
         [self.infiles_dict['users']['cols']['zipcode']['index'],\
-        self.infiles_dict['users']['cols']['user_id']['index']]))
+        self.infiles_dict['users']['cols']['user_id']['index']],\
+        debug_tag='R-U'))
     except Exception as ex:
       logging.error("ERROR for R-U")
       raise ex
@@ -154,7 +156,8 @@ class IngestAndJoin(beam.PTransform):
         | f'left_join_values_2_{random.randint(0, 1000000000)}' \
         >> beam.ParDo(LeftJoinFn(\
         [self.infiles_dict['movies']['cols']['title']['index'],\
-        self.infiles_dict['movies']['cols']['movie_id']['index']]))
+        self.infiles_dict['movies']['cols']['movie_id']['index']],\
+        debug_tag="R-M"))
     except Exception as ex:
       logging.error("ERROR for R-M")
       raise ex

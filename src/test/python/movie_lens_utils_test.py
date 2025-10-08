@@ -97,7 +97,9 @@ class TestInfileDictUtils(unittest.TestCase):
     )
     output_config_ser = serialize_proto_to_string(output_config)
     deser = deserialize_to_proto(output_config_ser)
-    logging.debug(f"\noutput_config={output_config}\noutput_config_ser={output_config_ser}\ndeser={deser}")
+    self.assertIsNotNone(deser)
+    self.assertNotEqual(deser, "")
+    #logging.debug(f"\noutput_config={output_config}\noutput_config_ser={output_config_ser}\ndeser={deser}")
     #protocol buffers deserialization is not deterministic
     #self.assertEqual(output_config, deser, \
     #  f"output_config and deser should be same"
