@@ -14,6 +14,7 @@ import absl
 from absl import logging
 absl.logging.set_verbosity(absl.logging.DEBUG)
 
+#@beam.typehints.with_output_types(beam.PCollection)
 class LeftJoinFn(beam.DoFn):
   """
   left join of left PCollection rows with right PCollection row.
@@ -141,7 +142,7 @@ class IngestAndJoin(beam.PTransform):
     l_keyed_2 = ratings_1 | f'kv_l_RM_{random.randint(0, 1000000000)}' \
       >> beam.Map(lambda x: (x[self.infiles_dict['ratings']['cols']['movie_id']['index']], x))
     r_keyed_2 = pc['movies'] | f'kv_r_RM_{random.randint(0, 1000000000)}' \
-      >> beam.Map(lambda x: (x[self.infiles_dict['users']['cols']['movie_id']['index']], x))
+      >> beam.Map(lambda x: (x[self.infiles_dict['movies']['cols']['movie_id']['index']], x))
 
     # multiple lefts on one line, and one in right's list:
     grouped_data_2 = ({'left': l_keyed_2, 'right': r_keyed_2} \
