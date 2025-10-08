@@ -78,12 +78,13 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
     store = metadata_store.MetadataStore(connection_config)
 
     input_config = example_gen_pb2.Input()
-    output_config = proto.Output(
-      split_config=proto.SplitConfig(splits=[
-        proto.SplitConfig.Split(name='train', hash_buckets=8),
-        proto.SplitConfig.Split(name='eval', hash_buckets=1),
-        proto.SplitConfig.Split(name='test', hash_buckets=1)
-      ]))
+    output_config = example_gen_pb2.Output(
+      split_config=example_gen_pb2.SplitConfig(
+        splits=[
+          proto.SplitConfig.Split(name='train', hash_buckets=8),
+          proto.SplitConfig.Split(name='eval', hash_buckets=1),
+          proto.SplitConfig.Split(name='test', hash_buckets=1)
+        ]))
 
     users_example_gen = tfx.components.CsvExampleGen(\
       input_base=prefix2,\
