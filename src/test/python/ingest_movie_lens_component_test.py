@@ -119,7 +119,7 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     #output_data_dir = os.path.join(os.environ.get('TEST_UNDECLARED_OUTPUTS_DIR',self.get_temp_dir()),self._testMethodName)
     output_data_dir = os.path.join('/kaggle/working/bin/', test_num, self._testMethodName)
     PIPELINE_ROOT = os.path.join(output_data_dir, PIPELINE_NAME)
-    METADATA_PATH = os.path.join(METADATA_PATH, 'tfx_metadata', 'metadata.db')
+    METADATA_PATH = os.path.join(PIPELINE_ROOT, 'tfx_metadata', 'metadata.db')
     os.makedirs(METADATA_PATH, exist_ok=True)
 
     alt_output_data_dir = os.path.join(
