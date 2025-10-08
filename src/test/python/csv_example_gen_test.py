@@ -48,6 +48,7 @@ class CSVExampleGenTest(tf.test.TestCase):
     os.makedirs(prefix2, exist_ok=True)
     users_uri = f"{prefix2}users2.dat"
 
+    #a work around to use CSVExample Gen.  the workaround isn't scalable.
     #users.dat delimeter is ::
     #the moview.dat title field has commas
      #replace delimiters in users2.dat '_'
@@ -75,7 +76,6 @@ class CSVExampleGenTest(tf.test.TestCase):
     connection_config = metadata_store_pb2.ConnectionConfig()
     connection_config.sqlite.SetInParent() #uses in-memory database
     metadata_connection = metadata.Metadata(connection_config)
-    store = metadata_store.MetadataStore(connection_config)
 
     output_config = example_gen_pb2.Output(
       split_config=example_gen_pb2.SplitConfig(
@@ -118,6 +118,7 @@ class CSVExampleGenTest(tf.test.TestCase):
       for filename in filenames:
         print(os.path.join(dirname, filename))
 
+    store = metadata_store.MetadataStore(connection_config)
     artifact_types = store.get_artifact_types()
     logging.debug(f"MLMD store artifact_types={artifact_types}")
     artifacts = store.get_artifacts()
