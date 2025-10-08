@@ -269,6 +269,7 @@ class IngestMovieLensComponent(base_beam_component.BaseBeamComponent):
 
     if not output_config or not split_config in output_config or not splits in \
       output_config.split_config.splits:
+      logging.error(f"output_config={output_config}")
       raise ValueError("parameters must include output_config which"
                        " must contain split_config")
 

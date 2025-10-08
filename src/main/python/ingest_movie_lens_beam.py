@@ -78,9 +78,13 @@ class MergeByKey(beam.PTransform):
       | f'group_by_key_{random.randint(0,1000000000)}' \
       >> beam.CoGroupByKey())
 
-    joined_data = grouped_data \
-      | f'left_join_values_{random.randint(0,1000000000)}' \
-      >> beam.ParDo(LeftJoinFn(self.filter_cols))
+    try:
+      joined_data = grouped_data \
+        | f'left_join_values_{random.randint(0,1000000000)}' \
+        >> beam.ParDo(LeftJoinFn(self.filter_cols))
+    except Exception as ex:
+      logging.error(f"ERROR for {debug_tag}: l_key_col={l_key_col}, r_key_col={r_key_col}")
+      raise ex
 
     return joined_data
 
