@@ -178,6 +178,12 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       pipeline | f"GetInputSource{random.randint(0, 1000000000000)}" \
       >> input_to_examples(exec_properties)
 
+    #DEBUG
+    ratings_examples[0] | f'Take_First_{random.randint(0, 1000000000000)}' \
+      >> beam.transforms.combiners.Sample.FixedSizeGlobally(1) \
+      | f"print_first_row_{random.randint(0, 1000000000000)}" \
+      >> beam.Map(lambda x: print(f'RATINGS first row={x}'))
+
     bucket_names = exec_properties['bucket_names']
     buckets = exec_properties['buckets']
     if len(buckets) != len(bucket_names):
