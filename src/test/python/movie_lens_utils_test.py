@@ -94,7 +94,8 @@ class TestInfileDictUtils(unittest.TestCase):
     output_config_ser = serialize_proto_to_string(output_config)
     deser = deserialize_to_proto(output_config_ser)
     self.assertEqual(output_config, deser, \
-      "output_config and deser should be same")
+      f"output_config and deser should be same"
+      f"\noutput_config={output_config}\ndeser={deser}")
 
   def test_ser_deser(self):
     ratings_dict, movies_dict, users_dict, infiles_dict = \
