@@ -109,38 +109,48 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
     mock_publisher.return_value.publish_execution.return_value = {}
 
     name = "test_fully_custom_component"
+
     ratings_example_gen = IngestMovieLensComponent( \
       name=name,\
       infiles_dict_ser=infiles_dict_ser, \
       output_config=self.output_config)
 
+     components = [ratings_example_gen]
+
+    PIPELINE_NAME = 'TestFullyCustomCompPipeline'
+    #output_data_dir = os.path.join(os.environ.get('TEST_UNDECLARED_OUTPUTS_DIR',self.get_temp_dir()),self._testMethodName)
     output_data_dir = os.path.join('/kaggle/working/bin/', test_num, self._testMethodName)
-    pipeline_root = os.path.join(output_data_dir, 'TestFullyCustomCompPipeline')
-    os.makedirs(pipeline_root, exist_ok=True)
+    PIPELINE_ROOT = os.path.join(output_data_dir, PIPELINE_NAME)
+    METADATA_PATH = os.path.join(METADATA_PATH, 'tfx_metadata', 'metadata.db')
+    os.makedirs(METADATA_PATH, exist_ok=True)
 
-    pipeline_info = data_types.PipelineInfo(
-      pipeline_name='TestFullyCustomCompPipeline', pipeline_root=pipeline_root, run_id=test_num)
+    alt_output_data_dir = os.path.join(
+      os.environ.get('TEST_UNDECLARED_OUTPUTS_DIR',
+                     self.get_temp_dir()), self._testMethodName)
+    print(f'alt_output_data_dir={alt_output_data_dir}')
 
-    driver_args = data_types.DriverArgs(enable_cache=True)
+    ENABLE_CACHE = False;
 
-    connection_config = metadata_store_pb2.ConnectionConfig()
-    connection_config.sqlite.SetInParent() #uses in-memory database
-    metadata_connection = metadata.Metadata(connection_config)
-    store = metadata_store.MetadataStore(connection_config)
+    if not ENABLE_CACHE:
+      if os.path.exists(METADATA_PATH):
+        os.remove(METADATA_PATH)
 
-    launcher = in_process_component_launcher.InProcessComponentLauncher.create(
-        component=ratings_example_gen,
-        pipeline_info=pipeline_info,
-        driver_args=driver_args,
-        metadata_connection=metadata_connection,
-        beam_pipeline_args=[],
-        additional_pipeline_args={})
+    #metadata_connection_config = metadata_store_pb2.ConnectionConfig()
+    #metadata_connection_config.sqlite.SetInParent()
+    #metadata_connection = metadata.Metadata(metadata_connection_config)
+    metadata_connection_config = metadata.sqlite_metadata_connection_config(METADATA_PATH)
 
-    self.assertEqual(
-        launcher._component_info.component_type,
-        name_utils.get_full_name(IngestMovieLensComponent))
+    my_pipeline = tfx.dsl.Pipeline(
+      pipeline_name=PIPELINE_NAME,
+      pipeline_root=PIPELINE_ROOT,
+      components=components,
+      enable_cache=ENABLE_CACHE,
+      metadata_connection_config=metadata_connection_config,
+      #beam_pipeline_args=beam_pipeline_args,
+    )
 
-    launcher.launch()
+    tfx.orchestration.LocalDagRunner().run(my_pipeline)
+
     mock_publisher.return_value.publish_execution.assert_called_once()
 
     # Check output paths.

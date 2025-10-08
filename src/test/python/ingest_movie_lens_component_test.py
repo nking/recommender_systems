@@ -127,10 +127,11 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
                      self.get_temp_dir()), self._testMethodName)
     print(f'alt_output_data_dir={alt_output_data_dir}')
 
-    pipeline_info = data_types.PipelineInfo(
-        pipeline_name=PIPELINE_NAME, pipeline_root=PIPELINE_ROOT, run_id=test_num)
+    ENABLE_CACHE = False;
 
-    driver_args = data_types.DriverArgs(enable_cache=False)
+    if not ENABLE_CACHE:
+      if os.path.exists(METADATA_PATH):
+        os.remove(METADATA_PATH)
 
     #metadata_connection_config = metadata_store_pb2.ConnectionConfig()
     #metadata_connection_config.sqlite.SetInParent()
@@ -141,7 +142,7 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
       pipeline_name=PIPELINE_NAME,
       pipeline_root=PIPELINE_ROOT,
       components=components,
-      enable_cache=True,
+      enable_cache=ENABLE_CACHE,
       metadata_connection_config=metadata_connection_config,
       #beam_pipeline_args=beam_pipeline_args,
     )
