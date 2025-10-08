@@ -4,6 +4,7 @@ from tensorflow_metadata.proto.v0 import schema_pb2
 import bisect
 import hashlib
 import pickle
+import base64
 
 import tensorflow as tf
 
