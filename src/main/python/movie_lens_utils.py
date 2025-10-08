@@ -268,13 +268,13 @@ def partition_fn(\
   return bisect.bisect(cumulative_buckets, bucket)
 
 def serialize_proto_to_string(output_config : example_gen_pb2.Output) -> str:
-  #return base64.b64encode(output_config.SerializeToString()).decode('utf-8')
-  return output_config.SerializeToString()
+  return base64.b64encode(output_config.SerializeToString()).decode('utf-8')
+  #return output_config.SerializeToString()
 
 def deserialize_to_proto(output_config_ser: str) -> example_gen_pb2.Output:
   new_output_config = example_gen_pb2.Input()
-  #new_output_config.ParseFromString(base64.b64decode(output_config_ser.encode('utf-8')))
-  new_output_config.ParseFromString(output_config_ser)
+  new_output_config.ParseFromString(base64.b64decode(output_config_ser.encode('utf-8')))
+  #new_output_config.ParseFromString(output_config_ser)
   return new_output_config
 
 def serialize_to_string(x : Any) -> str:
