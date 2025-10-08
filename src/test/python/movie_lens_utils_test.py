@@ -7,6 +7,10 @@ from movie_lens_utils import _assert_dict_1
 import random
 from tfx.proto import example_gen_pb2
 
+import absl
+from absl import logging
+absl.logging.set_verbosity(absl.logging.DEBUG)
+
 class TestInfileDictUtils(unittest.TestCase):
 
   def _assert_dict_content(self, ml_dict: Dict[str, Union[str, Dict]]) -> None:
@@ -95,7 +99,7 @@ class TestInfileDictUtils(unittest.TestCase):
     deser = deserialize_to_proto(output_config_ser)
     self.assertEqual(output_config, deser, \
       f"output_config and deser should be same"
-      f"\noutput_config={output_config}\ndeser={deser}")
+      f"\noutput_config={output_config}\noutput_config_ser={output_config_ser}\ndeser={deser}")
 
   def test_ser_deser(self):
     ratings_dict, movies_dict, users_dict, infiles_dict = \
