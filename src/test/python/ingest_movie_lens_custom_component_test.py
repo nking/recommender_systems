@@ -88,25 +88,31 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
                                       movies_dict=movies_dict, \
                                       users_dict=users_dict, version=1)
 
-    self.buckets = [80, 10, 10]
-    self.bucket_names = ['train', 'eval', 'test']
+    buckets = [80, 10, 10]
+    bucket_names = ['train', 'eval', 'test']
+    self.output_config = example_gen_pb2.Output(
+      split_config=example_gen_pb2.SplitConfig(
+        splits=[
+          example_gen_pb2.SplitConfig.Split(name=n, hash_buckets=b) \
+            for n, b in zip(bucket_names, buckets)]
+      )
+    )
 
     self.name = 'test run of ingest with tfx'
 
   @mock.patch.object(publisher, 'Publisher')
   def testRun(self, mock_publisher):
 
-    test_num = "100"
-    infiles_dict_ser = (base64.b64encode(pickle.dumps(self.infiles_dict))).decode('utf-8')
+    test_num = "fully_custom_comp_1"
+    infiles_dict_ser = serialize_to_string(self.infiles_dict)
 
     mock_publisher.return_value.publish_execution.return_value = {}
 
     name = "test_fully_custom_component"
-    ratings_example_gen = (IngestMovieLensComponent( \
+    ratings_example_gen = IngestMovieLensComponent( \
       name=name,\
       infiles_dict_ser=infiles_dict_ser, \
-      bucket_names=self.bucket_names, \
-      buckets=self.buckets))
+      output_config=self.output_config)
 
     output_data_dir = os.path.join('/kaggle/working/bin/', test_num, self._testMethodName)
     pipeline_root = os.path.join(output_data_dir, 'TestFullyCustomCompPipeline')

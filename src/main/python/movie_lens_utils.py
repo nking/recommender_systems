@@ -266,4 +266,18 @@ def partition_fn(\
   #   bucket >=50 && < 80, returns 2
   return bisect.bisect(cumulative_buckets, bucket)
 
+def serialize_proto_to_string(output_config : example_gen_pb2.Output) -> str:
+  return base64.b64encode(output_config.SerializeToString()).decode('utf-8')
+
+def deserialize_to_proto(output_config_ser: str) -> example_gen_pb2.Output:
+  new_output_config = example_gen_pb2.Input()
+  new_output_config.ParseFromString(base64.b64decode(output_config_ser.encode('utf-8')))
+  return new_output_config
+
+def serialize_to_string(x : Any) -> str:
+  return (base64.b64encode(pickle.dumps(x))).decode('utf-8')
+
+def deserialize(x_ser: str) -> Any:
+  return pickle.loads(base64.b64decode(x_ser.encode('utf-8')))
+
 

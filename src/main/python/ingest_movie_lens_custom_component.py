@@ -1,9 +1,5 @@
 import apache_beam as beam
 
-#NOTE: this component is not correct yet.
-#TODO: consider building the output_config outside of classes and passing
-# the argument in.
-
 import absl
 import pprint
 import time
@@ -58,13 +54,6 @@ print(f"TFX version: {tfx.__version__}")
 #tf.train.SequenceExample is for variable-length sequential data,
 #    such as sentences, time series, or videos.
 
-## TODO: follow up on adding output splitconfig as input to the
-#        Component instead of using separate arguments for
-#        buckets and bucket_names.
-#        it can only be placed in ComponentSpec Parameters
-#        not INPUTS, so no automatic MLMD registration unfortunately
-
-
 class IngestMovieLensExecutorSpec(ComponentSpec):
   """ComponentSpec for Custom TFX MovieLensExecutor Component."""
   #PARAMETERS, INPUTS, and OUTPUTS are static instead of instance vars
@@ -73,23 +62,13 @@ class IngestMovieLensExecutorSpec(ComponentSpec):
     # create an instance of this component.
     'name': ExecutionParameter(type=Text),
     'infiles_dict_ser' : ExecutionParameter(type=Text),
-    'bucket_names': ExecutionParameter(type=List[str]),
-    'buckets' : ExecutionParameter(type=List[int])
+    'output_config': ExecutionParameter(type=example_gen_pb2, use_proto=True),
+    #output_config should include split_config
   }
   INPUTS = {
     # these are tracked by MLMD.  They are usually the output artifacts
     #   of an upstream component.
     # INPUTS will be a dictionary with input artifacts, including URIs
-    #'ratings_uri' : ChannelParameter(type=standard_artifacts.String), \
-    #'movies_uri' : ChannelParameter(type=standard_artifacts.String), \
-    #'users_uri' : ChannelParameter(type=standard_artifacts.String), \
-    #'headers_present' : ChannelParameter(type=standard_artifacts.JsonValue), \
-    #'delim' : ChannelParameter(type=standard_artifacts.String), \
-    #'ratings_key_dict' : ChannelParameter(type=standard_artifacts.JsonValue), \
-    #'users_key_dict' : ChannelParameter(type=standard_artifacts.JsonValue), \
-    #'movies_key_dict' : ChannelParameter(type=standard_artifacts.JsonValue), \
-    #'bucket_names' : ChannelParameter(type=standard_artifacts.JsonValue)
-    #'buckets' : ChannelParameter(type=standard_artifacts.JsonValue) \
   }
   OUTPUTS = {
     # these are tracked by MLMD.
@@ -106,19 +85,9 @@ class IngestMovieLensExecutorSpec(ComponentSpec):
 # the Do method invokes GenerateExamplesByBeam.
 # GenerateExamplesByBeam uses GetInputSourcesToExamplePTransform.
 # The later is abstract in BaseExampleGenExecutor so must be implemented.
-#
-# The reason for overriding the Do method of BaseExampleGenExecutor here
-# is because using a split (data partitions by directory or file name)
-# naively, seems like it might be more complicated for uris that are
-# not file sources, and writing an input_config example_gen_pb2.Input.Split
-# pattern when all files are in the same directory isn't clear.
-#
-# It might be simpler to extend
-# base_executor.BaseExecutor and override the Do method instead of
-# extending BaseExampleGenExecutor as is done here.
 
 class IngestMovieLensExecutor(BaseExampleGenExecutor):
-  """executor to ingest movie lens data, join, and split into buckets"""
+  """executor to ingest movie lens data, left join on ratings, and split"""
 
   def GetInputSourceToExamplePTransform(self) -> beam.PTransform:
     """Returns PTransform for ratings, movies, users joined to TF examples."""
@@ -130,7 +99,7 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       -> Tuple[tf.train.Example, List[Tuple[str, Any]]]:
       try:
         infiles_dict_ser = exec_properties['infiles_dict_ser']
-        infiles_dict = pickle.loads(base64.b64decode(infiles_dict_ser.encode('utf-8')))
+        infiles_dict = deserialize(infiles_dict_ser)
         logging.debug(f'infiles_dict_ser={infiles_dict_ser}\ninfiles_dict={infiles_dict}')
       except Exception as ex:
         logging.error(f'ERROR: {ex}')
@@ -156,15 +125,12 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
     :param exec_properties: is a json string serialized dictionary holding:
       key = infiles_dict_ser which is a json serialization of the
         infiles_dict
-      key = buckets, value = a list of integers as percents of the whole,
-        e.g. [80, 10, 10]
-      key = bucket_names, value = a list of strings of names for the
-        buckets,  e.g. ['train', 'eval', test']
+      key = output_config which must contain split_config
     :param output_dict:
-    :return:  tuple of :
+    :return:  tuple of (
       a dictionary of the merged, split data as keys=name, values
          = PCollection for a partition,
-      and a list of tuple of the column names and types
+      and a list of tuple of the column names and types)
     """
 
     #following https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/components/example_gen/base_example_gen_executor.py#L103
@@ -174,9 +140,15 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
 
     input_to_examples = self.GetInputSourceToExamplePTransform()
 
+    logging.debug( \
+      "about to read input and transform to tf.train.Example")
+
     ratings_examples, column_name_type_list = \
       pipeline | f"GetInputSource{random.randint(0, 1000000000000)}" \
       >> input_to_examples(exec_properties)
+
+    logging.debug( \
+      "about to print the first row of the ratings_example")
 
     #DEBUG
     ratings_examples | f'Take_First_{random.randint(0, 1000000000000)}' \
@@ -184,36 +156,32 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       | f"print_first_row_{random.randint(0, 1000000000000)}" \
       >> beam.Map(lambda x: print(f'RATINGS first row={x}'))
 
-    bucket_names = exec_properties['bucket_names']
-    buckets = exec_properties['buckets']
-    if len(buckets) != len(bucket_names):
-      err = (f' buckets must be same length as deserialized bucket_names'
-             f' buckets={buckets}, bucket_names={bucket_names}')
-      logging.error(f'ERROR: {err}')
-      raise ValueError(f'ERROR: {err}')
+    try:
+      output_config = exec_properties['output_config']
+    except Exception as ex:
+      logging.error(f"ERROR: {ex}")
+      raise ValueError(ex)
+    if not split_config in output_config or not splits in \
+      output_config.split_config.splits:
+      raise ValueError("parameters must include output_config which"
+        " must contain split_config")
 
-    output_config = example_gen_pb2.Output(
-      split_config=example_gen_pb2.SplitConfig(
-        splits = [example_gen_pb2.SplitConfig.Split(name=n, hash_buckets=b) \
-          for n, b in zip(bucket_names, buckets)]
-      )
-    )
-
-    total = sum(buckets)
+    total = sum([split.hash_buckets for split in output_config.split_config.splits])
     s = 0
     cumulative_buckets = []
-    for b in buckets:
-      s += int(100 * (b / total))
+    for split in output_config.split_config.splits:
+      s += int(100 * (split.hash_buckets / total))
       cumulative_buckets.append(s)
 
     #type: apache_beam.DoOutputsTuple
     ratings_tuple = ratings_examples | f'split_{time.time_ns()}' >> beam.Partition( \
-      partition_fn, len(buckets), cumulative_buckets, output_config.split_config)
+      partition_fn, len(cumulative_buckets), cumulative_buckets, output_config.split_config)
 
+    split_names = [split.name for split in output_config.split_config.splits]
     result = {}
     for index, example_split in enumerate(ratings_tuple):
-      result[bucket_names[index]] = example_split
-    # pass to Do method
+      result[split_names[index]] = example_split
+    # pass back to Do method
     return result, column_name_type_list
 
   def Do(
@@ -241,6 +209,10 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       ratings_dict, column_name_type_list = \
         self.GenerateExamplesByBeam(pipeline, exec_properties, output_dict)
 
+      logging.debug( \
+        "have read, left joined, converted to tf.tran.Example, and split."
+        "  about to write to uri")
+
       output_examples = output_dict['output_examples']
       logging.debug(f"output_examples TYPE={type(output_examples)}")
       logging.debug(f"output_examples={output_examples}")
@@ -254,10 +226,6 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
           "ERROR: fix coding error for missing output_examples")
         raise ValueError(
           "Error: fix coding error for missing output_examples")
-
-      bucket_names = exec_properties['bucket_names']
-
-      #bucket names are already set in IngestMovieLensComponent.init
 
       # https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/proto/example_gen.proto#L44
       # If VERSION is specified, but not SPAN, an error will be thrown.
@@ -282,7 +250,7 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
           >> beam.io.tfrecordio.WriteToTFRecord( \
           file_path_prefix=prefix_path, file_name_suffix='.tfrecord')
       logging.info(
-        'Examples written to output_examples as TFRecords.')
+        f'Examples written to output_examples as TFRecords to {output_examples2.uri}')
       # no return
 
 #class IngestMovieLensComponent(base_component.BaseComponent):
@@ -294,20 +262,25 @@ class IngestMovieLensComponent(base_beam_component.BaseBeamComponent):
   def __init__(self,\
     name : Optional[Text],
     infiles_dict_ser : Text,\
-    bucket_names : List[str], \
-    buckets : List[int], \
+    output_config : example_gen_pb2.Output, \
     output_examples : Optional[types.Channel] = None):
 
     print(f'DEBUG IngestMovieLensComponent init')
 
+    if not output_config or not split_config in output_config or not splits in \
+      output_config.split_config.splits:
+      raise ValueError("parameters must include output_config which"
+                       " must contain split_config")
+
     if not output_examples:
+      split_names = [split.name for split in output_config.split_config.splits]
       examples_artifact = standard_artifacts.Examples()
-      examples_artifact.splits = bucket_names.copy()
+      examples_artifact.splits = split_names
       output_examples = channel_utils.as_channel([examples_artifact])
 
     spec = IngestMovieLensExecutorSpec(
       name=name, infiles_dict_ser=infiles_dict_ser, \
-      bucket_names=bucket_names, buckets=buckets,\
+      output_config=output_config,\
       output_examples=output_examples)
 
     #super().__init__(spec=spec)

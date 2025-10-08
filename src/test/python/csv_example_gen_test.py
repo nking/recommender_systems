@@ -37,7 +37,7 @@ class CSVExampleGenTest(tf.test.TestCase):
   @mock.patch.object(publisher, 'Publisher')
   def testRun(self, mock_publisher):
 
-    test_num = "2"
+    test_num = "csv_comp_1"
     kaggle = True
     if kaggle:
       prefix = '/kaggle/working/ml-1m/'
@@ -129,7 +129,7 @@ class CSVExampleGenTest(tf.test.TestCase):
     artifact_count = len(artifacts)
     execution_count = len(executions)
     self.assertGreaterEqual(artifact_count, execution_count)
-
+    logging.debug(f'contexts={store.get_contexts()}')
     """
     #self.assertIsNotNone(ratings_example_gen.outputs['output'].get()[0])
     #output_path = ratings_example_gen.outputs['output'].get()[0].uri

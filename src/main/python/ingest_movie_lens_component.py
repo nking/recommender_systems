@@ -37,23 +37,20 @@ print(f"TFX version: {tfx.__version__}")
 def ingest_movie_lens_component( \
   #name: tfx.dsl.components.Parameter[str], \
   infiles_dict_ser: tfx.dsl.components.Parameter[str], \
-  bucket_names_ser: tfx.dsl.components.Parameter[str], \
-  buckets_ser: tfx.dsl.components.Parameter[str], \
+  output_config_ser: tfx.dsl.components.Parameter[str], \
   output_examples: tfx.dsl.components.OutputArtifact[standard_artifacts.Examples], \
   #output_split_config: tfx.dsl.components.OutputArtifact[standard_artifacts.SplitConfig],\
   beam_pipeline: annotations.BeamComponentParameter[beam.Pipeline]=None):
   """
   ingest the ratings, movies, and users files, left join them on ratings,
-  and split them into the given buckets by percentange and bucket_name.
+  and split them into the given buckets in output_config.
   
   Args:
     :param infiles_dict_ser: a string created from using base64 and pickle on the infiles_dict created with
       movie_lens_utils.create_infiles_dict where its input arguments are made
       from movie_lens_utils.create_infile_dict
-    :param buckets_ser: string serialized list of partitions in percent.
-      this is a string from pickle and base64
-    :param bucket_names_ser: string serialized list of partitions names corresponding to
-      buckets.  this is a string from pickle and base64
+    :param output_config_ser: string serialized example_gen_pb2.Output which
+      must include split_config
     :param output_examples: 
       ChannelParameter(type=standard_artifacts.Examples),
     :param beam_pipeline: injected into method by TFX.  do not supply
@@ -62,7 +59,7 @@ def ingest_movie_lens_component( \
   logging.info("ingest_movie_lens_component")
 
   try:
-    infiles_dict = pickle.loads(base64.b64decode(infiles_dict_ser.encode('utf-8')))
+    infiles_dict = deserialize(infiles_dict_ser)
   except Exception as ex:
     err = f"error using pickle and base64"
     logging.error(f'{err} : {ex}')
@@ -74,44 +71,30 @@ def ingest_movie_lens_component( \
     raise ValueError(err)
     
   try:
-    buckets = pickle.loads(base64.b64decode(buckets_ser.encode('utf-8')))
+    output_config = example_gen_pb2.Input()
+    output_config.ParseFromString(deserialize_to_proto(output_config_ser))
   except Exception as ex:
-    err = f"error using pickle and base64, {ex}"
+    err = f"error decoding, {ex}"
     logging.error(err)
     raise ValueError(err)
 
-  try:
-    bucket_names = pickle.loads(base64.b64decode(bucket_names_ser.encode('utf-8')))
-  except Exception as ex:
-    err = f"error using pickle and base64, {ex}"
-    logging.error(err)
-    raise ValueError(err)
-
-  if len(buckets) != len(bucket_names):
-    err = (
-      f'deserialized len(buckets) != deserialized len(bucket_names)'
-      f' buckets={buckets}, bucket_names={bucket_names}')
-    logging.error(f'ERROR: {err}')
-    raise ValueError(f'ERROR: {err}')
+  split_names = [split.name for split in
+                 output_config.split_config.splits]
 
   if not output_examples:
     examples_artifact = standard_artifacts.Examples()
-    examples_artifact.splits = bucket_names.copy()
+    examples_artifact.splits = split_names
     output_examples = channel_utils.as_channel([examples_artifact])
     output_examples2 = artifact_utils.get_single_instance(output_examples)
   else:
     logging.debug(f"output_examples was passed in to component")
     output_examples2 = output_examples
+    #TODO: consider if need to check for splits
 
   logging.debug(f"output_examples TYPE={type(output_examples)}")
   logging.debug(f"output_examples={output_examples}")
-
-  output_config = example_gen_pb2.Output(
-    split_config=example_gen_pb2.SplitConfig(
-      splits=[example_gen_pb2.SplitConfig.Split(name=n, hash_buckets=b) \
-              for n, b in zip(bucket_names, buckets)]
-    )
-  )
+  logging.debug(f"output_examples2 TYPE={type(output_examples2)}")
+  logging.debug(f"output_examples2={output_examples2}")
 
   with beam_pipeline as pipeline:
     #beam.PCollection, List[Tuple[str, Any]
@@ -119,17 +102,16 @@ def ingest_movie_lens_component( \
       pipeline | f"IngestAndJoin_{random.randint(0,1000000000)}" \
       >> IngestAndJoin(infiles_dict = infiles_dict)
 
-    #perform partitions
-    total = sum(buckets)
+    total = sum([split.hash_buckets for split in output_config.split_config.splits])
     s = 0
     cumulative_buckets = []
-    for b in buckets:
-      s += int(100*(b/total))
-      cumulative_buckets.append(s)
+    for split in output_config.split_config.splits:
+      s += int(100 * (split.hash_buckets / total))
+    cumulative_buckets.append(s)
 
     #type: apache_beam.DoOutputsTuple
     ratings_tuple = ratings | f'split_{random.randint(0, 1000000000000)}' >> beam.Partition( \
-      partition_fn, len(buckets), cumulative_buckets, \
+      partition_fn, len(cumulative_buckets), cumulative_buckets, \
       output_config.split_config)
 
     logging.debug(f"have ratings_tuple.  type={type(ratings_tuple)}")
@@ -152,14 +134,18 @@ def ingest_movie_lens_component( \
       #write to csv
       column_names = ",".join([t[0] for t in column_name_type_list])
       for i, part in enumerate(ratings_tuple):
-        prefix_path = f'{output_examples2.uri}/Split-{bucket_names[i]}'
+        prefix_path = f'{output_examples2.uri}/Split-{split_names[i]}'
         write_to_csv(pcollection=part, \
           column_names=column_names, prefix_path=prefix_path, delim='_')
+      logging.info(
+        f'Examples written to output_examples as CSV to {output_examples2.uri}')
     else:
       #write to TFRecords
       for i, part in enumerate(ratings_tuple):
-          prefix_path = f'{output_examples2.uri}/Split-{bucket_names[i]}'
+          prefix_path = f'{output_examples2.uri}/Split-{split_names[i]}'
           convert_to_tf_example(part, column_name_type_list) \
             | f"Serialize_{random.randint(0, 1000000000000)}" >> beam.Map(lambda x: x.SerializeToString()) \
             | f"write_to_tf_{random.randint(0, 1000000000000)}" >> beam.io.tfrecordio.WriteToTFRecord(\
             file_path_prefix=prefix_path, file_name_suffix='.tfrecord')
+    logging.info(
+      f'Examples written to output_examples as TFRecords to {output_examples2.uri}')

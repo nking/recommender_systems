@@ -5,6 +5,7 @@ from typing import  Dict, Union
 from movie_lens_utils import *
 from movie_lens_utils import _assert_dict_1
 import random
+from tfx.proto import example_gen_pb2
 
 class TestInfileDictUtils(unittest.TestCase):
 
@@ -22,7 +23,7 @@ class TestInfileDictUtils(unittest.TestCase):
     r = infiles_dict_formedness_error(merged_dict)
     self.assertIsNone(r, r)
 
-  def test_make_file_dict(self):
+  def make_infiles(self):
     kaggle = True
     if kaggle:
       prefix = '/kaggle/working/ml-1m/'
@@ -43,23 +44,31 @@ class TestInfileDictUtils(unittest.TestCase):
       uri=ratings_uri, col_names=ratings_col_names, \
       col_types=ratings_col_types, headers_present=False, delim="::")
 
-    self._assert_dict_content(ratings_dict)
-
     movies_dict = create_infile_dict(for_file='movies', \
       uri=movies_uri, col_names=movies_col_names, \
       col_types=movies_col_types, headers_present=False, delim="::")
-
-    self._assert_dict_content(movies_dict)
 
     users_dict = create_infile_dict(for_file='users', \
       uri=users_uri,  col_names=users_col_names, \
       col_types=users_col_types, headers_present=False, delim="::")
 
-    self._assert_dict_content(users_dict)
-
-    self.infiles_dict = create_infiles_dict(ratings_dict=ratings_dict, \
+    infiles_dict = create_infiles_dict(ratings_dict=ratings_dict, \
                               movies_dict=movies_dict, \
                               users_dict=users_dict, version=1)
+
+    return ratings_dict, movies_dict, users_dict, infiles_dict
+
+  def test_make_file_dict(self):
+    ratings_dict, movies_dict, users_dict, infiles_dict = \
+      self.make_infiles()
+
+    self._assert_dict_content(ratings_dict)
+
+    self._assert_dict_content(movies_dict)
+
+    self._assert_dict_content(users_dict)
+
+    self.infiles_dict = infiles_dict
 
     self._assert_merged_dict_content(self.infiles_dict)
 
@@ -72,5 +81,28 @@ class TestInfileDictUtils(unittest.TestCase):
         self.assertTrue(isinstance(_name, str))
         self.assertIsNotNone(_type)
 
+  def test_prot_ser_deser(self):
+    buckets = [80, 10, 10]
+    bucket_names = ['train', 'eval', 'test']
+    output_config = example_gen_pb2.Output(
+      split_config=example_gen_pb2.SplitConfig(
+        splits=[
+          example_gen_pb2.SplitConfig.Split(name=n, hash_buckets=b) \
+          for n, b in zip(bucket_names, buckets)]
+      )
+    )
+    output_config_ser = serialize_proto_to_string(output_config)
+    deser = deserialize_to_proto(output_config_ser)
+    self.assertEqual(output_config, deser, \
+      "output_config and deser should be same")
+
+  def test_ser_deser(self):
+    ratings_dict, movies_dict, users_dict, infiles_dict = \
+      self.make_infiles()
+    infiles_dict_ser = serialize_to_string(infiles_dict)
+    deser = deserialize(infiles_dict_ser)
+    self.assertEqual(infiles_dict, deser, \
+      "infiles_dict and deser should be same")
+ 
 if __name__ == '__main__':
     unittest.main()

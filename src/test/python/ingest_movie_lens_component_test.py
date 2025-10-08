@@ -87,26 +87,31 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
                                       movies_dict=movies_dict, \
                                       users_dict=users_dict, version=1)
 
-    self.buckets = [80, 10, 10]
-    self.bucket_names = ['train', 'eval', 'test']
-    self.buckets_ser = (base64.b64encode(pickle.dumps(self.buckets))).decode('utf-8')
-    self.bucket_names_ser = (base64.b64encode(pickle.dumps(self.bucket_names))).decode('utf-8')
+    buckets = [80, 10, 10]
+    bucket_names = ['train', 'eval', 'test']
+    output_config = example_gen_pb2.Output(
+      split_config=example_gen_pb2.SplitConfig(
+        splits=[
+          example_gen_pb2.SplitConfig.Split(name=n, hash_buckets=b) \
+          for n, b in zip(bucket_names, buckets)]
+      )
+    )
+    self.output_config_ser = serialize_proto_to_string(output_config)
 
     self.name = 'test run of ingest with tfx'
 
   @mock.patch.object(publisher, 'Publisher')
   def testRun(self, mock_publisher):
 
-    test_num = "1"
+    test_num = "py_custom_comp_1"
 
-    infiles_dict_ser = (base64.b64encode(pickle.dumps(self.infiles_dict))).decode('utf-8')
+    infiles_dict_ser = serialize_to_string(self.infiles_dict)
 
     mock_publisher.return_value.publish_execution.return_value = {}
 
     ratings_example_gen = (ingest_movie_lens_component( \
       infiles_dict_ser=infiles_dict_ser, \
-      bucket_names_ser=self.bucket_names_ser, \
-      buckets_ser=self.buckets_ser))
+      output_config_ser = self.output_config_ser))
 
     #output_data_dir = os.path.join(os.environ.get('TEST_UNDECLARED_OUTPUTS_DIR',self.get_temp_dir()),self._testMethodName)
     output_data_dir = os.path.join('/kaggle/working/bin/', test_num, self._testMethodName)
