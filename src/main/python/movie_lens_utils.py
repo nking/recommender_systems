@@ -269,13 +269,11 @@ def partition_fn(\
 
 def serialize_proto_to_string(output_config : example_gen_pb2.Output) -> str:
   return base64.b64encode(output_config.SerializeToString()).decode('utf-8')
-  #return serialize_to_string(output_config)
 
 def deserialize_to_proto(output_config_ser: str) -> example_gen_pb2.Output:
   new_output_config = example_gen_pb2.Output()
   new_output_config.ParseFromString(base64.b64decode(output_config_ser.encode('utf-8')))
   return new_output_config
-  #return deserialize(output_config_ser)
 
 def serialize_to_string(x : Any) -> str:
   return (base64.b64encode(pickle.dumps(x))).decode('utf-8')
