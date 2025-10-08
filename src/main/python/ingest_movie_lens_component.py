@@ -71,8 +71,7 @@ def ingest_movie_lens_component( \
     raise ValueError(err)
     
   try:
-    output_config = example_gen_pb2.Input()
-    output_config.ParseFromString(deserialize_to_proto(output_config_ser))
+    output_config = deserialize_to_proto(output_config_ser)
   except Exception as ex:
     err = f"error decoding, {ex}"
     logging.error(err)
