@@ -166,15 +166,14 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       s += int(100 * (split.hash_buckets / total))
       cumulative_buckets.append(s)
 
-    logging.debug(f'cumulative_buckets={cumulative_buckets}')
-
     #type: apache_beam.DoOutputsTuple
-    ratings_tuple = ratings_example | f'split_{time.time_ns()}' \
-      >> beam.Partition( \
+    ratings_tuple = ratings_example | f'split_{time.time_ns()}' >> beam.Partition( \
       partition_fn, len(cumulative_buckets), cumulative_buckets, output_config.split_config)
 
     split_names = [split.name for split in output_config.split_config.splits]
-    result = {split_name : example for split_name, example in zip(ratings_tuple, split_names)}
+    result = {}
+    for index, example_split in enumerate(ratings_tuple):
+      result[split_names[index]] = example_split
     # pass back to Do method
     return result, column_name_type_list
 
@@ -235,16 +234,15 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       #could use WriteSplit method instead:
       #https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/components/example_gen/base_example_gen_executor.py#L281
 
-      DEFAULT_FILE_NAME = 'data_tfrecord'
       # write to TFRecords
-      for split_name, example in ratings_dict.items():
-        file_prefix = f'{output_uri}/Split-{split_name}/{DEFAULT_FILE_NAME}'
-        logging.debug(f"file_prefix={file_prefix}")
+      for name, example in ratings_dict.items():
+        prefix_path = f'{output_uri}/Split-{name}'
+        logging.debug(f"prefix_path={prefix_path}")
         example | f"Serialize_{random.randint(0, 1000000000000)}" \
-        >> beam.Map(lambda x: x.SerializeToString()) \
-        | f"write_to_tfrecord_{random.randint(0, 1000000000000)}" \
-        >> beam.io.tfrecordio.WriteToTFRecord( \
-        file_prefix, file_name_suffix='.gz')
+          >> beam.Map(lambda x: x.SerializeToString()) \
+          | f"write_to_tfrecord_{random.randint(0, 1000000000000)}" \
+          >> beam.io.tfrecordio.WriteToTFRecord( \
+          file_path_prefix=prefix_path, file_name_suffix='.tfrecord')
       logging.info('output_examples written as TFRecords')
       # no return
 
