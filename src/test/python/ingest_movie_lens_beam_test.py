@@ -79,7 +79,7 @@ class IngestMovieLensBeamTest(tf.test.TestCase):
   def testRun2(self, mock_publisher):
 
     expected_schema_cols = [ \
-      ("user_id", int), ("movie_id", int), ("rating", int), \
+      ("user_id", int), ("movie_id", int), ("rating", int), ("timestamp", int),\
       ("gender", str), ("age", int), ("occupation", int), \
       ("genres", str)]
 
