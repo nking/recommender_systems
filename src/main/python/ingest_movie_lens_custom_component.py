@@ -162,8 +162,8 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       logging.error(f"ERROR: {ex}")
       raise ValueError(ex)
 
-    if not 'split_config' in output_config or not 'splits' in \
-      output_config.split_config:
+    if not output_config or not output_config.HasField('split_config') \
+      or not output_config.split_config.HasField('splits'):
       raise ValueError("parameters must include output_config which"
         f" must contain split_config.  output_config={output_config}")
 
@@ -268,8 +268,8 @@ class IngestMovieLensComponent(base_beam_component.BaseBeamComponent):
 
     print(f'DEBUG IngestMovieLensComponent init')
 
-    if not output_config or not 'split_config' in output_config or not 'splits' in \
-      output_config.split_config:
+    if not output_config or not output_config.HasField('split_config') \
+      or not output_config.split_config.HasField('splits'):
       raise ValueError("ERROR:  output_config is missing split_config"
                        f" output_config={output_config}")
 
