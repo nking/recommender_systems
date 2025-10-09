@@ -156,6 +156,7 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     # files are Split-train/data_*, etc
 
     # Check output paths.
+    logging.debug(f"ratings_example_gen.id={ratings_example_gen.id}")
     self.assertTrue(fileio.exists(os.path.join(PIPELINE_ROOT, ratings_example_gen.id)))
 
     for key, value in ratings_example_gen.outputs.items():
