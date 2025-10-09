@@ -167,12 +167,15 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     store = metadata_store.MetadataStore(metadata_connection_config)
     artifact_types = store.get_artifact_types()
     logging.debug(f"MLMD store artifact_types={artifact_types}")
+    self.assertEqual(1, len(artifact_types))
     artifacts = store.get_artifacts()
     logging.debug(f"MLMD store artifacts={artifacts}")
+    self.assertEqual(1, len(artifacts))
     executions = store.get_executions()
     logging.debug(f"MLMD store executions={executions}")
-    for execution in executions:
-      logging.debug(f"execution.properties={execution.properties}")
+    self.assertEqual(1, len(executions))
+    # executions has custom_properties.key: "infiles_dict_ser"
+    #    and custom_properties.key: "output_config_ser"
     artifact_count = len(artifacts)
     execution_count = len(executions)
     self.assertGreaterEqual(artifact_count, execution_count)
