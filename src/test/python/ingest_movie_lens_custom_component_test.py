@@ -115,14 +115,14 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
       infiles_dict_ser=infiles_dict_ser, \
       output_config=self.output_config)
 
-     components = [ratings_example_gen]
+    components = [ratings_example_gen]
 
     PIPELINE_NAME = 'TestFullyCustomCompPipeline'
     #output_data_dir = os.path.join(os.environ.get('TEST_UNDECLARED_OUTPUTS_DIR',self.get_temp_dir()),self._testMethodName)
     output_data_dir = os.path.join('/kaggle/working/bin/', test_num, self._testMethodName)
     PIPELINE_ROOT = os.path.join(output_data_dir, PIPELINE_NAME)
     METADATA_PATH = os.path.join(PIPELINE_ROOT, 'tfx_metadata', 'metadata.db')
-    os.makedirs(METADATA_PATH, exist_ok=True)
+    os.makedirs(os.path.join(PIPELINE_ROOT, 'tfx_metadata'), exist_ok=True)
 
     alt_output_data_dir = os.path.join(
       os.environ.get('TEST_UNDECLARED_OUTPUTS_DIR',

@@ -48,7 +48,7 @@ class CSVExampleGenTest(tf.test.TestCase):
     os.makedirs(prefix2, exist_ok=True)
     users_uri = f"{prefix2}users2.dat"
 
-    #a work around to use CSVExample Gen.  the workaround isn't scalable.
+    #a work around to use CSVExampleGen.  the workaround isn't scalable.
     #users.dat delimeter is ::
     #the moview.dat title field has commas
      #replace delimiters in users2.dat '_'

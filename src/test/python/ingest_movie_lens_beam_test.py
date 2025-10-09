@@ -15,6 +15,7 @@ from tfx.utils import name_utils
 from ingest_movie_lens_beam import *
 from movie_lens_utils import *
 
+import time
 import random
 
 from ml_metadata.proto import metadata_store_pb2
