@@ -84,16 +84,17 @@ def ingest_movie_lens_component( \
     examples_artifact = standard_artifacts.Examples()
     examples_artifact.splits = split_names
     output_examples = channel_utils.as_channel([examples_artifact])
-    output_examples2 = artifact_utils.get_single_instance(output_examples)
   else:
     logging.debug(f"output_examples was passed in to component")
-    output_examples2 = output_examples
     #TODO: consider if need to check for splits
+
+  if isinstance(output_examples, list):
+    output_uri = artifact_utils.get_single_instance(output_examples).uri
+  else:
+    output_uri = output_examples.uri
 
   logging.debug(f"output_examples TYPE={type(output_examples)}")
   logging.debug(f"output_examples={output_examples}")
-  logging.debug(f"output_examples2 TYPE={type(output_examples2)}")
-  logging.debug(f"output_examples2={output_examples2}")
 
   with beam_pipeline as pipeline:
     #beam.PCollection, List[Tuple[str, Any]
@@ -115,7 +116,7 @@ def ingest_movie_lens_component( \
 
     logging.debug(f"have ratings_tuple.  type={type(ratings_tuple)}")
 
-    logging.debug(f'output_examples.uri={output_examples2.uri}')
+    logging.debug(f'output_examples.uri={output_uri}')
 
     write_to_tfrecords = True
 
@@ -133,18 +134,18 @@ def ingest_movie_lens_component( \
       #write to csv
       column_names = ",".join([t[0] for t in column_name_type_list])
       for i, part in enumerate(ratings_tuple):
-        prefix_path = f'{output_examples2.uri}/Split-{split_names[i]}'
+        prefix_path = f'{output_uri}/Split-{split_names[i]}'
         write_to_csv(pcollection=part, \
           column_names=column_names, prefix_path=prefix_path, delim='_')
       logging.info(
-        f'Examples written to output_examples as CSV to {output_examples2.uri}')
+        f'Examples written to output_examples as CSV to {output_uri}')
     else:
       #write to TFRecords
       for i, part in enumerate(ratings_tuple):
-          prefix_path = f'{output_examples2.uri}/Split-{split_names[i]}'
+          prefix_path = f'{output_uri}/Split-{split_names[i]}'
           convert_to_tf_example(part, column_name_type_list) \
             | f"Serialize_{random.randint(0, 1000000000000)}" >> beam.Map(lambda x: x.SerializeToString()) \
             | f"write_to_tf_{random.randint(0, 1000000000000)}" >> beam.io.tfrecordio.WriteToTFRecord(\
             file_path_prefix=prefix_path, file_name_suffix='.tfrecord')
     logging.info(
-      f'Examples written to output_examples as TFRecords to {output_examples2.uri}')
+      f'Examples written to output_examples as TFRecords to {output_uri}')

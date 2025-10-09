@@ -165,7 +165,7 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
     if not output_config or not output_config.HasField('split_config') \
       or not output_config.split_config.splits:
       raise ValueError("parameters must include output_config which"
-        f" must contain split_config.  output_config={output_config}")
+        f" must contain split_config.splits.  output_config={output_config}")
 
     total = sum([split.hash_buckets for split in output_config.split_config.splits])
     s = 0
@@ -218,9 +218,10 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       logging.debug(f"output_examples TYPE={type(output_examples)}")
       logging.debug(f"output_examples={output_examples}")
 
-      output_examples2 = artifact_utils.get_single_instance(output_dict['output_examples'])
-      logging.debug(f"output_examples2 TYPE={type(output_examples2)}")
-      logging.debug(f"output_examples2={output_examples2}")
+      if isinstance(output_dict['output_examples'], list):
+        output_uri = artifact_utils.get_single_instance(output_dict['output_examples']).uri
+      else:
+        output_uri = output_examples.uri
 
       if output_examples is None:
         logging.error(
@@ -243,7 +244,7 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
 
       # write to TFRecords
       for name, example in ratings_dict.items():
-        prefix_path = f'{output_examples2.uri}/Split-{name}'
+        prefix_path = f'{ooutput_uri}/Split-{name}'
 
         example | f"Serialize_{random.randint(0, 1000000000000)}" \
           >> beam.Map(lambda x: x.SerializeToString()) \
@@ -251,7 +252,7 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
           >> beam.io.tfrecordio.WriteToTFRecord( \
           file_path_prefix=prefix_path, file_name_suffix='.tfrecord')
       logging.info(
-        f'Examples written to output_examples as TFRecords to {output_examples2.uri}')
+        f'Examples written to output_examples as TFRecords to {output_uri}')
       # no return
 
 #class IngestMovieLensComponent(base_component.BaseComponent):
