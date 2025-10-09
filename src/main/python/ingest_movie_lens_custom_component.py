@@ -213,9 +213,9 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       logging.debug(f"output_examples={output_examples}")
 
       if isinstance(output_dict['output_examples'], list):
-        output_uri = artifact_utils.get_single_instance(output_dict['output_examples']).uri
+        ex_artifact = artifact_utils.get_single_instance(output_dict['output_examples'])
       else:
-        output_uri = output_examples.uri
+        ex_artifact = output_examples
 
       if output_examples is None:
         logging.error(
@@ -236,10 +236,10 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       #could use WriteSplit method instead:
       #https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/components/example_gen/base_example_gen_executor.py#L281
 
+      DEFAULT_FILE_NAME = 'data_tfrecord'
       # write to TFRecords
       for split_name, example in ratings_dict.items():
-        # prefix_path = f'{output_uri}/Split-{split_name}'
-        prefix_path = artifact_utils.get_split_uri(output_uri, split_name)
+        prefix_path = artifact_utils.get_split_uri(ex_artifact, split_name)
         logging.debug(f"prefix_path={prefix_path}")
         example | f"Serialize_{random.randint(0, 1000000000000)}" \
           >> beam.Map(lambda x: x.SerializeToString()) \
@@ -247,8 +247,7 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
           >> beam.io.tfrecordio.WriteToTFRecord( \
           os.path.join(prefix_path, DEFAULT_FILE_NAME), \
           file_name_suffix='.gz')
-      logging.info(
-        f'Examples written to output_examples as TFRecords to {output_uri}')
+      logging.info('output_examples written as TFRecords')
       # no return
 
 #class IngestMovieLensComponent(base_component.BaseComponent):

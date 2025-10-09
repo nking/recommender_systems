@@ -90,9 +90,9 @@ def ingest_movie_lens_component( \
     #TODO: consider if need to check for splits
 
   if isinstance(output_examples, list):
-    output_uri = artifact_utils.get_single_instance(output_examples).uri
+    ex_artifact = artifact_utils.get_single_instance(output_examples)
   else:
-    output_uri = output_examples.uri
+    ex_artifact = output_examples
 
   logging.debug(f"output_examples TYPE={type(output_examples)}")
   logging.debug(f"output_examples={output_examples}")
@@ -127,8 +127,6 @@ def ingest_movie_lens_component( \
 
     logging.debug(f"have ratings_tuple.  type={type(ratings_tuple)}")
 
-    logging.debug(f'output_examples.uri={output_uri}')
-
     # https://www.tensorflow.org/tfx/api_docs/python/tfx/v1/types/standard_artifacts/Examples
     # files should be written as {uri}/Split-{split_name1}
 
@@ -142,10 +140,11 @@ def ingest_movie_lens_component( \
     ratings_dict = {split_name: example for split_name, example in
               zip(ratings_tuple, split_names)}
 
+    DEFAULT_FILE_NAME = 'data_tfrecord'
     # write to TFRecords
     for split_name, example in ratings_dict.items():
       #prefix_path = f'{output_uri}/Split-{split_name}'
-      prefix_path = artifact_utils.get_split_uri(output_uri, split_name)
+      prefix_path = artifact_utils.get_split_uri(ex_artifact, split_name)
       logging.debug(f"prefix_path={prefix_path}")
       example | f"Serialize_{random.randint(0, 1000000000000)}" \
       >> beam.Map(lambda x: x.SerializeToString()) \
@@ -153,5 +152,4 @@ def ingest_movie_lens_component( \
       >> beam.io.tfrecordio.WriteToTFRecord( \
       os.path.join(prefix_path, DEFAULT_FILE_NAME), \
       file_name_suffix = '.gz')
-    logging.info(
-      f'Examples written to output_examples as TFRecords to {output_uri}')
+    logging.info('output_examples written as TFRecords')
