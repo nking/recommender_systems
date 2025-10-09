@@ -213,9 +213,9 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       logging.debug(f"output_examples={output_examples}")
 
       if isinstance(output_dict['output_examples'], list):
-        ex_artifact = artifact_utils.get_single_instance(output_dict['output_examples'])
+        output_uri = artifact_utils.get_single_instance(output_dict['output_examples']).uri
       else:
-        ex_artifact = output_examples
+        output_uri = output_examples.uri
 
       if output_examples is None:
         logging.error(
@@ -239,7 +239,7 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       DEFAULT_FILE_NAME = 'data_tfrecord'
       # write to TFRecords
       for split_name, example in ratings_dict.items():
-        prefix_path = artifact_utils.get_split_uri(ex_artifact, split_name)
+        prefix_path = os.path.join(output_uri, split_name)
         logging.debug(f"prefix_path={prefix_path}")
         example | f"Serialize_{random.randint(0, 1000000000000)}" \
           >> beam.Map(lambda x: x.SerializeToString()) \
