@@ -46,6 +46,8 @@ import ml_metadata as mlmd
 from ml_metadata.proto import metadata_store_pb2
 from ml_metadata.metadata_store import metadata_store
 
+from apache_beam.options.pipeline_options import PipelineOptions
+
 class IngestMovieLensCustomComponentTest(tf.test.TestCase):
 
   def setUp(self):
@@ -97,16 +99,14 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
             for n, b in zip(bucket_names, buckets)]
       )
     )
+    logging.debug(f"test self.output_config={self.output_config}")
 
     self.name = 'test run of ingest with tfx'
 
-  @mock.patch.object(publisher, 'Publisher')
-  def testRun(self, mock_publisher):
+  def testRun2(self):
 
     test_num = "fully_custom_comp_1"
     infiles_dict_ser = serialize_to_string(self.infiles_dict)
-
-    mock_publisher.return_value.publish_execution.return_value = {}
 
     name = "test_fully_custom_component"
 
@@ -129,7 +129,7 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
                      self.get_temp_dir()), self._testMethodName)
     print(f'alt_output_data_dir={alt_output_data_dir}')
 
-    ENABLE_CACHE = False;
+    ENABLE_CACHE = False
 
     if not ENABLE_CACHE:
       if os.path.exists(METADATA_PATH):
@@ -139,6 +139,13 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
     #metadata_connection_config.sqlite.SetInParent()
     #metadata_connection = metadata.Metadata(metadata_connection_config)
     metadata_connection_config = metadata.sqlite_metadata_connection_config(METADATA_PATH)
+
+    # apache-beam 2.59.0 - 2.68.0 with SparkRunner supports pyspark 3.2.x
+    # but not 4.0.0
+    # pyspark 3.2.4 is compatible with java >= 8 and <= 11 and python >= 3.6 and <= 3.9
+    # start Docker, then use portable SparkRunner
+    # https://beam.apache.org/documentation/runners/spark/
+    # from pyspark import SparkConf
 
     my_pipeline = tfx.dsl.Pipeline(
       pipeline_name=PIPELINE_NAME,
@@ -151,18 +158,17 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
 
     tfx.orchestration.LocalDagRunner().run(my_pipeline)
 
-    mock_publisher.return_value.publish_execution.assert_called_once()
-
     # Check output paths.
-    self.assertTrue(fileio.exists(os.path.join(pipeline_root, ratings_example_gen.id)))
+    self.assertTrue(fileio.exists(os.path.join(PIPELINE_ROOT, \
+      ratings_example_gen.id)))
 
     for key, value in ratings_example_gen.outputs.items():
       print(f'key={key}, value={value}')
 
 
     #list files in alt_output_data_dir and in output_data_dir
-    print(f'listing files in output_data_dir {output_data_dir}:')
-    for dirname, _, filenames in os.walk(output_data_dir):
+    print(f'listing files in output_data_dir {PIPELINE_ROOT}:')
+    for dirname, _, filenames in os.walk(PIPELINE_ROOT):
       for filename in filenames:
         print(os.path.join(dirname, filename))
 
@@ -234,8 +240,23 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
 
     """
 
-  #def testDo(self):
-  #  #EXECUTOR_SPEC = executor_spec.BeamExecutorSpec(IngestMovieLensExecutor)
-  #  #ratings_example_gen = IngestMovieLensExecutor()
-  #  #ratings_example_gen.Do({}, output_dict, exec_properties)
-  #  pass
+  def testDo(self):
+    #EXECUTOR_SPEC = executor_spec.BeamExecutorSpec(IngestMovieLensExecutor)
+
+    test_num = "fully_custom_comp_2"
+    output_data_dir = os.path.join('/kaggle/working/bin/', test_num,
+                                   self._testMethodName)
+    os.makedirs(output_data_dir, exist_ok=True)
+
+    output_examples = standard_artifacts.Examples()
+    output_examples.uri = os.path.join(output_data_dir, 'output_examples')
+
+    output_dict = {'output_examples':output_examples}
+    exec_properties = {'name': 'IngestMovieLensExecutor',
+      'infiles_dict_ser':serialize_to_string(self.infiles_dict),
+      'output_config': self.output_config}
+    ratings_example_gen = IngestMovieLensExecutor()
+    ratings_example_gen.Do({}, output_dict, exec_properties)
+
+    self.assertTrue(os.path.exists(output_examples.uri))
+    self.assertTrue(len(os.listdir(output_examples.uri)) > 0)

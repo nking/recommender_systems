@@ -100,14 +100,11 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
 
     self.name = 'test run of ingest with tfx'
 
-  @mock.patch.object(publisher, 'Publisher')
-  def testRun(self, mock_publisher):
+  def test_ingest_movie_lens_component(self):
 
     test_num = "py_custom_comp_1"
 
     infiles_dict_ser = serialize_to_string(self.infiles_dict)
-
-    mock_publisher.return_value.publish_execution.return_value = {}
 
     ratings_example_gen = (ingest_movie_lens_component( \
       infiles_dict_ser=infiles_dict_ser, \
@@ -127,7 +124,7 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
                      self.get_temp_dir()), self._testMethodName)
     print(f'alt_output_data_dir={alt_output_data_dir}')
 
-    ENABLE_CACHE = False;
+    ENABLE_CACHE = False
 
     if not ENABLE_CACHE:
       if os.path.exists(METADATA_PATH):
@@ -149,7 +146,9 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
 
     tfx.orchestration.LocalDagRunner().run(my_pipeline)
 
-    mock_publisher.return_value.publish_execution.assert_called_once()
+    # creates output_examples.uri=
+    # PIPELINE_ROOT/ingest_movie_lens_component/output_examples/1
+    #which is PIPELINE_ROOT/<executor_name>/output_examples/1
 
     # Check output paths.
     self.assertTrue(fileio.exists(os.path.join(PIPELINE_ROOT, ratings_example_gen.id)))
@@ -158,8 +157,8 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
       print(f'key={key}, value={value}')
 
     #list files in alt_output_data_dir and in output_data_dir
-    print(f'listing files in output_data_dir {output_data_dir}:')
-    for dirname, _, filenames in os.walk(output_data_dir):
+    print(f'listing files in PIPELINE_ROOT {PIPELINE_ROOT}:')
+    for dirname, _, filenames in os.walk(PIPELINE_ROOT):
       for filename in filenames:
         print(os.path.join(dirname, filename))
 
