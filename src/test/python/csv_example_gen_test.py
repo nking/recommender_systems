@@ -56,7 +56,6 @@ class CSVExampleGenTest(tf.test.TestCase):
     _fln2 = users_uri
     command = "LC_ALL=UTF8 sed 's/::/,/g' " + _fln + " > " + _fln2
     os.system(command)
-    shutil.copy(_fln2, _fln)
     self.assertTrue(os.path.exists(users_uri))
 
     mock_publisher.return_value.publish_execution.return_value = {}
