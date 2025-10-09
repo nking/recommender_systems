@@ -1,4 +1,3 @@
-from unittest import mock
 import apache_beam as beam
 from apache_beam.testing.util import assert_that, is_not_empty, equal_to
 
@@ -7,7 +6,6 @@ from tfx.dsl.components.base import executor_spec
 from tfx.dsl.io import fileio
 from tfx.orchestration import data_types
 from tfx.orchestration import metadata
-from tfx.orchestration import publisher
 from tfx.orchestration.launcher import in_process_component_launcher
 from tfx.proto import example_gen_pb2
 from tfx.utils import name_utils
@@ -75,8 +73,7 @@ class IngestMovieLensBeamTest(tf.test.TestCase):
 
     self.name = 'test run of ingest with tfx'
 
-  @mock.patch.object(publisher, 'Publisher')
-  def testRun2(self, mock_publisher):
+  def testRun2(self):
 
     expected_schema_cols = [ \
       ("user_id", int), ("movie_id", int), ("rating", int), ("timestamp", int),\
