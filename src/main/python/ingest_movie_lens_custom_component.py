@@ -60,7 +60,9 @@ class IngestMovieLensExecutorSpec(ComponentSpec):
     # create an instance of this component.
     'name': ExecutionParameter(type=Text),
     'infiles_dict_ser' : ExecutionParameter(type=Text),
-    'output_config': ExecutionParameter(type=example_gen_pb2.Output, use_proto=True),
+    #output_config has to be string serialzied because the orchestrator uses pickle to save it
+    #'output_config': ExecutionParameter(type=example_gen_pb2.Output, use_proto=True),
+    'output_config_ser': ExecutionParameter(type=Text),
     #output_config should include split_config
   }
   INPUTS = {
@@ -123,7 +125,7 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
     :param exec_properties: is a json string serialized dictionary holding:
       key = infiles_dict_ser which is a json serialization of the
         infiles_dict
-      key = output_config which must contain split_config
+      key = output_config_ser which is string serialized and must contain split_config
     :param output_dict:
     :return:  tuple of (
       a dictionary of the merged, split data as keys=name, values
@@ -146,7 +148,8 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       >> input_to_examples(exec_properties)
 
     try:
-      output_config = exec_properties['output_config']
+      output_config_ser = exec_properties['output_config_ser']
+      output_config = deserialize_to_proto(output_config_ser)
     except Exception as ex:
       logging.error(f"ERROR: {ex}")
       raise ValueError(ex)
@@ -253,17 +256,13 @@ class IngestMovieLensComponent(base_beam_component.BaseBeamComponent):
   def __init__(self,\
     name : Optional[Text],
     infiles_dict_ser : Text,\
-    output_config : example_gen_pb2.Output, \
+    output_config_ser : Text,\
     output_examples : Optional[types.Channel] = None):
 
     logging.debug(f'DEBUG IngestMovieLensComponent init')
 
-    if not output_config or not output_config.HasField('split_config') \
-      or not output_config.split_config.splits: #no access errors if splits doesn't exist
-      raise ValueError("ERROR:  output_config is missing split_config"
-                       f" output_config={output_config}")
-
     if not output_examples:
+      output_config = deserialize_to_proto(output_config_ser)
       split_names = [split.name for split in output_config.split_config.splits]
       examples_artifact = standard_artifacts.Examples()
       examples_artifact.splits = split_names
@@ -272,7 +271,7 @@ class IngestMovieLensComponent(base_beam_component.BaseBeamComponent):
     spec = IngestMovieLensExecutorSpec(
       name=name, \
       infiles_dict_ser=infiles_dict_ser, \
-      output_config=output_config,\
+      output_config_ser=output_config_ser,\
       output_examples=output_examples)
 
     #super().__init__(spec=spec)

@@ -220,14 +220,11 @@ def create_schema_pb2(column_name_type_list: List[Tuple[str, Any]]) -> schema_pb
 
 # ========== partition functions ============
 
-#from ht_generate_partition_keytps://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/components/example_gen/base_example_gen_executor.py
+#from _generate_partition_key https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/components/example_gen/base_example_gen_executor.py
 def _generate_partition_key(record: Union[tf.train.Example,\
   tf.train.SequenceExample, bytes, Dict[str, Any]], \
   split_config: example_gen_pb2.SplitConfig) -> bytes:
   """Generates key for partition."""
-
-  logging.debug(f"in _generate_partition_key: split_config={split_config}")
-
   if not split_config.HasField('partition_feature_name'):
     if isinstance(record, bytes):
       return record

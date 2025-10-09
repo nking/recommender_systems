@@ -111,7 +111,7 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
     ratings_example_gen = IngestMovieLensComponent( \
       name=name,\
       infiles_dict_ser=serialize_to_string(self.infiles_dict), \
-      output_config=self.output_config)
+      output_config_ser=serialize_proto_to_string(self.output_config))
 
     components = [ratings_example_gen]
 
@@ -158,6 +158,9 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
       metadata_connection_config=metadata_connection_config,
       #beam_pipeline_args=beam_pipeline_args,
     )
+
+    #LocalDagRunner is trying to pickle arguments of the components,
+    #  so output_config
 
     tfx.orchestration.LocalDagRunner().run(my_pipeline)
 
@@ -265,7 +268,7 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
     output_dict = {'output_examples':output_examples}
     exec_properties = {'name': 'IngestMovieLensExecutor',
       'infiles_dict_ser':serialize_to_string(self.infiles_dict),
-      'output_config': self.output_config}
+      'output_config_ser': serialize_proto_to_string(self.output_config)}
     ratings_example_gen = IngestMovieLensExecutor()
     ratings_example_gen.Do({}, output_dict, exec_properties)
 
