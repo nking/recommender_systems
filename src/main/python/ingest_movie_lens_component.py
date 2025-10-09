@@ -5,7 +5,6 @@ import time
 import pickle
 import base64
 import random
-import os
 
 import apache_beam as beam
 from tfx.types import standard_artifacts, artifact_utils, standard_component_specs
@@ -143,13 +142,11 @@ def ingest_movie_lens_component( \
     DEFAULT_FILE_NAME = 'data_tfrecord'
     # write to TFRecords
     for split_name, example in ratings_dict.items():
-      #prefix_path = f'{output_uri}/Split-{split_name}'
-      prefix_path = os.path.join(output_uri, split_name)
-      logging.debug(f"prefix_path={prefix_path}")
+      file_prefix = f'{output_uri}/Split-{split_name}/{DEFAULT_FILE_NAME}'
+      logging.debug(f"file_prefix={file_prefix}")
       example | f"Serialize_{random.randint(0, 1000000000000)}" \
       >> beam.Map(lambda x: x.SerializeToString()) \
       | f"write_to_tfrecord_{random.randint(0, 1000000000000)}" \
       >> beam.io.tfrecordio.WriteToTFRecord( \
-      os.path.join(prefix_path, DEFAULT_FILE_NAME), \
-      file_name_suffix = '.gz')
+      file_prefix, file_name_suffix = '.gz')
     logging.info('output_examples written as TFRecords')

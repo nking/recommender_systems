@@ -4,7 +4,6 @@ import absl
 import pprint
 import time
 import random
-import os
 
 from typing import Any, Dict, List, Text, Optional, Union, Tuple
 
@@ -212,8 +211,8 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       logging.debug(f"output_examples TYPE={type(output_examples)}")
       logging.debug(f"output_examples={output_examples}")
 
-      if isinstance(output_dict['output_examples'], list):
-        output_uri = artifact_utils.get_single_instance(output_dict['output_examples']).uri
+      if isinstance(output_examples, list):
+        output_uri = artifact_utils.get_single_instance(output_examples).uri
       else:
         output_uri = output_examples.uri
 
@@ -239,14 +238,13 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       DEFAULT_FILE_NAME = 'data_tfrecord'
       # write to TFRecords
       for split_name, example in ratings_dict.items():
-        prefix_path = os.path.join(output_uri, split_name)
-        logging.debug(f"prefix_path={prefix_path}")
+        file_prefix = f'{output_uri}/Split-{split_name}/{DEFAULT_FILE_NAME}'
+        logging.debug(f"file_prefix={file_prefix}")
         example | f"Serialize_{random.randint(0, 1000000000000)}" \
-          >> beam.Map(lambda x: x.SerializeToString()) \
-          | f"write_to_tfrecord_{random.randint(0, 1000000000000)}" \
-          >> beam.io.tfrecordio.WriteToTFRecord( \
-          os.path.join(prefix_path, DEFAULT_FILE_NAME), \
-          file_name_suffix='.gz')
+        >> beam.Map(lambda x: x.SerializeToString()) \
+        | f"write_to_tfrecord_{random.randint(0, 1000000000000)}" \
+        >> beam.io.tfrecordio.WriteToTFRecord( \
+        file_prefix, file_name_suffix='.gz')
       logging.info('output_examples written as TFRecords')
       # no return
 
