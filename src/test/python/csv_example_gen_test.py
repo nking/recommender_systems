@@ -53,8 +53,7 @@ class CSVExampleGenTest(tf.test.TestCase):
     #the moview.dat title field has commas
      #replace delimiters in users2.dat '_'
     _fln = f"{prefix}users.dat"
-    _fln2 = users_uri
-    command = "LC_ALL=UTF8 sed 's/::/,/g' " + _fln + " > " + _fln2
+    command = "LC_ALL=UTF8 sed 's/::/,/g' " + _fln + " > " + users_uri
     os.system(command)
     self.assertTrue(os.path.exists(users_uri))
 
