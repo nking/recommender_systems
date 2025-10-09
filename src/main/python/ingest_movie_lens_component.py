@@ -136,17 +136,18 @@ def ingest_movie_lens_component( \
     #output_examples.set_string_custom_property('description',\
     #  'ratings file created from left join of ratings, users, movies')
 
-    ratings_dict = {split_name: example for split_name, example in
-              zip(ratings_tuple, split_names)}
+    ratings_dict = {}
+    for index, example_split in enumerate(ratings_tuple):
+      ratings_dict[split_names[index]] = example_split
 
     DEFAULT_FILE_NAME = 'data_tfrecord'
     # write to TFRecords
-    for split_name, example in ratings_dict.items():
-      file_prefix = f'{output_uri}/Split-{split_name}/{DEFAULT_FILE_NAME}'
-      logging.debug(f"file_prefix={file_prefix}")
+    for name, example in ratings_dict.items():
+      prefix_path = f'{output_uri}/Split-{name}'
+      logging.debug(f"prefix_path={prefix_path}")
       example | f"Serialize_{random.randint(0, 1000000000000)}" \
       >> beam.Map(lambda x: x.SerializeToString()) \
       | f"write_to_tfrecord_{random.randint(0, 1000000000000)}" \
       >> beam.io.tfrecordio.WriteToTFRecord( \
-      file_prefix, file_name_suffix = '.gz')
+        file_path_prefix=prefix_path, file_name_suffix='.tfrecord')
     logging.info('output_examples written as TFRecords')
