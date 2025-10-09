@@ -234,15 +234,16 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       #could use WriteSplit method instead:
       #https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/components/example_gen/base_example_gen_executor.py#L281
 
+      DEFAULT_TF_RECORD_FILE_NAME = 'data_tfrecord'
       # write to TFRecords
       for name, example in ratings_dict.items():
-        prefix_path = f'{output_uri}/Split-{name}'
+        prefix_path = f'{output_uri}/Split-{name}/{DEFAULT_TF_RECORD_FILE_NAME}'
         logging.debug(f"prefix_path={prefix_path}")
         example | f"Serialize_{random.randint(0, 1000000000000)}" \
           >> beam.Map(lambda x: x.SerializeToString()) \
           | f"write_to_tfrecord_{random.randint(0, 1000000000000)}" \
           >> beam.io.tfrecordio.WriteToTFRecord( \
-          file_path_prefix=prefix_path, file_name_suffix='.tfrecord')
+          file_path_prefix=prefix_path, file_name_suffix='.gz')
       logging.info('output_examples written as TFRecords')
       # no return
 
