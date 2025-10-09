@@ -62,7 +62,7 @@ class IngestMovieLensExecutorSpec(ComponentSpec):
     # create an instance of this component.
     'name': ExecutionParameter(type=Text),
     'infiles_dict_ser' : ExecutionParameter(type=Text),
-    'output_config': ExecutionParameter(type=example_gen_pb2, use_proto=True),
+    'output_config': ExecutionParameter(type=example_gen_pb2.Output, use_proto=True),
     #output_config should include split_config
   }
   INPUTS = {
@@ -272,7 +272,8 @@ class IngestMovieLensComponent(base_beam_component.BaseBeamComponent):
       output_examples = channel_utils.as_channel([examples_artifact])
 
     spec = IngestMovieLensExecutorSpec(
-      name=name, infiles_dict_ser=infiles_dict_ser, \
+      name=name, \
+      infiles_dict_ser=infiles_dict_ser, \
       output_config=output_config,\
       output_examples=output_examples)
 
