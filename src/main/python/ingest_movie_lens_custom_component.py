@@ -162,10 +162,7 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       logging.error(f"ERROR: {ex}")
       raise ValueError(ex)
 
-    logging.debug(
-      f"DEBUG: output_config={output_config}")
-
-    if not split_config in output_config or not splits in \
+    if not 'split_config' in output_config or not 'splits' in \
       output_config.split_config:
       raise ValueError("parameters must include output_config which"
         f" must contain split_config.  output_config={output_config}")
@@ -271,11 +268,10 @@ class IngestMovieLensComponent(base_beam_component.BaseBeamComponent):
 
     print(f'DEBUG IngestMovieLensComponent init')
 
-    if not output_config or not split_config in output_config or not splits in \
-      output_config.split_config.splits:
-      logging.error(f"output_config={output_config}")
-      raise ValueError("parameters must include output_config which"
-                       " must contain split_config")
+    if not output_config or not 'split_config' in output_config or not 'splits' in \
+      output_config.split_config:
+      raise ValueError("ERROR:  output_config is missing split_config"
+                       f" output_config={output_config}")
 
     if not output_examples:
       split_names = [split.name for split in output_config.split_config.splits]
