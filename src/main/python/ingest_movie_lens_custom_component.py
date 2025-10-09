@@ -3,8 +3,6 @@ import apache_beam as beam
 import absl
 import pprint
 import time
-import pickle
-import base64
 import random
 
 from typing import Any, Dict, List, Text, Optional, Union, Tuple
@@ -239,7 +237,7 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
 
         example | f"Serialize_{random.randint(0, 1000000000000)}" \
           >> beam.Map(lambda x: x.SerializeToString()) \
-          | f"write_to_tf_{random.randint(0, 1000000000000)}" \
+          | f"write_to_tfrecord_{random.randint(0, 1000000000000)}" \
           >> beam.io.tfrecordio.WriteToTFRecord( \
           file_path_prefix=prefix_path, file_name_suffix='.tfrecord')
       logging.info(
@@ -258,7 +256,7 @@ class IngestMovieLensComponent(base_beam_component.BaseBeamComponent):
     output_config : example_gen_pb2.Output, \
     output_examples : Optional[types.Channel] = None):
 
-    print(f'DEBUG IngestMovieLensComponent init')
+    logging.debug(f'DEBUG IngestMovieLensComponent init')
 
     if not output_config or not output_config.HasField('split_config') \
       or not output_config.split_config.splits: #no access errors if splits doesn't exist

@@ -1,0 +1,688 @@
+INFO:absl:Using deployment config:
+ executor_specs {
+  key: "IngestMovieLensComponent"
+  value {
+    beam_executable_spec {
+      python_executor_spec {
+	class_path:
+"ingest_movie_lens_custom_component.IngestMovieLensExecutor"
+      }
+    }
+  }
+}
+metadata_connection_config {
+  database_connection_config {
+    sqlite {
+      filename_uri:
+"/kaggle/working/bin/fully_custom_comp_1/testRun2/TestFullyCustomCompPipeline/tfx_metadata/metadata.db"
+      connection_mode: READWRITE_OPENCREATE
+    }
+  }
+}
+
+INFO:absl:Using connection config:
+ sqlite {
+  filename_uri:
+"/kaggle/working/bin/fully_custom_comp_1/testRun2/TestFullyCustomCompPipeline/tfx_metadata/metadata.db"
+  connection_mode: READWRITE_OPENCREATE
+}
+
+INFO:absl:Component IngestMovieLensComponent is running.
+INFO:absl:Running launcher for node_info {
+  type {
+    name: "ingest_movie_lens_custom_component.IngestMovieLensComponent"
+  }
+  id: "IngestMovieLensComponent"
+}
+contexts {
+  contexts {
+    type {
+      name: "pipeline"
+    }
+    name {
+      field_value {
+	string_value: "TestFullyCustomCompPipeline"
+      }
+    }
+  }
+  contexts {
+    type {
+      name: "pipeline_run"
+    }
+    name {
+      field_value {
+	string_value: "2025-10-09T18:07:27.620266"
+      }
+    }
+  }
+  contexts {
+    type {
+      name: "node"
+    }
+    name {
+      field_value {
+	string_value:
+"TestFullyCustomCompPipeline.IngestMovieLensComponent"
+      }
+    }
+  }
+}
+outputs {
+  outputs {
+    key: "output_examples"
+    value {
+      artifact_spec {
+	type {
+	  name: "Examples"
+	  properties {
+	    key: "span"
+	    value: INT
+	  }
+	  properties {
+	    key: "split_names"
+	    value: STRING
+	  }
+	  properties {
+	    key: "version"
+	    value: INT
+	  }
+	  base_type: DATASET
+	}
+      }
+    }
+  }
+}
+parameters {
+  parameters {
+    key: "infiles_dict_ser"
+    value {
+      field_value {
+	string_value:
+"gASVCQIAAAAAAAB9lCiMB3JhdGluZ3OUfZQojARjb2xzlH2UKIwHdXNlcl9pZJR9lCiMBWluZGV4lEsAjAR0eXBllIwIYnVpbHRpbnOUjANpbnSUk5R1jAhtb3ZpZV9pZJR9lChoB0sBaAhoC3WMBnJhdGluZ5R9lChoB0sCaAhoC3WMCXRpbWVzdGFtcJR9lChoB0sDaAhoC3V1jAN1cmmUjCEva2FnZ2xlL3dvcmtpbmcvbWwtMW0vcmF0aW5ncy5kYXSUjA9oZWFkZXJzX3ByZXNlbnSUiYwFZGVsaW2UjAI6OpR1jAZtb3ZpZXOUfZQoaAN9lChoDH2UKGgHSwBoCGgLdYwFdGl0bGWUfZQoaAdLAWgIaAmMA3N0cpSTlHWMBmdlbnJlc5R9lChoB0sCaAhoHnV1aBKMIC9rYWdnbGUvd29ya2luZy9tbC0xbS9tb3ZpZXMuZGF0lGgUiWgVaBZ1jAV1c2Vyc5R9lChoA32UKGgFfZQoaAdLAGgIaAt1jAZnZW5kZXKUfZQoaAdLAWgIaB51jANhZ2WUfZQoaAdLAmgIaAt1jApvY2N1cGF0aW9ulH2UKGgHSwNoCGgLdYwHemlwY29kZZR9lChoB0sEaAhoHnV1aBKMHy9rYWdnbGUvd29ya2luZy9tbC0xbS91c2Vycy5kYXSUaBSJaBVoFnWMB3ZlcnNpb26USwF1Lg=="
+      }
+    }
+  }
+  parameters {
+    key: "name"
+    value {
+      field_value {
+	string_value: "test_fully_custom_component"
+      }
+    }
+  }
+  parameters {
+    key: "output_config"
+    value {
+      placeholder {
+	operator {
+	  make_proto_op {
+	    base {
+	      type_url:
+"type.googleapis.com/tfx.components.example_gen.Output"
+	      value:
+"\032\037\n\t\n\005train\020P\n\010\n\004eval\020\n\n\010\n\004test\020\n"
+	    }
+	    file_descriptors {
+	      file {
+		name: "tfx/proto/example_gen.proto"
+		package: "tfx.components.example_gen"
+		message_type {
+		  name: "Output"
+		  field {
+		    name: "split_config"
+		    number: 3
+		    label: LABEL_OPTIONAL
+		    type: TYPE_MESSAGE
+		    type_name:
+".tfx.components.example_gen.SplitConfig"
+		  }
+		  reserved_range {
+		    start: 1
+		    end: 2
+		  }
+		  reserved_range {
+		    start: 2
+		    end: 3
+		  }
+		  reserved_range {
+		    start: 4
+		    end: 5
+		  }
+		}
+		message_type {
+		  name: "SplitConfig"
+		  field {
+		    name: "splits"
+		    number: 1
+		    label: LABEL_REPEATED
+		    type: TYPE_MESSAGE
+		    type_name:
+".tfx.components.example_gen.SplitConfig.Split"
+		  }
+		  nested_type {
+		    name: "Split"
+		    field {
+		      name: "name"
+		      number: 1
+		      label: LABEL_OPTIONAL
+		      type: TYPE_STRING
+		    }
+		    field {
+		      name: "hash_buckets"
+		      number: 2
+		      label: LABEL_OPTIONAL
+		      type: TYPE_UINT32
+		    }
+		    reserved_range {
+		      start: 3
+		      end: 4
+		    }
+		  }
+		}
+		syntax: "proto3"
+	      }
+	    }
+	  }
+	}
+      }
+    }
+  }
+}
+execution_options {
+  caching_options {
+  }
+}
+
+INFO:absl:MetadataStore with DB connection initialized
+DEBUG:absl:ConnectionConfig: sqlite {
+  filename_uri:
+"/kaggle/working/bin/fully_custom_comp_1/testRun2/TestFullyCustomCompPipeline/tfx_metadata/metadata.db"
+  connection_mode: READWRITE_OPENCREATE
+}
+
+DEBUG:absl:Failed to get context of type pipeline and name
+TestFullyCustomCompPipeline
+DEBUG:absl:ID of context type {
+  name: "pipeline"
+}
+name {
+  field_value {
+    string_value: "TestFullyCustomCompPipeline"
+  }
+}
+ is 1.
+DEBUG:absl:Failed to get context of type pipeline_run and name
+2025-10-09T18:07:27.620266
+DEBUG:absl:ID of context type {
+  name: "pipeline_run"
+}
+name {
+  field_value {
+    string_value: "2025-10-09T18:07:27.620266"
+  }
+}
+ is 2.
+DEBUG:absl:Failed to get context of type node and name
+TestFullyCustomCompPipeline.IngestMovieLensComponent
+DEBUG:absl:ID of context type {
+  name: "node"
+}
+name {
+  field_value {
+    string_value:
+"TestFullyCustomCompPipeline.IngestMovieLensComponent"
+  }
+}
+ is 3.
+DEBUG:absl:Before conditional:
+{}
+DEBUG:absl:After conditional:
+{}
+INFO:absl:[IngestMovieLensComponent] Resolved inputs: ({},)
+DEBUG:absl:Prepared EXECUTION:
+ type_id: 13
+last_known_state: RUNNING
+custom_properties {
+  key: "__schema__output_config__"
+  value {
+    string_value: "{\n  \"value_type\": {\n    \"proto_type\": {\n
+\"file_descriptors\": {\n        \"file\": [\n          {\n
+\"message_type\": [\n              {\n                \"field\": [\n
+{\n                    \"label\": \"LABEL_OPTIONAL\",\n
+\"name\": \"split_config\",\n                    \"number\": 3,\n
+\"type\": \"TYPE_MESSAGE\",\n                    \"type_name\":
+\".tfx.components.example_gen.SplitConfig\"\n                  }\n
+],\n                \"name\": \"Output\",\n
+\"reserved_range\": [\n                  {\n
+\"end\": 2,\n                    \"start\": 1\n                  },\n
+{\n                    \"end\": 3,\n                    \"start\": 2\n
+},\n                  {\n                    \"end\": 5,\n
+\"start\": 4\n                  }\n                ]\n
+},\n              {\n                \"field\": [\n
+{\n                    \"label\": \"LABEL_REPEATED\",\n
+\"name\": \"splits\",\n                    \"number\": 1,\n
+\"type\": \"TYPE_MESSAGE\",\n                    \"type_name\":
+\".tfx.components.example_gen.SplitConfig.Split\"\n
+}\n                ],\n                \"name\": \"SplitConfig\",\n
+\"nested_type\": [\n                  {\n                    \"field\":
+[\n                      {\n                        \"label\":
+\"LABEL_OPTIONAL\",\n                        \"name\": \"name\",\n
+\"number\": 1,\n                        \"type\": \"TYPE_STRING\"\n
+},\n                      {\n                        \"label\":
+\"LABEL_OPTIONAL\",\n                        \"name\":
+\"hash_buckets\",\n                        \"number\": 2,\n
+\"type\": \"TYPE_UINT32\"\n                      }\n
+],\n                    \"name\": \"Split\",\n
+\"reserved_range\": [\n                      {\n
+\"end\": 4,\n                        \"start\": 3\n
+}\n                    ]\n                  }\n                ]\n
+}\n            ],\n            \"name\":
+\"tfx/proto/example_gen.proto\",\n            \"package\":
+\"tfx.components.example_gen\",\n            \"syntax\": \"proto3\"\n
+}\n        ]\n      },\n      \"message_type\":
+\"tfx.components.example_gen.Output\"\n    }\n  }\n}"
+  }
+}
+custom_properties {
+  key: "infiles_dict_ser"
+  value {
+    string_value:
+"gASVCQIAAAAAAAB9lCiMB3JhdGluZ3OUfZQojARjb2xzlH2UKIwHdXNlcl9pZJR9lCiMBWluZGV4lEsAjAR0eXBllIwIYnVpbHRpbnOUjANpbnSUk5R1jAhtb3ZpZV9pZJR9lChoB0sBaAhoC3WMBnJhdGluZ5R9lChoB0sCaAhoC3WMCXRpbWVzdGFtcJR9lChoB0sDaAhoC3V1jAN1cmmUjCEva2FnZ2xlL3dvcmtpbmcvbWwtMW0vcmF0aW5ncy5kYXSUjA9oZWFkZXJzX3ByZXNlbnSUiYwFZGVsaW2UjAI6OpR1jAZtb3ZpZXOUfZQoaAN9lChoDH2UKGgHSwBoCGgLdYwFdGl0bGWUfZQoaAdLAWgIaAmMA3N0cpSTlHWMBmdlbnJlc5R9lChoB0sCaAhoHnV1aBKMIC9rYWdnbGUvd29ya2luZy9tbC0xbS9tb3ZpZXMuZGF0lGgUiWgVaBZ1jAV1c2Vyc5R9lChoA32UKGgFfZQoaAdLAGgIaAt1jAZnZW5kZXKUfZQoaAdLAWgIaB51jANhZ2WUfZQoaAdLAmgIaAt1jApvY2N1cGF0aW9ulH2UKGgHSwNoCGgLdYwHemlwY29kZZR9lChoB0sEaAhoHnV1aBKMHy9rYWdnbGUvd29ya2luZy9tbC0xbS91c2Vycy5kYXSUaBSJaBVoFnWMB3ZlcnNpb26USwF1Lg=="
+  }
+}
+custom_properties {
+  key: "name"
+  value {
+    string_value: "test_fully_custom_component"
+  }
+}
+custom_properties {
+  key: "output_config"
+  value {
+    string_value: "{\n  \"split_config\": {\n    \"splits\": [\n
+{\n        \"hash_buckets\": 80,\n        \"name\": \"train\"\n
+},\n      {\n        \"hash_buckets\": 10,\n        \"name\":
+\"eval\"\n      },\n      {\n        \"hash_buckets\": 10,\n
+\"name\": \"test\"\n      }\n    ]\n  }\n}"
+  }
+}
+name: "e62b631c-ae83-4172-99d5-871f5dafde58"
+
+DEBUG:absl:Creating output artifact uri
+/kaggle/working/bin/fully_custom_comp_1/testRun2/TestFullyCustomCompPipeline/IngestMovieLensComponent/output_examples/1
+INFO:absl:MetadataStore with DB connection initialized
+DEBUG:absl:ConnectionConfig: sqlite {
+  filename_uri:
+"/kaggle/working/bin/fully_custom_comp_1/testRun2/TestFullyCustomCompPipeline/tfx_metadata/metadata.db"
+  connection_mode: READWRITE_OPENCREATE
+}
+
+DEBUG:absl:Failed to get context of type execution_cache and name
+ed1358e28ffb4437362a6cb02a3ab46438c65efeecbd5ff1d26af6f1b56075dd
+DEBUG:absl:ID of context type {
+  name: "execution_cache"
+}
+name {
+  field_value {
+    string_value:
+"ed1358e28ffb4437362a6cb02a3ab46438c65efeecbd5ff1d26af6f1b56075dd"
+  }
+}
+ is 4.
+INFO:absl:Going to run a new execution 1
+WARNING: All log messages before absl::InitializeLog() is called are
+written to STDERR
+I0000 00:00:1760033247.833375     691 chttp2_server.cc:712] WARNING:
+UNKNOWN:Only 1 addresses added out of total 2 resolved
+{children:[UNKNOWN:socket: Address family not supported by protocol
+(97)]}
+INFO:absl:Going to run a new execution: ExecutionInfo(execution_id=1,
+input_dict={}, output_dict=defaultdict(<class 'list'>,
+{'output_examples': [Artifact(artifact: uri:
+"/kaggle/working/bin/fully_custom_comp_1/testRun2/TestFullyCustomCompPipeline/IngestMovieLensComponent/output_examples/1"
+, artifact_type: name: "Examples"
+properties {
+  key: "span"
+  value: INT
+}
+properties {
+  key: "split_names"
+  value: STRING
+}
+properties {
+  key: "version"
+  value: INT
+}
+base_type: DATASET
+)]}), exec_properties={'name': 'test_fully_custom_component',
+'infiles_dict_ser':
+'gASVCQIAAAAAAAB9lCiMB3JhdGluZ3OUfZQojARjb2xzlH2UKIwHdXNlcl9pZJR9lCiMBWluZGV4lEsAjAR0eXBllIwIYnVpbHRpbnOUjANpbnSUk5R1jAhtb3ZpZV9pZJR9lChoB0sBaAhoC3WMBnJhdGluZ5R9lChoB0sCaAhoC3WMCXRpbWVzdGFtcJR9lChoB0sDaAhoC3V1jAN1cmmUjCEva2FnZ2xlL3dvcmtpbmcvbWwtMW0vcmF0aW5ncy5kYXSUjA9oZWFkZXJzX3ByZXNlbnSUiYwFZGVsaW2UjAI6OpR1jAZtb3ZpZXOUfZQoaAN9lChoDH2UKGgHSwBoCGgLdYwFdGl0bGWUfZQoaAdLAWgIaAmMA3N0cpSTlHWMBmdlbnJlc5R9lChoB0sCaAhoHnV1aBKMIC9rYWdnbGUvd29ya2luZy9tbC0xbS9tb3ZpZXMuZGF0lGgUiWgVaBZ1jAV1c2Vyc5R9lChoA32UKGgFfZQoaAdLAGgIaAt1jAZnZW5kZXKUfZQoaAdLAWgIaB51jANhZ2WUfZQoaAdLAmgIaAt1jApvY2N1cGF0aW9ulH2UKGgHSwNoCGgLdYwHemlwY29kZZR9lChoB0sEaAhoHnV1aBKMHy9rYWdnbGUvd29ya2luZy9tbC0xbS91c2Vycy5kYXSUaBSJaBVoFnWMB3ZlcnNpb26USwF1Lg==', 'output_config': split_config {
+  splits {
+    name: "train"
+    hash_buckets: 80
+  }
+  splits {
+    name: "eval"
+    hash_buckets: 10
+  }
+  splits {
+    name: "test"
+    hash_buckets: 10
+  }
+}
+},
+execution_output_uri='/kaggle/working/bin/fully_custom_comp_1/testRun2/TestFullyCustomCompPipeline/IngestMovieLensComponent/.system/executor_execution/1/executor_output.pb',
+stateful_working_dir='/kaggle/working/bin/fully_custom_comp_1/testRun2/TestFullyCustomCompPipeline/IngestMovieLensComponent/.system/stateful_working_dir/1d091bea-ff2f-40cd-9656-4bd326976828',
+tmp_dir='/kaggle/working/bin/fully_custom_comp_1/testRun2/TestFullyCustomCompPipeline/IngestMovieLensComponent/.system/executor_execution/1/.temp/',
+pipeline_node=node_info {
+  type {
+    name: "ingest_movie_lens_custom_component.IngestMovieLensComponent"
+  }
+  id: "IngestMovieLensComponent"
+}
+contexts {
+  contexts {
+    type {
+      name: "pipeline"
+    }
+    name {
+      field_value {
+	string_value: "TestFullyCustomCompPipeline"
+      }
+    }
+  }
+  contexts {
+    type {
+      name: "pipeline_run"
+    }
+    name {
+      field_value {
+	string_value: "2025-10-09T18:07:27.620266"
+      }
+    }
+  }
+  contexts {
+    type {
+      name: "node"
+    }
+    name {
+      field_value {
+	string_value:
+"TestFullyCustomCompPipeline.IngestMovieLensComponent"
+      }
+    }
+  }
+}
+outputs {
+  outputs {
+    key: "output_examples"
+    value {
+      artifact_spec {
+	type {
+	  name: "Examples"
+	  properties {
+	    key: "span"
+	    value: INT
+	  }
+	  properties {
+	    key: "split_names"
+	    value: STRING
+	  }
+	  properties {
+	    key: "version"
+	    value: INT
+	  }
+	  base_type: DATASET
+	}
+      }
+    }
+  }
+}
+parameters {
+  parameters {
+    key: "infiles_dict_ser"
+    value {
+      field_value {
+	string_value:
+"gASVCQIAAAAAAAB9lCiMB3JhdGluZ3OUfZQojARjb2xzlH2UKIwHdXNlcl9pZJR9lCiMBWluZGV4lEsAjAR0eXBllIwIYnVpbHRpbnOUjANpbnSUk5R1jAhtb3ZpZV9pZJR9lChoB0sBaAhoC3WMBnJhdGluZ5R9lChoB0sCaAhoC3WMCXRpbWVzdGFtcJR9lChoB0sDaAhoC3V1jAN1cmmUjCEva2FnZ2xlL3dvcmtpbmcvbWwtMW0vcmF0aW5ncy5kYXSUjA9oZWFkZXJzX3ByZXNlbnSUiYwFZGVsaW2UjAI6OpR1jAZtb3ZpZXOUfZQoaAN9lChoDH2UKGgHSwBoCGgLdYwFdGl0bGWUfZQoaAdLAWgIaAmMA3N0cpSTlHWMBmdlbnJlc5R9lChoB0sCaAhoHnV1aBKMIC9rYWdnbGUvd29ya2luZy9tbC0xbS9tb3ZpZXMuZGF0lGgUiWgVaBZ1jAV1c2Vyc5R9lChoA32UKGgFfZQoaAdLAGgIaAt1jAZnZW5kZXKUfZQoaAdLAWgIaB51jANhZ2WUfZQoaAdLAmgIaAt1jApvY2N1cGF0aW9ulH2UKGgHSwNoCGgLdYwHemlwY29kZZR9lChoB0sEaAhoHnV1aBKMHy9rYWdnbGUvd29ya2luZy9tbC0xbS91c2Vycy5kYXSUaBSJaBVoFnWMB3ZlcnNpb26USwF1Lg=="
+      }
+    }
+  }
+  parameters {
+    key: "name"
+    value {
+      field_value {
+	string_value: "test_fully_custom_component"
+      }
+    }
+  }
+  parameters {
+    key: "output_config"
+    value {
+      placeholder {
+	operator {
+	  make_proto_op {
+	    base {
+	      type_url:
+"type.googleapis.com/tfx.components.example_gen.Output"
+	      value:
+"\032\037\n\t\n\005train\020P\n\010\n\004eval\020\n\n\010\n\004test\020\n"
+	    }
+	    file_descriptors {
+	      file {
+		name: "tfx/proto/example_gen.proto"
+		package: "tfx.components.example_gen"
+		message_type {
+		  name: "Output"
+		  field {
+		    name: "split_config"
+		    number: 3
+		    label: LABEL_OPTIONAL
+		    type: TYPE_MESSAGE
+		    type_name:
+".tfx.components.example_gen.SplitConfig"
+		  }
+		  reserved_range {
+		    start: 1
+		    end: 2
+		  }
+		  reserved_range {
+		    start: 2
+		    end: 3
+		  }
+		  reserved_range {
+		    start: 4
+		    end: 5
+		  }
+		}
+		message_type {
+		  name: "SplitConfig"
+		  field {
+		    name: "splits"
+		    number: 1
+		    label: LABEL_REPEATED
+		    type: TYPE_MESSAGE
+		    type_name:
+".tfx.components.example_gen.SplitConfig.Split"
+		  }
+		  nested_type {
+		    name: "Split"
+		    field {
+		      name: "name"
+		      number: 1
+		      label: LABEL_OPTIONAL
+		      type: TYPE_STRING
+		    }
+		    field {
+		      name: "hash_buckets"
+		      number: 2
+		      label: LABEL_OPTIONAL
+		      type: TYPE_UINT32
+		    }
+		    reserved_range {
+		      start: 3
+		      end: 4
+		    }
+		  }
+		}
+		syntax: "proto3"
+	      }
+	    }
+	  }
+	}
+      }
+    }
+  }
+}
+execution_options {
+  caching_options {
+  }
+}
+, pipeline_info=id: "TestFullyCustomCompPipeline"
+, pipeline_run_id='2025-10-09T18:07:27.620266',
+top_level_pipeline_run_id=None, frontend_url=None)
+DEBUG:absl:in IngestMovieLensExecutor.Do
+DEBUG:absl:in IngestMovieLensExecutor.GenerateExamplesByBeam
+DEBUG:absl:about to read input and transform to tf.train.Example
+DEBUG:absl:infiles_dict_ser=gASVCQIAAAAAAAB9lCiMB3JhdGluZ3OUfZQojARjb2xzlH2UKIwHdXNlcl9pZJR9lCiMBWluZGV4lEsAjAR0eXBllIwIYnVpbHRpbnOUjANpbnSUk5R1jAhtb3ZpZV9pZJR9lChoB0sBaAhoC3WMBnJhdGluZ5R9lChoB0sCaAhoC3WMCXRpbWVzdGFtcJR9lChoB0sDaAhoC3V1jAN1cmmUjCEva2FnZ2xlL3dvcmtpbmcvbWwtMW0vcmF0aW5ncy5kYXSUjA9oZWFkZXJzX3ByZXNlbnSUiYwFZGVsaW2UjAI6OpR1jAZtb3ZpZXOUfZQoaAN9lChoDH2UKGgHSwBoCGgLdYwFdGl0bGWUfZQoaAdLAWgIaAmMA3N0cpSTlHWMBmdlbnJlc5R9lChoB0sCaAhoHnV1aBKMIC9rYWdnbGUvd29ya2luZy9tbC0xbS9tb3ZpZXMuZGF0lGgUiWgVaBZ1jAV1c2Vyc5R9lChoA32UKGgFfZQoaAdLAGgIaAt1jAZnZW5kZXKUfZQoaAdLAWgIaB51jANhZ2WUfZQoaAdLAmgIaAt1jApvY2N1cGF0aW9ulH2UKGgHSwNoCGgLdYwHemlwY29kZZR9lChoB0sEaAhoHnV1aBKMHy9rYWdnbGUvd29ya2luZy9tbC0xbS91c2Vycy5kYXSUaBSJaBVoFnWMB3ZlcnNpb26USwF1Lg==
+infiles_dict={'ratings': {'cols': {'user_id': {'index': 0, 'type':
+<class 'int'>}, 'movie_id': {'index': 1, 'type': <class 'int'>},
+'rating': {'index': 2, 'type': <class 'int'>}, 'timestamp': {'index':
+3, 'type': <class 'int'>}}, 'uri': '/kaggle/working/ml-1m/ratings.dat',
+'headers_present': False, 'delim': '::'}, 'movies': {'cols':
+{'movie_id': {'index': 0, 'type': <class 'int'>}, 'title': {'index': 1,
+'type': <class 'str'>}, 'genres': {'index': 2, 'type': <class 'str'>}},
+'uri': '/kaggle/working/ml-1m/movies.dat', 'headers_present': False,
+'delim': '::'}, 'users': {'cols': {'user_id': {'index': 0, 'type':
+<class 'int'>}, 'gender': {'index': 1, 'type': <class 'str'>}, 'age':
+{'index': 2, 'type': <class 'int'>}, 'occupation': {'index': 3, 'type':
+<class 'int'>}, 'zipcode': {'index': 4, 'type': <class 'str'>}}, 'uri':
+'/kaggle/working/ml-1m/users.dat', 'headers_present': False, 'delim':
+'::'}, 'version': 1}
+DEBUG:absl:columns=[('user_id', <class 'int'>), ('movie_id', <class
+'int'>), ('rating', <class 'int'>), ('timestamp', <class 'int'>),
+('gender', <class 'str'>), ('age', <class 'int'>), ('occupation',
+<class 'int'>), ('genres', <class 'str'>)]
+T4: <class 'SplitConfig'>
+INFO:dill:T4: <class 'SplitConfig'>
+INFO:absl:MetadataStore with DB connection initialized
+DEBUG:absl:ConnectionConfig: sqlite {
+  filename_uri:
+"/kaggle/working/bin/fully_custom_comp_1/testRun2/TestFullyCustomCompPipeline/tfx_metadata/metadata.db"
+  connection_mode: READWRITE_OPENCREATE
+}
+
+ERROR:absl:Execution 1 failed.
+INFO:absl:Cleaning up stateless execution info.
+Es
+======================================================================
+ERROR: testRun2
+(ingest_movie_lens_custom_component_test.IngestMovieLensCustomComponentTest)
+ingest_movie_lens_custom_component_test.IngestMovieLensCustomComponentTest.testRun2
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/kaggle/working/ingest_movie_lens_custom_component_test.py",
+line 160, in testRun2
+    tfx.orchestration.LocalDagRunner().run(my_pipeline)
+  File
+"/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tfx/orchestration/portable/tfx_runner.py",
+line 124, in run
+    return self.run_with_ir(pipeline_pb, run_options=run_options_pb,
+**kwargs)
+  File
+"/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tfx/orchestration/local/local_dag_runner.py",
+line 109, in run_with_ir
+    component_launcher.launch()
+  File
+"/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tfx/orchestration/portable/launcher.py",
+line 613, in launch
+    executor_output = self._run_executor(execution_info)
+  File
+"/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tfx/orchestration/portable/launcher.py",
+line 487, in _run_executor
+    executor_output =
+self._executor_operator.run_executor(execution_info)
+  File
+"/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tfx/orchestration/portable/beam_executor_operator.py",
+line 112, in run_executor
+    return python_executor_operator.run_with_executor(execution_info,
+executor)
+  File
+"/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tfx/orchestration/portable/python_executor_operator.py",
+line 84, in run_with_executor
+    result = executor.Do(
+  File "/kaggle/working/ingest_movie_lens_custom_component.py", line
+202, in Do
+    self.GenerateExamplesByBeam(pipeline, exec_properties, output_dict)
+
+  File "/kaggle/working/ingest_movie_lens_custom_component.py", line
+169, in GenerateExamplesByBeam
+
+    ratings_tuple = ratings_examples | f'split_{time.time_ns()}' >>
+beam.Partition( \
+  File
+"/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/transforms/ptransform.py",
+line 874, in __init__
+    self.args = pickler.loads(pickler.dumps(self.args))
+  File
+"/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/internal/pickler.py",
+line 43, in dumps
+    return desired_pickle_lib.dumps(
+  File
+"/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/internal/dill_pickler.py",
+line 380, in dumps
+    s = dill.dumps(o, byref=settings['dill_byref'])
+  File
+"/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/dill/_dill.py",
+line 265, in dumps
+    dump(obj, file, protocol, byref, fmode, recurse, **kwds)#,
+strictio)
+  File
+"/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/dill/_dill.py",
+line 259, in dump
+    Pickler(file, protocol, **_kwds).dump(obj)
+  File
+"/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/dill/_dill.py",
+line 445, in dump
+    StockPickler.dump(self, obj)
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/pickle.py", line 487,
+in dump
+    self.save(obj)
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/pickle.py", line 560,
+in save
+    f(self, obj)  # Call unbound method with explicit self
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/pickle.py", line 932,
+in save_list
+    self._batch_appends(obj)
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/pickle.py", line 956,
+in _batch_appends
+    save(x)
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/pickle.py", line 603,
+in save
+    self.save_reduce(obj=obj, *rv)
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/pickle.py", line 691,
+in save_reduce
+    save(func)
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/pickle.py", line 560,
+in save
+    f(self, obj)  # Call unbound method with explicit self
+  File
+"/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/dill/_dill.py",
+line 1356, in save_type
+    StockPickler.save_global(pickler, obj)
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/pickle.py", line
+1071, in save_global
+    raise PicklingError(
+_pickle.PicklingError: Can't pickle <class 'SplitConfig'>: it's not
+found as __main__.SplitConfig
+
+----------------------------------------------------------------------
+Ran 3 tests in 195.721s
+
+FAILED (errors=1, skipped=1)1
+
+
+PROBLEM might be in _generate_partition_ke
+  but is because of how data is passed to it, because
+  the .Do invocation succeeds.
+

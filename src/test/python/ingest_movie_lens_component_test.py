@@ -1,8 +1,6 @@
-# edited from unit test for Avro component at:
-# https://github.com/tensorflow/tfx/blob/master/tfx/components/example_gen/custom_executors/avro_component_test.py
-# which has copyright:
-#
-# Copyright 2019 Google LLC. All Rights Reserved.
+# following from unit tests at:
+# https://github.com/tensorflow/tfx/
+# which have Google LLC. copyrights under Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,6 +16,7 @@
 """Tests for using avro_executor with example_gen component."""
 
 import os
+import shutil
 
 import pickle
 import base64
@@ -99,7 +98,7 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     logging.debug(f"test output_config={output_config}")
     self.output_config_ser = serialize_proto_to_string(output_config)
 
-    self.name = 'test run of ingest with tfx'
+    self.name = 'test run of ratings ingestion w/ python custom comp func'
 
   def test_ingest_movie_lens_component(self):
 
@@ -117,6 +116,11 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     #output_data_dir = os.path.join(os.environ.get('TEST_UNDECLARED_OUTPUTS_DIR',self.get_temp_dir()),self._testMethodName)
     output_data_dir = os.path.join('/kaggle/working/bin/', test_num, self._testMethodName)
     PIPELINE_ROOT = os.path.join(output_data_dir, PIPELINE_NAME)
+    #remove results from previous test runs:
+    try:
+      shutil.rmtree(PIPELINE_ROOT)
+    except OSError as e:
+      pass
     METADATA_PATH = os.path.join(PIPELINE_ROOT, 'tfx_metadata', 'metadata.db')
     os.makedirs(os.path.join(PIPELINE_ROOT, 'tfx_metadata'), exist_ok=True)
 
@@ -148,8 +152,8 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     tfx.orchestration.LocalDagRunner().run(my_pipeline)
 
     # creates output_examples.uri=
-    # PIPELINE_ROOT/ingest_movie_lens_component/output_examples/1
-    #which is PIPELINE_ROOT/<executor_name>/output_examples/1
+    # PIPELINE_ROOT/ingest_movie_lens_component/output_examples/1/
+    # files are Split-train/data_*, etc
 
     # Check output paths.
     self.assertTrue(fileio.exists(os.path.join(PIPELINE_ROOT, ratings_example_gen.id)))
@@ -157,7 +161,6 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     for key, value in ratings_example_gen.outputs.items():
       print(f'key={key}, value={value}')
 
-    #list files in alt_output_data_dir and in output_data_dir
     print(f'listing files in PIPELINE_ROOT {PIPELINE_ROOT}:')
     for dirname, _, filenames in os.walk(PIPELINE_ROOT):
       for filename in filenames:

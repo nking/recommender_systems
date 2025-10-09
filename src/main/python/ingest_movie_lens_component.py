@@ -96,6 +96,7 @@ def ingest_movie_lens_component( \
 
   logging.debug(f"output_examples TYPE={type(output_examples)}")
   logging.debug(f"output_examples={output_examples}")
+  logging.debug(f"split_names={split_names}")
 
   with beam_pipeline as pipeline:
     #beam.PCollection, List[Tuple[str, Any]
@@ -149,7 +150,7 @@ def ingest_movie_lens_component( \
           >> beam.Map(create_example, column_name_type_list) \
           | f"Serialize_{random.randint(0, 1000000000000)}" \
           >> beam.Map(lambda x: x.SerializeToString()) \
-          | f"write_to_tf_{random.randint(0, 1000000000000)}" \
+          | f"write_to_tfrecord_{random.randint(0, 1000000000000)}" \
           >> beam.io.tfrecordio.WriteToTFRecord(\
             file_path_prefix=prefix_path, file_name_suffix='.tfrecord')
         logging.debug(f"prefix_path={prefix_path}")

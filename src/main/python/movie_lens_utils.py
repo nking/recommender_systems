@@ -226,6 +226,8 @@ def _generate_partition_key(record: Union[tf.train.Example,\
   split_config: example_gen_pb2.SplitConfig) -> bytes:
   """Generates key for partition."""
 
+  logging.debug(f"in _generate_partition_key: split_config={split_config}")
+
   if not split_config.HasField('partition_feature_name'):
     if isinstance(record, bytes):
       return record
