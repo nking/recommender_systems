@@ -5,6 +5,7 @@ import time
 import pickle
 import base64
 import random
+import os
 
 import apache_beam as beam
 from tfx.types import standard_artifacts, artifact_utils, standard_component_specs
@@ -104,7 +105,7 @@ def ingest_movie_lens_component( \
       >> IngestAndJoin(infiles_dict = infiles_dict)
 
     # create tf.train.Examples from PCollection before split:
-    ratings_example = ratings_pc \
+    ratings_examples = ratings_pc \
       | f'ToTFExample_{random.randint(0, 1000000000000)}' \
       >> beam.Map(create_example, column_name_type_list)
 
@@ -115,9 +116,12 @@ def ingest_movie_lens_component( \
       s += int(100 * (split.hash_buckets / total))
     cumulative_buckets.append(s)
 
+    logging.debug(f'cumulative_buckets={cumulative_buckets}')
+
     #split the examples
     #type: apache_beam.DoOutputsTuple
-    ratings_tuple = ratings_example | f'split_{random.randint(0, 1000000000000)}' >> beam.Partition( \
+    ratings_tuple = ratings_examples | f'split_{random.randint(0, 1000000000000)}' \
+      >> beam.Partition( \
       partition_fn, len(cumulative_buckets), cumulative_buckets, \
       output_config.split_config)
 
@@ -135,14 +139,19 @@ def ingest_movie_lens_component( \
     #output_examples.set_string_custom_property('description',\
     #  'ratings file created from left join of ratings, users, movies')
 
-    #write to TFRecords.  by default it uses coder=coders.BytesCoder()
-    for i, example_split in enumerate(ratings_tuple):
-      prefix_path = f'{output_uri}/Split-{split_names[i]}'
-      example_split | f"Serialize_{random.randint(0, 1000000000000)}" \
-        >> beam.Map(lambda x: x.SerializeToString()) \
-        | f"write_to_tfrecord_{random.randint(0, 1000000000000)}" \
-        >> beam.io.tfrecordio.WriteToTFRecord(\
-          file_path_prefix=prefix_path, file_name_suffix='.tfrecord')
+    ratings_dict = {split_name: example for split_name, example in
+              zip(ratings_tuple, split_names)}
+
+    # write to TFRecords
+    for split_name, example in ratings_dict.items():
+      #prefix_path = f'{output_uri}/Split-{split_name}'
+      prefix_path = artifact_utils.get_split_uri(output_uri, split_name)
       logging.debug(f"prefix_path={prefix_path}")
+      example | f"Serialize_{random.randint(0, 1000000000000)}" \
+      >> beam.Map(lambda x: x.SerializeToString()) \
+      | f"write_to_tfrecord_{random.randint(0, 1000000000000)}" \
+      >> beam.io.tfrecordio.WriteToTFRecord( \
+      os.path.join(prefix_path, DEFAULT_FILE_NAME), \
+      file_name_suffix = '.gz')
     logging.info(
       f'Examples written to output_examples as TFRecords to {output_uri}')

@@ -4,6 +4,7 @@ import absl
 import pprint
 import time
 import random
+import os
 
 from typing import Any, Dict, List, Text, Optional, Union, Tuple
 
@@ -143,7 +144,7 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
     logging.debug( \
       "about to read input and transform to tf.train.Example")
 
-    ratings_examples, column_name_type_list = \
+    ratings_example, column_name_type_list = \
       pipeline | f"GetInputSource{random.randint(0, 1000000000000)}" \
       >> input_to_examples(exec_properties)
 
@@ -166,14 +167,15 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       s += int(100 * (split.hash_buckets / total))
       cumulative_buckets.append(s)
 
+    logging.debug(f'cumulative_buckets={cumulative_buckets}')
+
     #type: apache_beam.DoOutputsTuple
-    ratings_tuple = ratings_examples | f'split_{time.time_ns()}' >> beam.Partition( \
+    ratings_tuple = ratings_example | f'split_{time.time_ns()}' \
+      >> beam.Partition( \
       partition_fn, len(cumulative_buckets), cumulative_buckets, output_config.split_config)
 
     split_names = [split.name for split in output_config.split_config.splits]
-    result = {}
-    for index, example_split in enumerate(ratings_tuple):
-      result[split_names[index]] = example_split
+    result = {split_name : example for split_name, example in zip(ratings_tuple, split_names)}
     # pass back to Do method
     return result, column_name_type_list
 
@@ -235,14 +237,16 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       #https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/components/example_gen/base_example_gen_executor.py#L281
 
       # write to TFRecords
-      for name, example in ratings_dict.items():
-        prefix_path = f'{output_uri}/Split-{name}'
-
+      for split_name, example in ratings_dict.items():
+        # prefix_path = f'{output_uri}/Split-{split_name}'
+        prefix_path = artifact_utils.get_split_uri(output_uri, split_name)
+        logging.debug(f"prefix_path={prefix_path}")
         example | f"Serialize_{random.randint(0, 1000000000000)}" \
           >> beam.Map(lambda x: x.SerializeToString()) \
           | f"write_to_tfrecord_{random.randint(0, 1000000000000)}" \
           >> beam.io.tfrecordio.WriteToTFRecord( \
-          file_path_prefix=prefix_path, file_name_suffix='.tfrecord')
+          os.path.join(prefix_path, DEFAULT_FILE_NAME), \
+          file_name_suffix='.gz')
       logging.info(
         f'Examples written to output_examples as TFRecords to {output_uri}')
       # no return
