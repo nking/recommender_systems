@@ -1,7 +1,9 @@
 import apache_beam as beam
 #from apache_beam.coders import coders
 
-import time
+#TODO: replace use of random in labels for PTransform with unique
+#  sequential numbers
+
 import random
 
 from typing import Any, Dict, List, Union, Tuple
@@ -47,6 +49,50 @@ class LeftJoinFn(beam.DoFn):
         if i not in self.right_filter_cols:
           row.append(right)
       yield row
+
+
+class MergeByKey(beam.PTransform):
+  """
+  the PTransform operates on 1 PCollection, but we can add the other
+  as a side input by giving it to the constructor.
+
+  Merge the left and right PCollections on the given key columns,
+  and exclude filter_cols of the right PCollection from entering
+  the output left joined rows.
+
+  The left PCollection is the main PCollection piped to the PTransform
+  while the right PCollection is given as side input to the
+  constructor, along with the other parameters"""
+  def __init__(self, r_pc : beam.PCollection, \
+    l_key_col : int, r_key_col : int, \
+    filter_cols : List[int], debug_tag : str = ""):
+    super().__init__()
+    self.r_pc = r_pc
+    self.l_key_col = l_key_col
+    self.r_key_col = r_key_col
+    self.filter_cols = filter_cols
+    self.debug_tag = debug_tag
+
+  def expand(self, l_pc):
+    l_keyed = l_pc | f'kv_l_{random.randint(0,1000000000)}' \
+      >> beam.Map(lambda x: (x[self.l_key_col], x))
+    r_keyed = self.r_pc | f'kv_r_{random.randint(0,1000000000)}' \
+      >> beam.Map(lambda x: (x[self.r_key_col], x))
+
+    # multiple lefts on one line, and one in right's list:
+    grouped_data = ({'left': l_keyed, 'right': r_keyed} \
+      | f'group_by_key_{random.randint(0,1000000000)}' \
+      >> beam.CoGroupByKey())
+
+    try:
+      joined_data = grouped_data \
+        | f'left_join_values_{random.randint(0,1000000000)}' \
+        >> beam.ParDo(LeftJoinFn(self.filter_cols, debug_tag=self.debug_tag))
+    except Exception as ex:
+      logging.error(f"ERROR for {self.debug_tag}: l_key_col={self.l_key_col}, r_key_col={self.r_key_col}")
+      raise ex
+
+    return joined_data
 
 class ReadFiles(beam.PTransform):
   """
@@ -119,48 +165,24 @@ class IngestAndJoin(beam.PTransform):
     # ratings: user_id,movie_id,rating
     # movie_id,title,genre
     # user_id::gender::age::occupation::zipcode
-    l_keyed_1 = pc['ratings'] | f'kv_l_RU_{random.randint(0, 1000000000)}' \
-      >> beam.Map(lambda x: (x[self.infiles_dict['ratings']['cols']['user_id']['index']], x))
-    r_keyed_1 = pc['users'] | f'kv_r_RU_{random.randint(0, 1000000000)}' \
-      >> beam.Map(lambda x: (x[self.infiles_dict['users']['cols']['user_id']['index']], x))
-
-    # multiple lefts on one line, and one in right's list:
-    grouped_data_1 = ({'left': l_keyed_1, 'right': r_keyed_1} \
-      | f'group_by_key_1_{random.randint(0, 1000000000)}' \
-      >> beam.CoGroupByKey())
-
-    try:
-      ratings_1 = grouped_data_1 \
-        | f'left_join_values_1_{random.randint(0, 1000000000)}' \
-        >> beam.ParDo(LeftJoinFn(\
-        [self.infiles_dict['users']['cols']['zipcode']['index'],\
-        self.infiles_dict['users']['cols']['user_id']['index']],\
-        debug_tag='R-U'))
-    except Exception as ex:
-      logging.error("ERROR for R-U")
-      raise ex
+       # user_id,movie_id,rating,timestamp,gender,age,occupation,zipcode
+    ratings_1 = pc['ratings'] | \
+      f"left_join_ratings_users_{random.randint(0,1000000000)}" \
+      >> MergeByKey(pc['users'], \
+      self.infiles_dict['ratings']['cols']['user_id']['index'], \
+      self.infiles_dict['users']['cols']['user_id']['index'], \
+      filter_cols=[self.infiles_dict['users']['cols']['zipcode']['index'],\
+      self.infiles_dict['users']['cols']['user_id']['index']], debug_tag="R-U")
 
     # user_id,movie_id,rating,gender,age,occupation,zipcode,genres
-    l_keyed_2 = ratings_1 | f'kv_l_RM_{random.randint(0, 1000000000)}' \
-      >> beam.Map(lambda x: (x[self.infiles_dict['ratings']['cols']['movie_id']['index']], x))
-    r_keyed_2 = pc['movies'] | f'kv_r_RM_{random.randint(0, 1000000000)}' \
-      >> beam.Map(lambda x: (x[self.infiles_dict['movies']['cols']['movie_id']['index']], x))
-
-    # multiple lefts on one line, and one in right's list:
-    grouped_data_2 = ({'left': l_keyed_2, 'right': r_keyed_2} \
-      | f'group_by_key_2_{random.randint(0, 1000000000)}' \
-      >> beam.CoGroupByKey())
-
-    try:
-      ratings = grouped_data_2 \
-        | f'left_join_values_2_{random.randint(0, 1000000000)}' \
-        >> beam.ParDo(LeftJoinFn(\
-        [self.infiles_dict['movies']['cols']['title']['index'],\
-        self.infiles_dict['movies']['cols']['movie_id']['index']],\
-        debug_tag="R-M"))
-    except Exception as ex:
-      logging.error("ERROR for R-M")
-      raise ex
+    ratings = ratings_1 | \
+      f"left_join_ratings_users_movies_{random.randint(0,1000000000)}" \
+      >> MergeByKey(pc['movies'], \
+      self.infiles_dict['ratings']['cols']['movie_id']['index'], \
+      self.infiles_dict['movies']['cols']['movie_id']['index'], \
+      filter_cols=[self.infiles_dict['movies']['cols']['title']['index'], \
+      self.infiles_dict['movies']['cols']['movie_id']['index']], \
+      debug_tag="R-M")
 
     schemas = create_namedtuple_schemas(self.infiles_dict)
     #format, compatible with apache_beam.coders.registry.
