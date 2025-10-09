@@ -96,6 +96,7 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
           for n, b in zip(bucket_names, buckets)]
       )
     )
+    logging.debug(f"test output_config={output_config}")
     self.output_config_ser = serialize_proto_to_string(output_config)
 
     self.name = 'test run of ingest with tfx'

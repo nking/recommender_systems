@@ -162,7 +162,8 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       logging.error(f"ERROR: {ex}")
       raise ValueError(ex)
     if not split_config in output_config or not splits in \
-      output_config.split_config.splits:
+      output_config.split_config:
+      logging.error(f"ERROR: missing splits in output_config={output_config}")
       raise ValueError("parameters must include output_config which"
         " must contain split_config")
 
