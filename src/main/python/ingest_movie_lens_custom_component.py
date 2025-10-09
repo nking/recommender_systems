@@ -244,7 +244,7 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
 
       # write to TFRecords
       for name, example in ratings_dict.items():
-        prefix_path = f'{ooutput_uri}/Split-{name}'
+        prefix_path = f'{output_uri}/Split-{name}'
 
         example | f"Serialize_{random.randint(0, 1000000000000)}" \
           >> beam.Map(lambda x: x.SerializeToString()) \
