@@ -1,12 +1,15 @@
 from typing import Any, Dict, List, Literal, Union, Tuple
 from tensorflow_metadata.proto.v0 import schema_pb2
+import tensorflow as tf
 
 import bisect
 import hashlib
 import pickle
 import base64
-
-import tensorflow as tf
+import absl
+from absl import logging
+tf.get_logger().propagate = False
+absl.logging.set_verbosity(absl.logging.DEBUG)
 
 from tfx.proto import example_gen_pb2
 
@@ -104,17 +107,22 @@ def create_example(row, column_name_type_list: List[Tuple[str, Any]]):
   """
   feature_map = {}
   for i, value in enumerate(row):
-    element_type = column_name_type_list[i][1]
-    name = column_name_type_list[i][0]
-    if element_type == float:
-      f = tf.train.Feature(float_list=tf.train.FloatList(value=[float(value)]))
-    elif element_type == int or element_type == bool:
-      f = tf.train.Feature(int64_list=tf.train.Int64List(value=[int(value)]))
-    elif element_type == str:
-      f = tf.train.Feature(bytes_list=tf.train.BytesList(value=[value.encode('utf-8')]))
-    else:
-      raise ValueError(f"element_type={element_type}, but only float, int, and str classes are handled.")
-    feature_map[name] = f
+    try:
+      element_type = column_name_type_list[i][1]
+      name = column_name_type_list[i][0]
+      if element_type == float:
+        f = tf.train.Feature(float_list=tf.train.FloatList(value=[float(value)]))
+      elif element_type == int or element_type == bool:
+        f = tf.train.Feature(int64_list=tf.train.Int64List(value=[int(value)]))
+      elif element_type == str:
+        f = tf.train.Feature(bytes_list=tf.train.BytesList(value=[value.encode('utf-8')]))
+      else:
+        raise ValueError(f"element_type={element_type}, but only float, int, and str classes are handled.")
+      feature_map[name] = f
+    except Exception as ex:
+      logging.error(f"ERROR: {ex}\nrow={row}"
+        f"\ni={i}\ncolumn_name_type_list={column_name_type_list}")
+      raise ex
   return tf.train.Example(features=tf.train.Features(feature=feature_map))
 
 def create_namedtuple_schemas(infiles_dict: Dict[str, Union[str, Dict]]) -> Dict[str, List[Tuple]]:
