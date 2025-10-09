@@ -78,8 +78,7 @@ def ingest_movie_lens_component( \
     logging.error(err)
     raise ValueError(err)
 
-  split_names = [split.name for split in
-                 output_config.split_config.splits]
+  split_names = [split.name for split in output_config.split_config.splits]
 
   if not output_examples:
     examples_artifact = standard_artifacts.Examples()
@@ -100,9 +99,14 @@ def ingest_movie_lens_component( \
 
   with beam_pipeline as pipeline:
     #beam.PCollection, List[Tuple[str, Any]
-    ratings, column_name_type_list = \
+    ratings_pc, column_name_type_list = \
       pipeline | f"IngestAndJoin_{random.randint(0,1000000000)}" \
       >> IngestAndJoin(infiles_dict = infiles_dict)
+
+    # create tf.train.Examples from PCollection before split:
+    ratings_example = ratings_pc \
+      | f'ToTFExample_{random.randint(0, 1000000000000)}' \
+      >> beam.Map(create_example, column_name_type_list)
 
     total = sum([split.hash_buckets for split in output_config.split_config.splits])
     s = 0
@@ -111,16 +115,15 @@ def ingest_movie_lens_component( \
       s += int(100 * (split.hash_buckets / total))
     cumulative_buckets.append(s)
 
+    #split the examples
     #type: apache_beam.DoOutputsTuple
-    ratings_tuple = ratings | f'split_{random.randint(0, 1000000000000)}' >> beam.Partition( \
+    ratings_tuple = ratings_example | f'split_{random.randint(0, 1000000000000)}' >> beam.Partition( \
       partition_fn, len(cumulative_buckets), cumulative_buckets, \
       output_config.split_config)
 
     logging.debug(f"have ratings_tuple.  type={type(ratings_tuple)}")
 
     logging.debug(f'output_examples.uri={output_uri}')
-
-    write_to_tfrecords = True
 
     # https://www.tensorflow.org/tfx/api_docs/python/tfx/v1/types/standard_artifacts/Examples
     # files should be written as {uri}/Split-{split_name1}
@@ -132,27 +135,14 @@ def ingest_movie_lens_component( \
     #output_examples.set_string_custom_property('description',\
     #  'ratings file created from left join of ratings, users, movies')
 
-    if not write_to_tfrecords:
-      #write to csv
-      column_names = ",".join([t[0] for t in column_name_type_list])
-      for i, part in enumerate(ratings_tuple):
-        prefix_path = f'{output_uri}/Split-{split_names[i]}'
-        write_to_csv(pcollection=part, \
-          column_names=column_names, prefix_path=prefix_path, delim='_')
-      logging.info(
-        f'Examples written to output_examples as CSV to {output_uri}')
-    else:
-      #write to TFRecords.  by default it uses coder=coders.BytesCoder()
-      for i, example_split in enumerate(ratings_tuple):
-        split_name = split_names[i]
-        prefix_path = f'{output_uri}/Split-{split_name}'
-        example_split | f"pcoll_to_tf_{random.randint(0, 1000000000000)}" \
-          >> beam.Map(create_example, column_name_type_list) \
-          | f"Serialize_{random.randint(0, 1000000000000)}" \
-          >> beam.Map(lambda x: x.SerializeToString()) \
-          | f"write_to_tfrecord_{random.randint(0, 1000000000000)}" \
-          >> beam.io.tfrecordio.WriteToTFRecord(\
-            file_path_prefix=prefix_path, file_name_suffix='.tfrecord')
-        logging.debug(f"prefix_path={prefix_path}")
+    #write to TFRecords.  by default it uses coder=coders.BytesCoder()
+    for i, example_split in enumerate(ratings_tuple):
+      prefix_path = f'{output_uri}/Split-{split_names[i]}'
+      example_split | f"Serialize_{random.randint(0, 1000000000000)}" \
+        >> beam.Map(lambda x: x.SerializeToString()) \
+        | f"write_to_tfrecord_{random.randint(0, 1000000000000)}" \
+        >> beam.io.tfrecordio.WriteToTFRecord(\
+          file_path_prefix=prefix_path, file_name_suffix='.tfrecord')
+      logging.debug(f"prefix_path={prefix_path}")
     logging.info(
       f'Examples written to output_examples as TFRecords to {output_uri}')
