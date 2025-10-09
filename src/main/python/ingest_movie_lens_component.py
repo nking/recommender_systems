@@ -7,9 +7,10 @@ import base64
 import random
 
 import apache_beam as beam
-from tfx.types import standard_artifacts, artifact_utils
+from tfx.types import standard_artifacts, artifact_utils, standard_component_specs
 from tfx.dsl.component.experimental import annotations
 from tfx.dsl.component.experimental.decorators import component
+from tfx.components.example_gen import write_split
 #from tfx.dsl.components.component import component
 
 from movie_lens_utils import *
@@ -140,12 +141,17 @@ def ingest_movie_lens_component( \
       logging.info(
         f'Examples written to output_examples as CSV to {output_uri}')
     else:
-      #write to TFRecords
-      for i, part in enumerate(ratings_tuple):
-          prefix_path = f'{output_uri}/Split-{split_names[i]}'
-          convert_to_tf_example(part, column_name_type_list) \
-            | f"Serialize_{random.randint(0, 1000000000000)}" >> beam.Map(lambda x: x.SerializeToString()) \
-            | f"write_to_tf_{random.randint(0, 1000000000000)}" >> beam.io.tfrecordio.WriteToTFRecord(\
+      #write to TFRecords.  by default it uses coder=coders.BytesCoder()
+      for i, example_split in enumerate(ratings_tuple):
+        split_name = split_names[i]
+        prefix_path = f'{output_uri}/Split-{split_name}'
+        example_split | f"pcoll_to_tf_{random.randint(0, 1000000000000)}" \
+          >> beam.Map(create_example, column_name_type_list) \
+          | f"Serialize_{random.randint(0, 1000000000000)}" \
+          >> beam.Map(lambda x: x.SerializeToString()) \
+          | f"write_to_tf_{random.randint(0, 1000000000000)}" \
+          >> beam.io.tfrecordio.WriteToTFRecord(\
             file_path_prefix=prefix_path, file_name_suffix='.tfrecord')
+        logging.debug(f"prefix_path={prefix_path}")
     logging.info(
       f'Examples written to output_examples as TFRecords to {output_uri}')
