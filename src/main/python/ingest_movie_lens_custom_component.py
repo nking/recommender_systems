@@ -161,11 +161,14 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
     except Exception as ex:
       logging.error(f"ERROR: {ex}")
       raise ValueError(ex)
+
+    logging.debug(
+      f"DEBUG: output_config={output_config}")
+
     if not split_config in output_config or not splits in \
       output_config.split_config:
-      logging.error(f"ERROR: missing splits in output_config={output_config}")
       raise ValueError("parameters must include output_config which"
-        " must contain split_config")
+        f" must contain split_config.  output_config={output_config}")
 
     total = sum([split.hash_buckets for split in output_config.split_config.splits])
     s = 0
