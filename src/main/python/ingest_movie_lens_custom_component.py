@@ -197,7 +197,7 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
     """
     logging.debug("in IngestMovieLensExecutor.Do")
     #https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/components/example_gen/base_example_gen_executor.py#L281
-    with self._make_beam_pipeline() as pipeline:
+    with (self._make_beam_pipeline() as pipeline):
       # apache_beam.DoOutputsTuple
       ratings_dict, column_name_type_list = \
         self.GenerateExamplesByBeam(pipeline, exec_properties, output_dict)
@@ -234,10 +234,9 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
       #could use WriteSplit method instead:
       #https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/components/example_gen/base_example_gen_executor.py#L281
 
-      DEFAULT_TF_RECORD_FILE_NAME = 'data_tfrecord'
       # write to TFRecords
       for name, example in ratings_dict.items():
-        prefix_path = f'{output_uri}/Split-{name}/{DEFAULT_TF_RECORD_FILE_NAME}'
+        prefix_path = get_file_prefix_path(output_uri, name)
         logging.debug(f"prefix_path={prefix_path}")
         example | f"Serialize_{random.randint(0, 1000000000000)}" \
           >> beam.Map(lambda x: x.SerializeToString()) \

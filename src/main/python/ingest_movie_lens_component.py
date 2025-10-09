@@ -140,10 +140,9 @@ def ingest_movie_lens_component( \
     for index, example_split in enumerate(ratings_tuple):
       ratings_dict[split_names[index]] = example_split
 
-    DEFAULT_TF_RECORD_FILE_NAME = 'data_tfrecord'
     # write to TFRecords
     for name, example in ratings_dict.items():
-      prefix_path = f'{output_uri}/Split-{name}/{DEFAULT_TF_RECORD_FILE_NAME}'
+      prefix_path = get_file_prefix_path(output_uri, name)
       logging.debug(f"prefix_path={prefix_path}")
       example | f"Serialize_{random.randint(0, 1000000000000)}" \
       >> beam.Map(lambda x: x.SerializeToString()) \

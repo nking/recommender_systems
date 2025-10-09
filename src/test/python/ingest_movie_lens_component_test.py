@@ -87,12 +87,12 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
                                       users_dict=users_dict, version=1)
 
     buckets = [80, 10, 10]
-    bucket_names = ['train', 'eval', 'test']
+    self.split_names = ['train', 'eval', 'test']
     output_config = example_gen_pb2.Output(
       split_config=example_gen_pb2.SplitConfig(
         splits=[
           example_gen_pb2.SplitConfig.Split(name=n, hash_buckets=b) \
-          for n, b in zip(bucket_names, buckets)]
+          for n, b in zip(self.split_names, buckets)]
       )
     )
     logging.debug(f"test output_config={output_config}")
@@ -109,6 +109,8 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     ratings_example_gen = (ingest_movie_lens_component( \
       infiles_dict_ser=infiles_dict_ser, \
       output_config_ser = self.output_config_ser))
+
+    logging.debug(f'TYPE of ratings_example_gen={type(ratings_example_gen)}')
 
     components = [ratings_example_gen]
 
@@ -160,7 +162,7 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     self.assertTrue(fileio.exists(os.path.join(PIPELINE_ROOT, ratings_example_gen.id)))
 
     for key, value in ratings_example_gen.outputs.items():
-      print(f'key={key}, value={value}')
+      print(f'key={key}\n  value={value}')
 
     print(f'listing files in PIPELINE_ROOT {PIPELINE_ROOT}:')
     for dirname, _, filenames in os.walk(PIPELINE_ROOT):
@@ -184,6 +186,10 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     execution_count = len(executions)
     self.assertGreaterEqual(artifact_count, execution_count)
 
-    #self.assertIsNotNone(ratings_example_gen.outputs['output'].get()[0])
+    for split_name in self.split_names:
+      file_list = get_output_files(ratings_example_gen, 'output_examples', split_name)
+      self.assertGreaterEqual(len(file_list), 1)
+
+    #self.assertIsNotNone(ratings_example_gen.outputs['output_examples'].get()[0])
     #output_path = ratings_example_gen.outputs['output'].get()[0].uri
     #self.assertTrue(fileio.exists(output_path))

@@ -274,6 +274,19 @@ def partition_fn(\
   #   bucket >=50 && < 80, returns 2
   return bisect.bisect(cumulative_buckets, bucket)
 
+def _get_split_dir_name(split_name:str) -> str:
+  return f"Split-{split_name}"
+
+def get_file_prefix_path(examples_uri:str, split_name:str) -> str:
+  DEFAULT_TF_RECORD_FILE_NAME = 'data_tfrecord'
+  return f'{examples_uri}/{_get_split_dir_name(split_name)}/{DEFAULT_TF_RECORD_FILE_NAME}'
+
+def get_output_files(component, channel_name, split_name) -> List[str]:
+  file_uri = os.path.join(component.outputs[channel_name].get()[0].uri, \
+    _get_split_dir_name(split_name))
+  tfrecord_filenames = [os.path.join(file_uri, name) for name in os.listdir(file_uri)]
+  return tfrecord_filenames
+
 def serialize_proto_to_string(output_config : example_gen_pb2.Output) -> str:
   return base64.b64encode(output_config.SerializeToString()).decode('utf-8')
 

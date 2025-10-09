@@ -90,12 +90,12 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
                                       users_dict=users_dict, version=1)
 
     buckets = [80, 10, 10]
-    bucket_names = ['train', 'eval', 'test']
+    self.split_names = ['train', 'eval', 'test']
     self.output_config = example_gen_pb2.Output(
       split_config=example_gen_pb2.SplitConfig(
         splits=[
           example_gen_pb2.SplitConfig.Split(name=n, hash_buckets=b) \
-            for n, b in zip(bucket_names, buckets)]
+            for n, b in zip(self.split_names, buckets)]
       )
     )
     logging.debug(f"test self.output_config={self.output_config}")
@@ -112,6 +112,8 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
       name=name,\
       infiles_dict_ser=serialize_to_string(self.infiles_dict), \
       output_config_ser=serialize_proto_to_string(self.output_config))
+
+    logging.debug(f'TYPE of ratings_example_gen={type(ratings_example_gen)}')
 
     components = [ratings_example_gen]
 
@@ -197,6 +199,10 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
     artifact_count = len(artifacts)
     execution_count = len(executions)
     self.assertGreaterEqual(artifact_count, execution_count)
+
+    for split_name in self.split_names:
+      file_list = get_output_files(ratings_example_gen, 'output_examples', split_name)
+      self.assertGreaterEqual(len(file_list), 1)
 
     """
     #self.assertIsNotNone(ratings_example_gen.outputs['output'].get()[0])
