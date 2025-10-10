@@ -68,11 +68,11 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
 
     statistics_gen = StatisticsGen(examples = ratings_example_gen.outputs['output_examples'])
 
-    infer_schema = SchemaGen(
+    schema_gen = SchemaGen(
       statistics=statistics_gen.outputs['statistics'],
       infer_feature_shape=True)
 
-    components = [ratings_example_gen, statistics_gen, infer_schema]
+    components = [ratings_example_gen, statistics_gen, schema_gen]
 
     PIPELINE_NAME = 'TestPythonFuncCustomCompPipeline'
     #output_data_dir = os.path.join(os.environ.get('TEST_UNDECLARED_OUTPUTS_DIR',self.get_temp_dir()),self._testMethodName)
