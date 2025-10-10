@@ -172,8 +172,8 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
 
     logging.debug(f'TYPE of ratings_example_gen={type(ratings_example_gen)}')
     logging.debug(f'ratings_example_gen={ratings_example_gen}')
-    logging.debug(f'ratings_example_gen.outputs["ouput_examples"]='
-                  f'{ratings_example_gen.outputs["ouput_examples"]}')
+    logging.debug(f'ratings_example_gen.outputs["output_examples"]='
+                  f'{ratings_example_gen.outputs["output_examples"]}')
 
     for key, value in ratings_example_gen.outputs.items():
       print(f'key={key}, value={value}')
