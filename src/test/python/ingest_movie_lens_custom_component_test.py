@@ -113,7 +113,7 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
     ratings_example_gen = IngestMovieLensComponent( \
       name=name,\
       infiles_dict_ser=serialize_to_string(self.infiles_dict), \
-      output_config=proto_utils.proto_to_json(self.output_config))
+      output_config_ser=serialize_proto_to_string(self.output_config))
 
     #stats_gen = tfx.components.StatisticsGen(
     #  examples=ratings_example_gen.outputs['output_examples'])
@@ -203,7 +203,7 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
     logging.debug(f"MLMD store executions={executions}")
     self.assertEqual(1, len(executions))
     #executions has custom_properties.key: "infiles_dict_ser"
-    #    and custom_properties.key: "output_config"
+    #    and custom_properties.key: "output_config_ser"
     artifact_count = len(artifacts)
     execution_count = len(executions)
     self.assertGreaterEqual(artifact_count, execution_count)
@@ -287,7 +287,7 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
     output_dict = {'output_examples':output_examples}
     exec_properties = {'name': 'IngestMovieLensExecutor',
       'infiles_dict_ser':serialize_to_string(self.infiles_dict),
-      'output_config': proto_utils.proto_to_json(self.output_config)}
+      'output_config_ser': serialize_proto_to_string(self.output_config)}
     ratings_example_gen = IngestMovieLensExecutor()
     ratings_example_gen.Do({}, output_dict, exec_properties)
 

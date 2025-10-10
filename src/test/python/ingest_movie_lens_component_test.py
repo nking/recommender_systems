@@ -100,7 +100,7 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
       )
     )
     logging.debug(f"test output_config={output_config}")
-    self.output_config_ser = proto_utils.proto_to_json(output_config)
+    self.output_config_ser = serialize_proto_to_string(output_config)
 
     self.name = 'test run of ratings ingestion w/ python custom comp func'
 
@@ -112,7 +112,7 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
 
     ratings_example_gen = (ingest_movie_lens_component( \
       infiles_dict_ser=infiles_dict_ser, \
-      output_config = self.output_config_ser))
+      output_config_ser = self.output_config_ser))
 
     logging.debug(f'TYPE of ratings_example_gen={type(ratings_example_gen)}')
 
@@ -186,7 +186,7 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     logging.debug(f"MLMD store executions={executions}")
     self.assertEqual(1, len(executions))
     # executions has custom_properties.key: "infiles_dict_ser"
-    #    and custom_properties.key: "output_config"
+    #    and custom_properties.key: "output_config_ser"
     artifact_count = len(artifacts)
     execution_count = len(executions)
     self.assertGreaterEqual(artifact_count, execution_count)
