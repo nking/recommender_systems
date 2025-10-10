@@ -203,10 +203,12 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
     execution_count = len(executions)
     self.assertGreaterEqual(artifact_count, execution_count)
 
-    #TODO: change to use pipeline path, and do another assert with MLMD info
-    #for split_name in self.split_names:
-    #  file_list = get_output_files(ratings_example_gen, 'output_examples', split_name)
-    #  self.assertGreaterEqual(len(file_list), 1)
+    artifact_uri = artifacts[0].uri
+    for split_name in self.split_names:
+      dir_path = f'{examples_uri}/{get_split_dir_name(split_name)}'
+      file_paths = [os.path.join(dir_path, name) for name in os.listdir(dir_path)]
+      #  file_paths = get_output_files(ratings_example_gen, 'output_examples', split_name)
+      self.assertGreaterEqual(len(file_paths), 1)
 
     #stats_output = stats_gen.outputs['statistics']
 

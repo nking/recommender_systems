@@ -188,6 +188,14 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     self.assertGreaterEqual(artifact_count, execution_count)
     self.assertGreaterEqual(artifact_count, execution_count)
 
+    artifact_uri = artifacts[0].uri
+    for split_name in self.split_names:
+      dir_path = f'{examples_uri}/{get_split_dir_name(split_name)}'
+      file_paths = [os.path.join(dir_path, name) for name in
+                    os.listdir(dir_path)]
+      #  file_paths = get_output_files(ratings_example_gen, 'output_examples', split_name)
+      self.assertGreaterEqual(len(file_paths), 1)
+      
     """
     def get_latest_artifact_path_statistics(metadata_store, pipeline_name, component_name):
       # Find the component by name
