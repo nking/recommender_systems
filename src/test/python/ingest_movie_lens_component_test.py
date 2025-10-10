@@ -23,17 +23,15 @@ import base64
 import pprint
 import random
 
-from unittest import mock
 import tensorflow as tf
+import tensorflow_data_validation as tfdv
 from tfx.dsl.components.base import executor_spec
 from tfx.dsl.io import fileio
 from tfx.orchestration import data_types
 from tfx.orchestration import metadata
-from tfx.orchestration import publisher
 from tfx.orchestration.launcher import in_process_component_launcher
 from tfx.proto import example_gen_pb2
-from tfx.utils import name_utils
-from tfx.components import StatisticsGen
+from tfx.components import StatisticsGen, SchemaGen
 from tfx.types import standard_component_specs
 from tfx.utils import proto_utils
 
@@ -47,60 +45,14 @@ import absl
 from absl import logging
 absl.logging.set_verbosity(absl.logging.DEBUG)
 
+from helper import *
+
 class IngestMovieLensComponentTest(tf.test.TestCase):
 
   def setUp(self):
     super().setUp()
-    kaggle = True
-    if kaggle:
-      prefix = '/kaggle/working/ml-1m/'
-    else:
-      prefix = "../resources/ml-1m/"
-    ratings_uri = f"{prefix}ratings.dat"
-    movies_uri = f"{prefix}movies.dat"
-    users_uri = f"{prefix}users.dat"
-
-    ratings_col_names = ["user_id", "movie_id", "rating", "timestamp"]
-    ratings_col_types = [int, int,int,int]  # for some files, ratings are floats
-    movies_col_names = ["movie_id", "title", "genres"]
-    movies_col_types = [int, str, str]
-    users_col_names = ["user_id", "gender", "age", "occupation", "zipcode"]
-    users_col_types = [int, str, int, int, str]
-
-    ratings_dict = create_infile_dict(for_file='ratings', \
-                                      uri=ratings_uri,
-                                      col_names=ratings_col_names, \
-                                      col_types=ratings_col_types,
-                                      headers_present=False, delim="::")
-
-    movies_dict = create_infile_dict(for_file='movies', \
-                                     uri=movies_uri,
-                                     col_names=movies_col_names, \
-                                     col_types=movies_col_types,
-                                     headers_present=False, delim="::")
-
-    users_dict = create_infile_dict(for_file='users', \
-                                    uri=users_uri,
-                                    col_names=users_col_names, \
-                                    col_types=users_col_types,
-                                    headers_present=False, delim="::")
-
-    self.infiles_dict = create_infiles_dict(ratings_dict=ratings_dict, \
-                                      movies_dict=movies_dict, \
-                                      users_dict=users_dict, version=1)
-
-    buckets = [80, 10, 10]
-    self.split_names = ['train', 'eval', 'test']
-    #TODO: wrap the proto in  proto_utils.proto_to_json instead of ser below
-    output_config = example_gen_pb2.Output(
-      split_config=example_gen_pb2.SplitConfig(
-        splits=[
-          example_gen_pb2.SplitConfig.Split(name=n, hash_buckets=b) \
-          for n, b in zip(self.split_names, buckets)]
-      )
-    )
-    logging.debug(f"test output_config={output_config}")
-    self.output_config_ser = serialize_proto_to_string(output_config)
+    self.infiles_dict_ser, self.output_config_ser, self.split_names = \
+      get_test_data()
 
     self.name = 'test run of ratings ingestion w/ python custom comp func'
 
@@ -108,15 +60,19 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
 
     test_num = "py_custom_comp_1"
 
-    infiles_dict_ser = serialize_to_string(self.infiles_dict)
-
     ratings_example_gen = (MovieLensExampleGen( \
-      infiles_dict_ser=infiles_dict_ser, \
+      infiles_dict_ser=self.infiles_dict_ser, \
       output_config_ser = self.output_config_ser))
 
     logging.debug(f'TYPE of ratings_example_gen={type(ratings_example_gen)}')
 
-    components = [ratings_example_gen]
+    statistics_gen = StatisticsGen(examples = ratings_example_gen.outputs['output_examples'])
+
+    infer_schema = SchemaGen(
+      statistics=statistics_gen.outputs['statistics'],
+      infer_feature_shape=True)
+
+    components = [ratings_example_gen, statistics_gen, infer_schema]
 
     PIPELINE_NAME = 'TestPythonFuncCustomCompPipeline'
     #output_data_dir = os.path.join(os.environ.get('TEST_UNDECLARED_OUTPUTS_DIR',self.get_temp_dir()),self._testMethodName)
@@ -161,8 +117,10 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     # PIPELINE_ROOT/MovieLensExampleGen/output_examples/1/
     # files are Split-train/data_*, etc
 
-    # Check output paths.
+    ## ================= ratings_example_gen unit tests ============
+
     logging.debug(f'ratings_example_gen={ratings_example_gen}')
+    #MovieLensExampleGen:
     logging.debug(f"ratings_example_gen.id={ratings_example_gen.id}")
     self.assertTrue(fileio.exists(os.path.join(PIPELINE_ROOT, ratings_example_gen.id)))
 
@@ -173,6 +131,11 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     for dirname, _, filenames in os.walk(PIPELINE_ROOT):
       for filename in filenames:
         print(os.path.join(dirname, filename))
+
+    #https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/types/standard_artifacts.py#L487
+    #Examples
+    #ExampleStatistics
+    #Schema
 
     #metadata_connection = metadata.Metadata(metadata_connection_config)
     store = metadata_store.MetadataStore(metadata_connection_config)
@@ -199,42 +162,40 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
                     os.listdir(dir_path)]
       #  file_paths = get_output_files(ratings_example_gen, 'output_examples', split_name)
       self.assertGreaterEqual(len(file_paths), 1)
-      
-    """
-    def get_latest_artifact_path_statistics(metadata_store, pipeline_name, component_name):
-      # Find the component by name
-      component_artifacts = metadata_store.get_artifacts_by_type_and_name(
-          type_name='Statistics', name=f'{pipeline_name}.{component_name}.statistics'
-      )
-      if not component_artifacts:
-        print(f"No artifacts found for component '{component_name}'.")
-        return None
-      # Sort artifacts by creation time to get the latest one
-      latest_artifact = sorted(component_artifacts, \
-        key=lambda a: a.create_time_since_epoch, reverse=True)[0]
 
-      # Get the URI and find the 'statistics.pb' file
-      artifact_uri = latest_artifact.uri
-      stats_path = os.path.join(artifact_uri, 'Split-train', 'stats_tfrecord')
+    #=============== verify statistics_gen results ==============
 
-      return stats_path
-    """
-    #stats_file_path = get_latest_artifact_path_statistics(store, PIPELINE_NAME, 'StatisticsGen')
-    #if stats_file_path:
-    #    stats_proto = tfdv.load_statistics(stats_file_path)
-    #    print("Successfully loaded statistics. Here is some example output:")
-    #    for dataset in stats_proto.datasets:
-    #        print(f"Statistics for dataset: {dataset.name}")
-    #        for feature in dataset.features:
-    #            print(f"  Feature: {feature.path.step[0]}, Type: {feature.type}")
-    #            if feature.HasField('num_stats'):
-    #                print(f"    Min: {feature.num_stats.min}, Max: {feature.num_stats.max}, Mean: {feature.num_stats.mean}")
+    logging.debug(f"statistics_gen.id={statistics_gen.id}")
+    self.assertTrue(fileio.exists(os.path.join(PIPELINE_ROOT, statistics_gen.id)))
 
-    # TODO: change to use pipeline path, and do another assert with MLMD info
-    # for split_name in self.split_names:
-    #  file_list = get_output_files(ratings_example_gen, 'output_examples', split_name)
-    #  self.assertGreaterEqual(len(file_list), 1)
+    stats_artifacts_list = store.get_artifacts_by_type("Statistics")
+    latest_stats_artifact = sorted(stats_artifacts_list, \
+      key=lambda x: x.create_time_since_epoch, reverse=True)[0]
+    #or use last_update_time_since_epoch
+    stats_uri = latest_stats_artifact.uri
+    stats_path_train = os.path.join(stats_uri, get_split_dir_name("train"), 'stats_tfrecord')
+    stats_path_eval = os.path.join(stats_uri, get_split_dir_name("eval"), 'stats_tfrecord')
+    stats_path_test = os.path.join(stats_uri, get_split_dir_name("test"),'stats_tfrecord')
 
-    #self.assertIsNotNone(ratings_example_gen.outputs['output_examples'].get()[0])
-    #output_path = ratings_example_gen.outputs['output'].get()[0].uri
-    #self.assertTrue(fileio.exists(output_path))
+    stats_proto_train = tfdv.load_statistics(stats_path_train)
+    print("Successfully loaded statistics. Here is some example output:")
+    for dataset in stats_proto_train.datasets:
+      print(f"Statistics for dataset: {dataset.name}")
+      for feature in dataset.features:
+        print(f"  Feature: {feature.path.step[0]}, Type: {feature.type}")
+        if feature.HasField('num_stats'):
+          print(f"    Min: {feature.num_stats.min}, Max: {feature.num_stats.max}, Mean: {feature.num_stats.mean}")
+
+    # =============== verify schema_gen results ==============
+    logging.debug(f"schema_gen.id={schema_gen.id}")
+    self.assertTrue(fileio.exists(os.path.join(PIPELINE_ROOT, schema_gen.id)))
+
+    schema_artifacts_list = store.get_artifacts_by_type("Schema")
+    latest_schema_artifact = sorted(schema_artifacts_list, \
+      key=lambda x: x.create_time_since_epoch, reverse=True)[0]
+    # or use last_update_time_since_epoch
+    schema_uri = latest_schema_artifact.uri
+    schema_path_train = os.path.join(schema_uri, get_split_dir_name("train"), \
+      'schema.pbtxt')
+    schema = tfx.utils.io_utils.load_schema_text(schema_path_train)
+    logging.debug(f"schema={schema}")

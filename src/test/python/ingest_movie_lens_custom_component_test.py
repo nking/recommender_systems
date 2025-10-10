@@ -23,16 +23,18 @@ import base64
 import random
 
 import tensorflow as tf
+import tensorflow_data_validation as tfdv
 from tfx.dsl.components.base import executor_spec
 from tfx.dsl.io import fileio
 from tfx.orchestration import data_types
 from tfx.orchestration import metadata
 from tfx.orchestration.launcher import in_process_component_launcher
 from tfx.proto import example_gen_pb2
-from tfx.utils import name_utils
-from tfx.components import StatisticsGen
+from tfx.components import StatisticsGen, SchemaGen
 from tfx.types import standard_component_specs
 from tfx.utils import proto_utils
+
+from helper import *
 
 import pprint
 import absl
@@ -52,55 +54,8 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
 
   def setUp(self):
     super().setUp()
-    kaggle = True
-    if kaggle:
-      prefix = '/kaggle/working/ml-1m/'
-    else:
-      prefix = "../resources/ml-1m/"
-    ratings_uri = f"{prefix}ratings.dat"
-    movies_uri = f"{prefix}movies.dat"
-    users_uri = f"{prefix}users.dat"
-
-    ratings_col_names = ["user_id", "movie_id", "rating", "timestamp"]
-    ratings_col_types = [int, int, int, int]  # for some files, ratings are floats
-    movies_col_names = ["movie_id", "title", "genres"]
-    movies_col_types = [int, str, str]
-    users_col_names = ["user_id", "gender", "age", "occupation", "zipcode"]
-    users_col_types = [int, str, int, int, str]
-
-    ratings_dict = create_infile_dict(for_file='ratings', \
-                                      uri=ratings_uri,
-                                      col_names=ratings_col_names, \
-                                      col_types=ratings_col_types,
-                                      headers_present=False, delim="::")
-
-    movies_dict = create_infile_dict(for_file='movies', \
-                                     uri=movies_uri,
-                                     col_names=movies_col_names, \
-                                     col_types=movies_col_types,
-                                     headers_present=False, delim="::")
-
-    users_dict = create_infile_dict(for_file='users', \
-                                    uri=users_uri,
-                                    col_names=users_col_names, \
-                                    col_types=users_col_types,
-                                    headers_present=False, delim="::")
-
-    self.infiles_dict = create_infiles_dict(ratings_dict=ratings_dict, \
-                                      movies_dict=movies_dict, \
-                                      users_dict=users_dict, version=1)
-
-    buckets = [80, 10, 10]
-    self.split_names = ['train', 'eval', 'test']
-    # TODO: wrap the proto in  proto_utils.proto_to_json instead of ser below
-    self.output_config = example_gen_pb2.Output(
-      split_config=example_gen_pb2.SplitConfig(
-        splits=[
-          example_gen_pb2.SplitConfig.Split(name=n, hash_buckets=b) \
-            for n, b in zip(self.split_names, buckets)]
-      )
-    )
-    logging.debug(f"test self.output_config={self.output_config}")
+    self.infiles_dict_ser, self.output_config_ser, self.split_names = \
+      get_test_data()
 
     self.name = 'test run of ratings ingestion w/ fully custom comp func'
 
@@ -112,13 +67,12 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
     #implement the task
     ratings_example_gen = IngestMovieLensComponent( \
       name=name,\
-      infiles_dict_ser=serialize_to_string(self.infiles_dict), \
-      output_config_ser=serialize_proto_to_string(self.output_config))
+      infiles_dict_ser=self.infiles_dict_ser, \
+      output_config_ser=self.output_config_ser)
 
-    #stats_gen = tfx.components.StatisticsGen(
-    #  examples=ratings_example_gen.outputs['output_examples'])
+    statistics_gen = tfx.components.StatisticsGen(examples=ratings_example_gen.outputs['output_examples'])
 
-    components = [ratings_example_gen]
+    components = [ratings_example_gen, statistics_gen]
 
     PIPELINE_NAME = 'TestFullyCustomCompPipeline'
     #output_data_dir = os.path.join(os.environ.get('TEST_UNDECLARED_OUTPUTS_DIR',self.get_temp_dir()),self._testMethodName)
@@ -286,8 +240,8 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
 
     output_dict = {'output_examples':output_examples}
     exec_properties = {'name': 'IngestMovieLensExecutor',
-      'infiles_dict_ser':serialize_to_string(self.infiles_dict),
-      'output_config_ser': serialize_proto_to_string(self.output_config)}
+      'infiles_dict_ser': self.infiles_dict_ser,
+      'output_config_ser': self.output_config_ser}
     ratings_example_gen = IngestMovieLensExecutor()
     ratings_example_gen.Do({}, output_dict, exec_properties)
 
