@@ -131,6 +131,7 @@ class CSVExampleGenTest(tf.test.TestCase):
     logging.debug(f'contexts={store.get_contexts()}')
 
     try:
+      logging.debug(f'users_example_gen={users_example_gen}')
       get_output_files(users_example_gen, 'examples', 'train')
     except Exception as ex:
       pass
