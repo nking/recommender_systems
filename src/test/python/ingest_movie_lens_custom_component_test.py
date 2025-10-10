@@ -31,6 +31,8 @@ from tfx.orchestration.launcher import in_process_component_launcher
 from tfx.proto import example_gen_pb2
 from tfx.utils import name_utils
 from tfx.components import StatisticsGen
+from tfx.types import standard_component_specs
+from tfx.utils import proto_utils
 
 import pprint
 import absl
@@ -90,6 +92,7 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
 
     buckets = [80, 10, 10]
     self.split_names = ['train', 'eval', 'test']
+    # TODO: wrap the proto in  proto_utils.proto_to_json instead of ser below
     self.output_config = example_gen_pb2.Output(
       split_config=example_gen_pb2.SplitConfig(
         splits=[
