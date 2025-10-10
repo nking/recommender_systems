@@ -1,13 +1,15 @@
 see https://www.tensorflow.org/tfx/guide/custom_function_component
 
-see https://github.com/PacktPublishing/Building-Big-Data-Pipelines-with-Apache-Beam
+see
+https://github.com/PacktPublishing/Building-Big-Data-Pipelines-with-Apache-Beam
 
 ============================
 Custom Python function components
 
 The outputs of steps in a TFX pipeline are called artifact.
 
-Artifacts must be strongly typed with an artifact type registered in the 
+Artifacts must be strongly typed with an artifact type registered in
+the 
 ML Metadata store. Learn more about the concepts used in ML Metadata.
 
 standard TFX artifact types:
@@ -24,7 +26,8 @@ class InfraBlessing: TFX first-party component artifact definition.
 class Integer: Integer-typed artifact.
 class JsonValue: Artifacts representing a Jsonable value.
 class Model: Artifact that contains the actual persisted model.
-class ModelBlessing: Artifact that contains the evaluation of a trained model.
+class ModelBlessing: Artifact that contains the evaluation of a trained
+model.
 class ModelEvaluation: TFX first-party component artifact definition.
 class ModelRun: TFX first-party component artifact definition.
 class PushedModel: TFX first-party component artifact definition.
@@ -34,48 +37,66 @@ class TransformCache: TFX first-party component artifact definition.
 class TransformGraph: TFX first-party component artifact definition.
 
 Parameter
-Parameters are inputs to pipelines that are known before your pipeline is
-executed. Parameters let you change the behavior of a pipeline, or a part of a
+Parameters are inputs to pipelines that are known before your pipeline
+is
+executed. Parameters let you change the behavior of a pipeline, or a
+part of a
 pipeline, through configuration instead of code.
-For example, you can use parameters to run a pipeline with different sets of 
+For example, you can use parameters to run a pipeline with different
+sets of 
 hyperparameters without changing the pipeline's code.
    RuntimeParameter class?
 
 
-The component specification is defined in the Python function's arguments using
-type annotations that describe if an argument is an input artifact, output
-artifact, or a parameter. The function body defines the component's executor.
-The component interface is defined by adding the @component decorator to your
+The component specification is defined in the Python function's
+arguments using
+type annotations that describe if an argument is an input artifact,
+output
+artifact, or a parameter. The function body defines the component's
+executor.
+The component interface is defined by adding the @component decorator
+to your
 function.
 
 Component
-A component is an implementation of an ML task that you can use as a step in
+A component is an implementation of an ML task that you can use as a
+step in
 your TFX pipeline. Components are composed of:
-- A component specification, which defines the component's input and output
+- A component specification, which defines the component's input and
+  output
   artifacts, and the component's required parameters.
-- An executor, which implements the code to perform a step in your ML workflow,
-  such as ingesting and transforming data or training and evaluating a model.
-- A component interface, which packages the component specification and executor
+- An executor, which implements the code to perform a step in your ML
+  workflow,
+  such as ingesting and transforming data or training and evaluating a
+model.
+- A component interface, which packages the component specification and
+  executor
   for use in a pipeline.
 
 TFX Standard components:
 https://www.tensorflow.org/tfx/guide#tfx_standard_components
 
-- ExampleGen is the initial input component of a pipeline that ingests and 
+- ExampleGen is the initial input component of a pipeline that ingests
+  and 
   optionally splits the input dataset.
 - StatisticsGen calculates statistics for the dataset.
 - SchemaGen examines the statistics and creates a data schema.
-- ExampleValidator looks for anomalies and missing values in the dataset.
+- ExampleValidator looks for anomalies and missing values in the
+  dataset.
 - Transform performs feature engineering on the dataset.
 - Trainer trains the model.
 - Tuner tunes the hyperparameters of the model.
-- Evaluator performs deep analysis of the training results and helps you validate 
-  your exported models, ensuring that they are "good enough" to be pushed to 
+- Evaluator performs deep analysis of the training results and helps
+  you validate 
+  your exported models, ensuring that they are "good enough" to be
+pushed to 
   production.
-- InfraValidator checks the model is actually servable from the infrastructure, 
+- InfraValidator checks the model is actually servable from the
+  infrastructure, 
   and prevents bad model from being pushed.
 - Pusher deploys the model on a serving infrastructure.
-- BulkInferrer performs batch processing on a model with unlabelled inference 
+- BulkInferrer performs batch processing on a model with unlabelled
+  inference 
   requests.
 
 ==================
@@ -85,19 +106,27 @@ https://www.tensorflow.org/tfx/guide#tfx_standard_components
 
 The transformations can either occur in the pipeline before training,
 or can occur as keras layers within the model.
-An advantage to preprocessing in pipeline before training, is that it makes
-it easier to reuse the code in a pipeline that makes curated features for a
-feature store.  It also makes it easier to use EDA on the features in contrast to
+An advantage to preprocessing in pipeline before training, is that it
+makes
+it easier to reuse the code in a pipeline that makes curated features
+for a
+feature store.  It also makes it easier to use EDA on the features in
+contrast to
 using keras layers in transformations to features.
-Note that the nomenclature is that raw data is transformed to features and
-the features are the direct inputs to the models.
+Note that the paradigm is that raw data is transformed to features
+and the features are the direct inputs to the models.
 
-- there will be scripts to set up the environment (provision a workbench).
+- there will be scripts to set up the environment (provision a
+  workbench).
   including setup of scan or other vector db
-- there will be python function custom components
-  - ingest, validate data, transform, train, tune, evaluate
-- there will be a custom component to use the trained model to reconstruct
-  the tf/keras model and extract the query and candidate models.
+- there will be python components, custom where needed, to
+  - ingest data, validate data, transform data, 
+    train models, tune hyperparameters of models, evaluate models
+    and data
+- there will be a custom component to use the trained model to
+  reconstruct
+  the tf/keras model and extract the query and candidate models
+  from the two-tower model for separate use.
 - there will be a custom component to create movie vector embeddings
   and store them in the vector db.
 - there will be an application which:
@@ -109,7 +138,8 @@ the features are the direct inputs to the models.
   - performs a db lookup to find candidate movies
 
 # given 
-#   set(['user_id', 'movie_id', 'age_group', 'gender', 'hr_bin', 'occupation'],
+#   set(['user_id', 'movie_id', 'age_group', 'gender', 'hr_bin',
+#   'occupation'],
 # use query model to make q_emb
 # and then find similar in vectordb
 # given
@@ -123,13 +153,17 @@ the features are the direct inputs to the models.
 # weights
 #
 
-import tensorflow as tf
-from tfx_bsl.public.tfxio import CsvTFXIO
-csv_tfxio = CsvTFXIO(
-    file_pattern='/path/to/my/data/file.csv',
-    column_names=['feature_1', 'feature_2', 'label'],
-    telemetry_descriptors=['MyComponent'],
-)
-dataset = csv_tfxio.TensorFlowDataset()
+============
+Looking into details of string serialization and deserialization of
+component parameters.
+
+protobufs need to be string serialized.  There are examples in the
+tfx source code where they use tfx.utils.proto_utils.proto_to_json
+to string encode the protobuf.
+- the deserialization of string to protobuf, json_to_proto is performed
+  by the driver.
+  e.g. tfx.dsl.components.base.base_driver.BaseDriver uses 
+  a method resolve_exec_properties that performs json_to_proto
+  on recognized keys such as tfx.types.standard_specs.OUTPUT_CONFIG
 
 
