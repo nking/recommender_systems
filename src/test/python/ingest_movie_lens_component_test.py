@@ -175,11 +175,15 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
       key=lambda x: x.create_time_since_epoch, reverse=True)[0]
     #or use last_update_time_since_epoch
     stats_uri = latest_stats_artifact.uri
+    logging.debug(f"loading stats_uri={stats_uri}")
     stats_path_train = os.path.join(stats_uri, get_split_dir_name("train"), 'FeatureStats.pb')
     stats_path_eval = os.path.join(stats_uri, get_split_dir_name("eval"), 'FeatureStats.pb')
     stats_path_test = os.path.join(stats_uri, get_split_dir_name("test"),'FeatureStats.pb')
 
-    stats_proto_train = tfdv.load_statistics(stats_path_train)
+    logging.debug(f"loading stats_path_train={stats_path_train}")
+    #statistics_pb2.DatasetFeatureStatisticsList
+    stats_proto_train = tfdv.load_stats_binary(stats_path_train)
+    logging.deubg(f'stats_proto_train={str(stats_proto_train)}')
     print("Successfully loaded statistics. Here is some example output:")
     for dataset in stats_proto_train.datasets:
       print(f"Statistics for dataset: {dataset.name}")
@@ -187,6 +191,8 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
         print(f"  Feature: {feature.path.step[0]}, Type: {feature.type}")
         if feature.HasField('num_stats'):
           print(f"    Min: {feature.num_stats.min}, Max: {feature.num_stats.max}, Mean: {feature.num_stats.mean}")
+        elif feature.HasField('string_stats'):
+          print(f"    String stats: unique_count={feature.string_stats.unique}")
 
     # =============== verify schema_gen results ==============
     logging.debug(f"schema_gen.id={schema_gen.id}")
