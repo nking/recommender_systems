@@ -104,13 +104,13 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
 
     self.name = 'test run of ratings ingestion w/ python custom comp func'
 
-  def test_ingest_movie_lens_component(self):
+  def test_MovieLensExampleGen(self):
 
     test_num = "py_custom_comp_1"
 
     infiles_dict_ser = serialize_to_string(self.infiles_dict)
 
-    ratings_example_gen = (ingest_movie_lens_component( \
+    ratings_example_gen = (MovieLensExampleGen( \
       infiles_dict_ser=infiles_dict_ser, \
       output_config_ser = self.output_config_ser))
 
@@ -158,7 +158,7 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     tfx.orchestration.LocalDagRunner().run(my_pipeline)
 
     # creates output_examples.uri=
-    # PIPELINE_ROOT/ingest_movie_lens_component/output_examples/1/
+    # PIPELINE_ROOT/MovieLensExampleGen/output_examples/1/
     # files are Split-train/data_*, etc
 
     # Check output paths.

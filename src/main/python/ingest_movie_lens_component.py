@@ -35,7 +35,7 @@ print(f"TFX version: {tfx.__version__}")
 #A parameter is an argument (int, float, bytes, or unicode string)
 
 @component(use_beam=True)
-def ingest_movie_lens_component( \
+def MovieLensExampleGen( \
   #name: tfx.dsl.components.Parameter[str], \
   infiles_dict_ser: tfx.dsl.components.Parameter[str], \
   output_config_ser: tfx.dsl.components.Parameter[str], \
@@ -57,7 +57,7 @@ def ingest_movie_lens_component( \
     :param beam_pipeline: injected into method by TFX.  do not supply
       this value
   """
-  logging.info("ingest_movie_lens_component")
+  logging.info("MovieLensExampleGen")
 
   try:
     infiles_dict = deserialize(infiles_dict_ser)

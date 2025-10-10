@@ -183,7 +183,7 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
 
     #editing
     # creates output_examples.uri=
-    # PIPELINE_ROOT/ingest_movie_lens_component/output_examples/1/
+    # PIPELINE_ROOT/IngestMovieLensComponent/output_examples/1/
     # files are Split-train/data_*, etc
 
     #list files in alt_output_data_dir and in output_data_dir
