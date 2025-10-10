@@ -207,7 +207,7 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
 
     artifact_uri = artifacts[0].uri
     for split_name in self.split_names:
-      dir_path = f'{examples_uri}/{get_split_dir_name(split_name)}'
+      dir_path = f'{artifact_uri}/{get_split_dir_name(split_name)}'
       file_paths = [os.path.join(dir_path, name) for name in os.listdir(dir_path)]
       #  file_paths = get_output_files(ratings_example_gen, 'output_examples', split_name)
       self.assertGreaterEqual(len(file_paths), 1)
