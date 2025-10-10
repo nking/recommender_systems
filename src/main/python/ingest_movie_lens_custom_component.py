@@ -28,7 +28,7 @@ from tfx.types import artifact_utils, standard_artifacts, \
 #from tfx.types.experimental.simple_artifacts import Dataset
 
 from tfx.proto import example_gen_pb2
-
+from tfx.utils import proto_utils
 from ingest_movie_lens_beam import *
 from movie_lens_utils import *
 
@@ -60,9 +60,11 @@ class IngestMovieLensExecutorSpec(ComponentSpec):
     # create an instance of this component.
     'name': ExecutionParameter(type=Text),
     'infiles_dict_ser' : ExecutionParameter(type=Text),
-    #output_config has to be string serialzied because the orchestrator uses pickle to save it
+    #output_config has to be string serialized because the orchestrator uses pickle to save it
     #'output_config': ExecutionParameter(type=example_gen_pb2.Output, use_proto=True),
-    'output_config_ser': ExecutionParameter(type=Text),
+    # deserialization is performed by the driver for PARAMETERS such as
+    #  tfx.types.standard_component_specs.OUTPUT_CONFIG
+    'output_config': ExecutionParameter(type=Text),
     #output_config should include split_config
   }
   INPUTS = {
@@ -125,7 +127,7 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
     :param exec_properties: is a json string serialized dictionary holding:
       key = infiles_dict_ser which is a json serialization of the
         infiles_dict
-      key = output_config_ser which is string serialized and must contain split_config
+      key = output_config which is string serialized and must contain split_config
     :param output_dict:
     :return:  tuple of (
       a dictionary of the merged, split data as keys=name, values
@@ -138,26 +140,26 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
     logging.debug(\
       "in IngestMovieLensExecutor.GenerateExamplesByBeam")
 
-    input_to_examples = self.GetInputSourceToExamplePTransform()
+    output_config = exec_properties["output_config"]
 
-    logging.debug( \
-      "about to read input and transform to tf.train.Example")
-
-    ratings_example, column_name_type_list = \
-      pipeline | f"GetInputSource{random.randint(0, 1000000000000)}" \
-      >> input_to_examples(exec_properties)
-
-    try:
-      output_config_ser = exec_properties['output_config_ser']
-      output_config = deserialize_to_proto(output_config_ser)
-    except Exception as ex:
-      logging.error(f"ERROR: {ex}")
-      raise ValueError(ex)
+    if not isinstance(output_config, example_gen_pb2.Output):
+      err = (f"ERROR: driver didn't de-serialize output_config.  "
+             f"type={type(output_config)}")
+      raise ValueError(err)
 
     if not output_config or not output_config.HasField('split_config') \
       or not output_config.split_config.splits:
       raise ValueError("parameters must include output_config which"
         f" must contain split_config.splits.  output_config={output_config}")
+
+    logging.debug( \
+      "about to read input and transform to tf.train.Example")
+
+    input_to_examples = self.GetInputSourceToExamplePTransform()
+
+    ratings_example, column_name_type_list = \
+      pipeline | f"GetInputSource{random.randint(0, 1000000000000)}" \
+      >> input_to_examples(exec_properties)
 
     total = sum([split.hash_buckets for split in output_config.split_config.splits])
     s = 0
@@ -190,7 +192,7 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
         detailed example gen implementation.
       output_dict: Output dict from output key to a list of Artifacts.
         - examples: splits of serialized records.
-      exec_properties: A dict of execution properties.
+      exec_properties: A dict of execution properties.  containes spec PARAMETERS.
 
     Returns:
       None
@@ -255,14 +257,16 @@ class IngestMovieLensComponent(base_beam_component.BaseBeamComponent):
   def __init__(self,\
     name : Optional[Text],
     infiles_dict_ser : Text,\
-    output_config_ser : Text,\
+    output_config : Text,\
     output_examples : Optional[types.Channel] = None):
 
     logging.debug(f'DEBUG IngestMovieLensComponent init')
 
     if not output_examples:
-      output_config = deserialize_to_proto(output_config_ser)
-      split_names = [split.name for split in output_config.split_config.splits]
+      _output_config = output_config
+      if not isinstance(_output_config, example_gen_pb2.Output):
+        _output_config = proto_utils.json_to_proto(output_config)
+      split_names = [split.name for split in _output_config.split_config.splits]
       examples_artifact = standard_artifacts.Examples()
       examples_artifact.splits = split_names
       output_examples = channel_utils.as_channel([examples_artifact])
@@ -270,7 +274,7 @@ class IngestMovieLensComponent(base_beam_component.BaseBeamComponent):
     spec = IngestMovieLensExecutorSpec(
       name=name, \
       infiles_dict_ser=infiles_dict_ser, \
-      output_config_ser=output_config_ser,\
+      output_config=output_config,\
       output_examples=output_examples)
 
     #super().__init__(spec=spec)

@@ -85,26 +85,6 @@ class TestInfileDictUtils(unittest.TestCase):
         self.assertTrue(isinstance(_name, str))
         self.assertIsNotNone(_type)
 
-  def test_prot_ser_deser(self):
-    buckets = [80, 10, 10]
-    bucket_names = ['train', 'eval', 'test']
-    output_config = example_gen_pb2.Output(
-      split_config=example_gen_pb2.SplitConfig(
-        splits=[
-          example_gen_pb2.SplitConfig.Split(name=n, hash_buckets=b) \
-          for n, b in zip(bucket_names, buckets)]
-      )
-    )
-    output_config_ser = serialize_proto_to_string(output_config)
-    deser = deserialize_to_proto(output_config_ser)
-    self.assertIsNotNone(deser)
-    self.assertNotEqual(deser, "")
-    #logging.debug(f"\noutput_config={output_config}\noutput_config_ser={output_config_ser}\ndeser={deser}")
-    #protocol buffers deserialization is not deterministic
-    #self.assertEqual(output_config, deser, \
-    #  f"output_config and deser should be same"
-    #  f"\noutput_config={output_config}\noutput_config_ser={output_config_ser}\ndeser={deser}")
-
   def test_ser_deser(self):
     ratings_dict, movies_dict, users_dict, infiles_dict = \
       self.make_infiles()

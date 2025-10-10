@@ -38,7 +38,7 @@ print(f"TFX version: {tfx.__version__}")
 def ingest_movie_lens_component( \
   #name: tfx.dsl.components.Parameter[str], \
   infiles_dict_ser: tfx.dsl.components.Parameter[str], \
-  output_config_ser: tfx.dsl.components.Parameter[str], \
+  output_config: tfx.dsl.components.Parameter[str], \
   output_examples: tfx.dsl.components.OutputArtifact[standard_artifacts.Examples], \
   #output_split_config: tfx.dsl.components.OutputArtifact[standard_artifacts.SplitConfig],\
   beam_pipeline: annotations.BeamComponentParameter[beam.Pipeline]=None):
@@ -50,8 +50,9 @@ def ingest_movie_lens_component( \
     :param infiles_dict_ser: a string created from using base64 and pickle on the infiles_dict created with
       movie_lens_utils.create_infiles_dict where its input arguments are made
       from movie_lens_utils.create_infile_dict
-    :param output_config_ser: string serialized example_gen_pb2.Output which
-      must include split_config
+    :param output_config: string serialized example_gen_pb2.Output which
+      must include split_config.   nothing else from it is parsed at this
+      time.
     :param output_examples: 
       ChannelParameter(type=standard_artifacts.Examples),
     :param beam_pipeline: injected into method by TFX.  do not supply
@@ -71,11 +72,9 @@ def ingest_movie_lens_component( \
     logging.error(err)
     raise ValueError(err)
     
-  try:
-    output_config = deserialize_to_proto(output_config_ser)
-  except Exception as ex:
-    err = f"error decoding, {ex}"
-    logging.error(err)
+  if not isinstance(output_config, example_gen_pb2.Output):
+    err = (f"ERROR: driver didn't de-serialize output_config.  "
+           f"type={type(output_config)}")
     raise ValueError(err)
 
   split_names = [split.name for split in output_config.split_config.splits]
