@@ -183,7 +183,7 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     logging.debug(f"loading stats_path_train={stats_path_train}")
     #statistics_pb2.DatasetFeatureStatisticsList
     stats_proto_train = tfdv.load_stats_binary(stats_path_train)
-    logging.deubg(f'stats_proto_train={str(stats_proto_train)}')
+    logging.debug(f'stats_proto_train={str(stats_proto_train)}')
     print("Successfully loaded statistics. Here is some example output:")
     for dataset in stats_proto_train.datasets:
       print(f"Statistics for dataset: {dataset.name}")
