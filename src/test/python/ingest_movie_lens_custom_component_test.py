@@ -115,8 +115,6 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
     #stats_gen = tfx.components.StatisticsGen(
     #  examples=ratings_example_gen.outputs['output_examples'])
 
-    logging.debug(f'TYPE of ratings_example_gen={type(ratings_example_gen)}')
-
     components = [ratings_example_gen]
 
     PIPELINE_NAME = 'TestFullyCustomCompPipeline'
@@ -171,6 +169,9 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
     # Check output paths.
     self.assertTrue(fileio.exists(os.path.join(PIPELINE_ROOT, \
       ratings_example_gen.id)))
+
+    logging.debug(f'TYPE of ratings_example_gen={type(ratings_example_gen)}')
+    logging.debug(f'ratings_example_gen={ratings_example_gen}')
 
     for key, value in ratings_example_gen.outputs.items():
       print(f'key={key}, value={value}')
