@@ -175,9 +175,9 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
       key=lambda x: x.create_time_since_epoch, reverse=True)[0]
     #or use last_update_time_since_epoch
     stats_uri = latest_stats_artifact.uri
-    stats_path_train = os.path.join(stats_uri, get_split_dir_name("train"), 'stats_tfrecord')
-    stats_path_eval = os.path.join(stats_uri, get_split_dir_name("eval"), 'stats_tfrecord')
-    stats_path_test = os.path.join(stats_uri, get_split_dir_name("test"),'stats_tfrecord')
+    stats_path_train = os.path.join(stats_uri, get_split_dir_name("train"), 'FeatureStats.pb')
+    stats_path_eval = os.path.join(stats_uri, get_split_dir_name("eval"), 'FeatureStats.pb')
+    stats_path_test = os.path.join(stats_uri, get_split_dir_name("test"),'FeatureStats.pb')
 
     stats_proto_train = tfdv.load_statistics(stats_path_train)
     print("Successfully loaded statistics. Here is some example output:")
@@ -199,7 +199,7 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
       key=lambda x: x.create_time_since_epoch, reverse=True)[0]
     # or use last_update_time_since_epoch
     schema_uri = latest_schema_artifact.uri
-    schema_path_train = os.path.join(schema_uri, get_split_dir_name("train"), \
-      'schema.pbtxt')
+    logging.debug(f'schema_uri={schema_uri}')
+    schema_path_train = os.path.join(schema_uri, 'schema.pbtxt')
     schema = tfx.utils.io_utils.load_schema_text(schema_path_train)
     logging.debug(f"schema={schema}")
