@@ -285,6 +285,8 @@ def get_file_prefix_path(examples_uri:str, split_name:str) -> str:
 def get_output_files(component, channel_name, split_name) -> List[str]:
   file_uri = os.path.join(component.outputs[channel_name].get()[0].uri, \
     _get_split_dir_name(split_name))
+  logging.debug(f"component.outputs[channel_name]={component.outputs[channel_name]}")
+  logging.debug(f"component.outputs[channel_name].get()={component.outputs[channel_name].get()}")
   logging.debug(f"comp.uri={component.outputs[channel_name].get()[0].uri},\n  file_uri={file_uri}")
   tfrecord_filenames = [os.path.join(file_uri, name) for name in os.listdir(file_uri)]
   return tfrecord_filenames
