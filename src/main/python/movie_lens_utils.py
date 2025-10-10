@@ -2,6 +2,7 @@ from typing import Any, Dict, List, Literal, Union, Tuple
 from tensorflow_metadata.proto.v0 import schema_pb2
 import tensorflow as tf
 
+import os
 import bisect
 import hashlib
 import pickle
