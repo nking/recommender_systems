@@ -198,7 +198,7 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
     #statistics_pb2.DatasetFeatureStatisticsList
     stats_proto_train = tfdv.load_stats_binary(stats_path_train)
     self.assertIsNotNone(stats_proto_train)
-    logging.debug(f'stats_proto_train={str(stats_proto_train)}')
+    #logging.debug(f'stats_proto_train={str(stats_proto_train)}')
     #print("Successfully loaded statistics. Here is some example output:")
     #self.assertLess(stats_proto_train.datasets.num_examples, 1000)
 
