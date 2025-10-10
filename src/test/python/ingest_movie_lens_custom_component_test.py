@@ -174,63 +174,54 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
       #  file_paths = get_output_files(ratings_example_gen, 'output_examples', split_name)
       self.assertGreaterEqual(len(file_paths), 1)
 
-    #stats_output = stats_gen.outputs['statistics']
+    #=============== verify statistics_gen results ==============
 
-    """
-    #self.assertIsNotNone(ratings_example_gen.outputs['output'].get()[0])
-    #output_path = ratings_example_gen.outputs['output'].get()[0].uri
-    #self.assertTrue(fileio.exists(output_path))
+    logging.debug(f"statistics_gen.id={statistics_gen.id}") #StatisticsGen
+    logging.debug(f"statistics_gen={statistics_gen}")
+    self.assertTrue(fileio.exists(os.path.join(PIPELINE_ROOT, statistics_gen.id)))
 
-    #following https://www.tensorflow.org/tfx/tutorials/mlmd/mlmd_tutorial#query_the_mlmd_database
-    
-    # Query all registered Artifact types.
-    artifact_types = store.get_artifact_types()
-    # All TFX artifacts are stored in the base directory
-    base_dir = \
-      connection_config.sqlite.filename_uri.split('metadata.sqlite')[0]
-    def display_types(types):
-      # Helper function to render dataframes for the artifact and execution types
-      table = {'id': [], 'name': []}
-      for a_type in types:
-        table['id'].append(a_type.id)
-        table['name'].append(a_type.name)
-      return pd.DataFrame(data=table)
+    stats_artifacts_list = store.get_artifacts_by_type("ExampleStatistics")
+    logging.debug(f"stats_artifacts_list={stats_artifacts_list}")
+    latest_stats_artifact = sorted(stats_artifacts_list, \
+      key=lambda x: x.create_time_since_epoch, reverse=True)[0]
+    #or use last_update_time_since_epoch
+    stats_uri = latest_stats_artifact.uri
+    logging.debug(f"loading stats_uri={stats_uri}")
+    stats_path_train = os.path.join(stats_uri, get_split_dir_name("train"), 'FeatureStats.pb')
+    stats_path_eval = os.path.join(stats_uri, get_split_dir_name("eval"), 'FeatureStats.pb')
+    stats_path_test = os.path.join(stats_uri, get_split_dir_name("test"),'FeatureStats.pb')
+    self.assertTrue(os.path.exists(stats_path_train))
+    self.assertTrue(os.path.exists(stats_path_eval))
+    self.assertTrue(os.path.exists(stats_path_test))
 
-    def display_artifacts(store, artifacts):
-      # Helper function to render dataframes for the input artifacts
-      table = {'artifact id': [], 'type': [], 'uri': []}
-      for a in artifacts:
-        table['artifact id'].append(a.id)
-        artifact_type = store.get_artifact_types_by_id([a.type_id])[0]
-        table['type'].append(artifact_type.name)
-        table['uri'].append(a.uri.replace(base_dir, './'))
-      return pd.DataFrame(data=table)
+    logging.debug(f"loading stats_path_train={stats_path_train}")
+    #statistics_pb2.DatasetFeatureStatisticsList
+    stats_proto_train = tfdv.load_stats_binary(stats_path_train)
+    self.assertIsNotNone(stats_proto_train)
+    logging.debug(f'stats_proto_train={str(stats_proto_train)}')
+    #print("Successfully loaded statistics. Here is some example output:")
+    #self.assertLess(stats_proto_train.datasets.num_examples, 1000)
 
-    def display_properties(store, node):
-      # Helper function to render dataframes for artifact and execution properties
-      table = {'property': [], 'value': []}
-      for k, v in node.properties.items():
-        table['property'].append(k)
-        table['value'].append(
-            v.string_value if v.HasField('string_value') else v.int_value)
-      for k, v in node.custom_properties.items():
-        table['property'].append(k)
-        table['value'].append(
-            v.string_value if v.HasField('string_value') else v.int_value)
-      return pd.DataFrame(data=table)
+    # =============== verify schema_gen results ==============
+    logging.debug(f"schema_gen.id={schema_gen.id}")
+    logging.debug(f"schema_gen={schema_gen}")
+    self.assertTrue(fileio.exists(os.path.join(PIPELINE_ROOT, schema_gen.id)))
 
-    display_types(store.get_artifact_types())
-    
-    execution_type = store.get_execution_type('IngestMovieLensComponent')
-    # Get the latest execution of this type
-    executions = store.get_executions_by_type(execution_type.name)
-    ingestion_execution = executions[-1] # Assuming the latest run is the one to check
-    
-    # Assert the execution is complete
-    assert ingestion_execution.last_known_state == metadata_store_pb2.Execution.State.COMPLETE
-
-
-    """
+    schema_artifacts_list = store.get_artifacts_by_type("Schema")
+    logging.debug(f"schema_artifacts_list={schema_artifacts_list}")
+    latest_schema_artifact = sorted(schema_artifacts_list, \
+      key=lambda x: x.create_time_since_epoch, reverse=True)[0]
+    # or use last_update_time_since_epoch
+    schema_uri = latest_schema_artifact.uri
+    logging.debug(f'schema_uri={schema_uri}')
+    schema_path_train = os.path.join(schema_uri, 'schema.pbtxt')
+    #schema_pb2.Schema
+    schema = tfdv.load_schema_text(schema_path_train)
+    self.assertIsNotNone(schema)
+    logging.debug(f"schema={schema}")
+    #TODO: consider asserting the schema:
+    # user_id,movie_id,rating,gender,age,occupation,zipcode,genres
+    # int,    int      int     str    int  int       str     str
 
   def testDo(self):
     #EXECUTOR_SPEC = executor_spec.BeamExecutorSpec(IngestMovieLensExecutor)
