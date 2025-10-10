@@ -169,7 +169,8 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     logging.debug(f"statistics_gen={statistics_gen}")
     self.assertTrue(fileio.exists(os.path.join(PIPELINE_ROOT, statistics_gen.id)))
 
-    stats_artifacts_list = store.get_artifacts_by_type("Statistics")
+    stats_artifacts_list = store.get_artifacts_by_type("ExampleStatistics")
+    logging.debug(f"stats_artifacts_list={stats_artifacts_list}")
     latest_stats_artifact = sorted(stats_artifacts_list, \
       key=lambda x: x.create_time_since_epoch, reverse=True)[0]
     #or use last_update_time_since_epoch
@@ -193,6 +194,7 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     self.assertTrue(fileio.exists(os.path.join(PIPELINE_ROOT, schema_gen.id)))
 
     schema_artifacts_list = store.get_artifacts_by_type("Schema")
+    logging.debug(f"schema_artifacts_list={schema_artifacts_list}")
     latest_schema_artifact = sorted(schema_artifacts_list, \
       key=lambda x: x.create_time_since_epoch, reverse=True)[0]
     # or use last_update_time_since_epoch
