@@ -11,6 +11,7 @@ from tfx.types import standard_artifacts, artifact_utils, standard_component_spe
 from tfx.dsl.component.experimental import annotations
 from tfx.dsl.component.experimental.decorators import component
 from tfx.components.example_gen import write_split
+from tfx.utils import proto_utils
 #from tfx.dsl.components.component import component
 
 from movie_lens_utils import *
@@ -73,9 +74,7 @@ def ingest_movie_lens_component( \
     raise ValueError(err)
     
   if not isinstance(output_config, example_gen_pb2.Output):
-    err = (f"ERROR: driver didn't de-serialize output_config.  "
-           f"type={type(output_config)}")
-    raise ValueError(err)
+    output_config = proto_utils.json_to_proto(output_config)
 
   split_names = [split.name for split in output_config.split_config.splits]
 

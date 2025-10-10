@@ -17,7 +17,6 @@ from tfx.components.util import examples_utils
 from tfx.dsl.components.base import executor_spec, base_component, base_beam_component
 from tfx import types
 from tfx.types.component_spec import ChannelParameter, ComponentSpec, ExecutionParameter
-
 from tfx.types import artifact_utils, standard_artifacts, \
   standard_component_specs, channel_utils
 
@@ -143,9 +142,7 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
     output_config = exec_properties["output_config"]
 
     if not isinstance(output_config, example_gen_pb2.Output):
-      err = (f"ERROR: driver didn't de-serialize output_config.  "
-             f"type={type(output_config)}")
-      raise ValueError(err)
+      output_config = proto_utils.json_to_proto(output_config)
 
     if not output_config or not output_config.HasField('split_config') \
       or not output_config.split_config.splits:
