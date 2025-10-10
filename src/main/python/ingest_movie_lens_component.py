@@ -90,8 +90,12 @@ def MovieLensExampleGen( \
 
   if isinstance(output_examples, list):
     output_uri = artifact_utils.get_single_instance(output_examples).uri
+    for artifact in output_examples:
+      #this is just json.dumps after some type checking
+      artifact.split_names = artifact_utils.encode_split_names(split_names)
   else:
     output_uri = output_examples.uri
+    output_examples.split_names = artifact_utils.encode_split_names(split_names)
 
   logging.debug(f"output_examples TYPE={type(output_examples)}")
   logging.debug(f"output_examples={output_examples}")
