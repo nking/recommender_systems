@@ -207,5 +207,6 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     schema_uri = latest_schema_artifact.uri
     logging.debug(f'schema_uri={schema_uri}')
     schema_path_train = os.path.join(schema_uri, 'schema.pbtxt')
-    schema = tfx.utils.io_utils.load_schema_text(schema_path_train)
+    #schema_pb2.Schema
+    schema = tfdv.load_schema_text(schema_path_train)
     logging.debug(f"schema={schema}")
