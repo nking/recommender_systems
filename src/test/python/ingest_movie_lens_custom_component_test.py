@@ -177,7 +177,7 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
     #=============== verify statistics_gen results ==============
 
     logging.debug(f"statistics_gen.id={statistics_gen.id}") #StatisticsGen
-    logging.debug(f"statistics_gen={statistics_gen}")
+    #logging.debug(f"statistics_gen={statistics_gen}")
     self.assertTrue(fileio.exists(os.path.join(PIPELINE_ROOT, statistics_gen.id)))
 
     stats_artifacts_list = store.get_artifacts_by_type("ExampleStatistics")

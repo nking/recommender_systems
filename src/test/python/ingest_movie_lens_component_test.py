@@ -193,7 +193,7 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
 
     # =============== verify schema_gen results ==============
     logging.debug(f"schema_gen.id={schema_gen.id}")
-    logging.debug(f"schema_gen={schema_gen}")
+    #logging.debug(f"schema_gen={schema_gen}")
     self.assertTrue(fileio.exists(os.path.join(PIPELINE_ROOT, schema_gen.id)))
 
     schema_artifacts_list = store.get_artifacts_by_type("Schema")
