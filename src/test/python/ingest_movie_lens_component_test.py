@@ -165,7 +165,7 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
 
     #=============== verify statistics_gen results ==============
 
-    logging.debug(f"statistics_gen.id={statistics_gen.id}")
+    logging.debug(f"statistics_gen.id={statistics_gen.id}") #StatisticsGen
     logging.debug(f"statistics_gen={statistics_gen}")
     self.assertTrue(fileio.exists(os.path.join(PIPELINE_ROOT, statistics_gen.id)))
 
@@ -179,25 +179,38 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     stats_path_train = os.path.join(stats_uri, get_split_dir_name("train"), 'FeatureStats.pb')
     stats_path_eval = os.path.join(stats_uri, get_split_dir_name("eval"), 'FeatureStats.pb')
     stats_path_test = os.path.join(stats_uri, get_split_dir_name("test"),'FeatureStats.pb')
+    self.assertTrue(os.path.exists(stats_path_train))
+    self.assertTrue(os.path.exists(stats_path_eval))
+    self.assertTrue(os.path.exists(stats_path_test))
 
     logging.debug(f"loading stats_path_train={stats_path_train}")
     #statistics_pb2.DatasetFeatureStatisticsList
     stats_proto_train = tfdv.load_stats_binary(stats_path_train)
+    self.assertIsNotNone(stats_proto_train)
     logging.debug(f'stats_proto_train={str(stats_proto_train)}')
     print("Successfully loaded statistics. Here is some example output:")
+    num_n = 0
+    num_str = 0
     for dataset in stats_proto_train.datasets:
-      print(f"Statistics for dataset: {dataset.name}")
+      self.assertIsNotNone(dataset)
+      #print(f"Statistics for dataset: {dataset.name}")
       for feature in dataset.features:
-        print(f"  Feature: {feature.path.step[0]}, Type: {feature.type}")
+        print(f"  Feature: {feature}")
         if feature.HasField('num_stats'):
-          print(f"    Min: {feature.num_stats.min}, Max: {feature.num_stats.max}, Mean: {feature.num_stats.mean}")
+          num_n += 1
+          #print(f"    Min: {feature.num_stats.min}, Max: {feature.num_stats.max}, Mean: {feature.num_stats.mean}")
         elif feature.HasField('string_stats'):
-          print(f"    String stats: unique_count={feature.string_stats.unique}")
-
+          num_str += 1
+          #print(f"    String stats: unique_count={feature.string_stats.unique}")
+    #self.assertLess(stats_proto_train.datasets.num_examples, 1000)
     # =============== verify schema_gen results ==============
     logging.debug(f"schema_gen.id={schema_gen.id}")
     logging.debug(f"schema_gen={schema_gen}")
     self.assertTrue(fileio.exists(os.path.join(PIPELINE_ROOT, schema_gen.id)))
+    # user_id,movie_id,rating,gender,age,occupation,zipcode,genres
+    # int,    int      int     str    int  int       str     str
+    #self.assertEqual(num_n, 5)
+    #self.assertEqual(num_str, 3)
 
     schema_artifacts_list = store.get_artifacts_by_type("Schema")
     logging.debug(f"schema_artifacts_list={schema_artifacts_list}")
@@ -209,4 +222,5 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     schema_path_train = os.path.join(schema_uri, 'schema.pbtxt')
     #schema_pb2.Schema
     schema = tfdv.load_schema_text(schema_path_train)
+    self.assertIsNotNone(schema)
     logging.debug(f"schema={schema}")
