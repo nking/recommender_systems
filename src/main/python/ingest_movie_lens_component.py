@@ -62,7 +62,7 @@ def MovieLensExampleGen( \
   try:
     infiles_dict = deserialize(infiles_dict_ser)
   except Exception as ex:
-    err = f"error using pickle and base64"
+    err = f"error with deserialize(infiles_dict_ser)"
     logging.error(f'{err} : {ex}')
     raise ValueError(f'{err} : {ex}')
 
@@ -74,7 +74,7 @@ def MovieLensExampleGen( \
   try:
     output_config = deserialize_to_proto(output_config_ser)
   except Exception as ex:
-    err = f"error decoding, {ex}"
+    err = f"error with deserialize_to_proto(output_config_ser), {ex}"
     logging.error(err)
     raise ValueError(err)
 
@@ -93,9 +93,15 @@ def MovieLensExampleGen( \
     for artifact in output_examples:
       #this is just json.dumps after some type checking
       artifact.split_names = artifact_utils.encode_split_names(split_names)
+      if "version" in infiles_dict:
+        artifact.version = infiles_dict["version"]
+        artifact.span = 0
   else:
     output_uri = output_examples.uri
     output_examples.split_names = artifact_utils.encode_split_names(split_names)
+    if "version" in infiles_dict:
+      output_examples.version = infiles_dict["version"]
+      output_examples.span = 0
 
   logging.debug(f"output_examples TYPE={type(output_examples)}")
   logging.debug(f"output_examples={output_examples}")

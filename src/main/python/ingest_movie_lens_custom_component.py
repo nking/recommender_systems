@@ -207,26 +207,31 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
         "  about to write to uri")
 
       output_examples = output_dict['output_examples']
+      if output_examples is None:
+        logging.error("ERROR: fix coding error for missing output_examples")
+        raise ValueError("Error: fix coding error for missing output_examples")
+
       logging.debug(f"output_examples TYPE={type(output_examples)}")
       logging.debug(f"output_examples={output_examples}")
 
       output_config = deserialize_to_proto(exec_properties['output_config_ser'])
       split_names = [split.name for split in output_config.split_config.splits]
+      infiles_dict = deserialize(exec_properties['infiles_dict_ser'])
 
       if isinstance(output_examples, list):
         output_uri = artifact_utils.get_single_instance(output_examples).uri
         for artifact in output_examples:
           #this is just json.dumps after some type checking
           artifact.split_names = artifact_utils.encode_split_names(split_names)
+          if "version" in infiles_dict:
+            artifact.version = infiles_dict["version"]
+            artifact.span = 0
       else:
         output_uri = output_examples.uri
         output_examples.split_names = artifact_utils.encode_split_names(split_names)
-
-      if output_examples is None:
-        logging.error(
-          "ERROR: fix coding error for missing output_examples")
-        raise ValueError(
-          "Error: fix coding error for missing output_examples")
+        if "version" in infiles_dict:
+          output_examples.version = infiles_dict["version"]
+          output_examples.span = 0
 
       # https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/proto/example_gen.proto#L44
       # If VERSION is specified, but not SPAN, an error will be thrown.

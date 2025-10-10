@@ -57,7 +57,7 @@ def create_infile_dict(for_file: Literal['ratings', 'movies', 'users'], \
 
 def create_infiles_dict(ratings_dict: Dict[str, Union[str, Dict]], \
   movies_dict: Dict[str, Union[str, Dict]], \
-  users_dict: Dict[str, Union[str, Dict]], version:int=1) \
+  users_dict: Dict[str, Union[str, Dict]], version:int=0) \
   -> Dict[str, Union[str, Dict]]:
   """
   merge the 3 dictionaries, each created by create_infile_dict, into single
@@ -65,7 +65,7 @@ def create_infiles_dict(ratings_dict: Dict[str, Union[str, Dict]], \
   :param ratings_dict:
   :param movies_dict:
   :param users_dict:
-  :param version: version for output tf.train.Examples artifact
+  :param version: version for output tf.train.Examples artifact.  optional
   :return: a merge of the 3 dictionaries
   """
 
