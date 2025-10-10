@@ -19,7 +19,7 @@ from tfx.utils import name_utils
 import pprint
 import absl
 from absl import logging
-absl.logging.set_verbosity(absl.logging.DEBUG)
+absl.logging.set_verbosity(absl.logging.INFO)
 
 from ingest_movie_lens_custom_component import *
 from movie_lens_utils import *

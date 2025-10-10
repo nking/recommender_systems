@@ -22,7 +22,7 @@ from tfx import v1 as tfx
 import tensorflow as tf
 
 tf.get_logger().propagate = False
-absl.logging.set_verbosity(absl.logging.DEBUG)
+absl.logging.set_verbosity(absl.logging.INFO)
 pp = pprint.PrettyPrinter()
 
 print(f"TensorFlow version: {tf.__version__}")

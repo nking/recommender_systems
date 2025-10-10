@@ -43,7 +43,7 @@ from ml_metadata.proto import metadata_store_pb2
 from ml_metadata.metadata_store import metadata_store
 import absl
 from absl import logging
-absl.logging.set_verbosity(absl.logging.DEBUG)
+absl.logging.set_verbosity(absl.logging.INFO)
 
 from helper import *
 

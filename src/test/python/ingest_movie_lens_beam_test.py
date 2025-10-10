@@ -22,7 +22,7 @@ import absl
 from absl import logging
 import pprint
 
-absl.logging.set_verbosity(absl.logging.DEBUG)
+absl.logging.set_verbosity(absl.logging.INFO)
 pp = pprint.PrettyPrinter()
 
 
