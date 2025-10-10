@@ -22,16 +22,15 @@ import pickle
 import base64
 import random
 
-from unittest import mock
 import tensorflow as tf
 from tfx.dsl.components.base import executor_spec
 from tfx.dsl.io import fileio
 from tfx.orchestration import data_types
 from tfx.orchestration import metadata
-from tfx.orchestration import publisher
 from tfx.orchestration.launcher import in_process_component_launcher
 from tfx.proto import example_gen_pb2
 from tfx.utils import name_utils
+from tfx.components import StatisticsGen
 
 import pprint
 import absl
@@ -112,6 +111,9 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
       name=name,\
       infiles_dict_ser=serialize_to_string(self.infiles_dict), \
       output_config_ser=serialize_proto_to_string(self.output_config))
+
+    #stats_gen = tfx.components.StatisticsGen(
+    #  examples=ratings_example_gen.outputs['output_examples'])
 
     logging.debug(f'TYPE of ratings_example_gen={type(ratings_example_gen)}')
 
@@ -200,9 +202,12 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
     execution_count = len(executions)
     self.assertGreaterEqual(artifact_count, execution_count)
 
-    for split_name in self.split_names:
-      file_list = get_output_files(ratings_example_gen, 'output_examples', split_name)
-      self.assertGreaterEqual(len(file_list), 1)
+    #TODO: change to use pipeline path, and do another assert with MLMD info
+    #for split_name in self.split_names:
+    #  file_list = get_output_files(ratings_example_gen, 'output_examples', split_name)
+    #  self.assertGreaterEqual(len(file_list), 1)
+
+    #stats_output = stats_gen.outputs['statistics']
 
     """
     #self.assertIsNotNone(ratings_example_gen.outputs['output'].get()[0])

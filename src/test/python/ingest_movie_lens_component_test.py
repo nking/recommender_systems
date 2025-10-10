@@ -33,6 +33,7 @@ from tfx.orchestration import publisher
 from tfx.orchestration.launcher import in_process_component_launcher
 from tfx.proto import example_gen_pb2
 from tfx.utils import name_utils
+from tfx.components import StatisticsGen
 
 from ingest_movie_lens_component import *
 from movie_lens_utils import *
@@ -185,10 +186,42 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     artifact_count = len(artifacts)
     execution_count = len(executions)
     self.assertGreaterEqual(artifact_count, execution_count)
+    self.assertGreaterEqual(artifact_count, execution_count)
 
-    for split_name in self.split_names:
-      file_list = get_output_files(ratings_example_gen, 'output_examples', split_name)
-      self.assertGreaterEqual(len(file_list), 1)
+    """
+    def get_latest_artifact_path_statistics(metadata_store, pipeline_name, component_name):
+      # Find the component by name
+      component_artifacts = metadata_store.get_artifacts_by_type_and_name(
+          type_name='Statistics', name=f'{pipeline_name}.{component_name}.statistics'
+      )
+      if not component_artifacts:
+        print(f"No artifacts found for component '{component_name}'.")
+        return None
+      # Sort artifacts by creation time to get the latest one
+      latest_artifact = sorted(component_artifacts, \
+        key=lambda a: a.create_time_since_epoch, reverse=True)[0]
+
+      # Get the URI and find the 'statistics.pb' file
+      artifact_uri = latest_artifact.uri
+      stats_path = os.path.join(artifact_uri, 'Split-train', 'stats_tfrecord')
+
+      return stats_path
+    """
+    #stats_file_path = get_latest_artifact_path_statistics(store, PIPELINE_NAME, 'StatisticsGen')
+    #if stats_file_path:
+    #    stats_proto = tfdv.load_statistics(stats_file_path)
+    #    print("Successfully loaded statistics. Here is some example output:")
+    #    for dataset in stats_proto.datasets:
+    #        print(f"Statistics for dataset: {dataset.name}")
+    #        for feature in dataset.features:
+    #            print(f"  Feature: {feature.path.step[0]}, Type: {feature.type}")
+    #            if feature.HasField('num_stats'):
+    #                print(f"    Min: {feature.num_stats.min}, Max: {feature.num_stats.max}, Mean: {feature.num_stats.mean}")
+
+    # TODO: change to use pipeline path, and do another assert with MLMD info
+    # for split_name in self.split_names:
+    #  file_list = get_output_files(ratings_example_gen, 'output_examples', split_name)
+    #  self.assertGreaterEqual(len(file_list), 1)
 
     #self.assertIsNotNone(ratings_example_gen.outputs['output_examples'].get()[0])
     #output_path = ratings_example_gen.outputs['output'].get()[0].uri

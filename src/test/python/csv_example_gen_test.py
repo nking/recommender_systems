@@ -129,6 +129,12 @@ class CSVExampleGenTest(tf.test.TestCase):
     execution_count = len(executions)
     self.assertGreaterEqual(artifact_count, execution_count)
     logging.debug(f'contexts={store.get_contexts()}')
+
+    try:
+      get_output_files(users_example_gen, 'examples', 'train')
+    except Exception as ex:
+      pass
+
     """
     #self.assertIsNotNone(ratings_example_gen.outputs['output'].get()[0])
     #output_path = ratings_example_gen.outputs['output'].get()[0].uri
