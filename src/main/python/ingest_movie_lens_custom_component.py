@@ -142,7 +142,7 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
     output_config = exec_properties["output_config"]
 
     if not isinstance(output_config, example_gen_pb2.Output):
-      output_config = proto_utils.json_to_proto(output_config)
+      output_config = proto_utils.json_to_proto(output_config, example_gen_pb2.Output)
 
     if not output_config or not output_config.HasField('split_config') \
       or not output_config.split_config.splits:
@@ -262,7 +262,7 @@ class IngestMovieLensComponent(base_beam_component.BaseBeamComponent):
     if not output_examples:
       _output_config = output_config
       if not isinstance(_output_config, example_gen_pb2.Output):
-        _output_config = proto_utils.json_to_proto(output_config)
+        _output_config = proto_utils.json_to_proto(output_config, example_gen_pb2.Output)
       split_names = [split.name for split in _output_config.split_config.splits]
       examples_artifact = standard_artifacts.Examples()
       examples_artifact.splits = split_names

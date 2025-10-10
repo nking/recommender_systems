@@ -74,7 +74,7 @@ def ingest_movie_lens_component( \
     raise ValueError(err)
     
   if not isinstance(output_config, example_gen_pb2.Output):
-    output_config = proto_utils.json_to_proto(output_config)
+    output_config = proto_utils.json_to_proto(output_config, example_gen_pb2.Output)
 
   split_names = [split.name for split in output_config.split_config.splits]
 
