@@ -2,6 +2,11 @@ import apache_beam as beam
 import pyarrow as pa
 from apache_beam.io import parquetio
 
+"""
+offers an IngestAndJoin which reads Parquet files into pyarrow tables,
+performs a left inner join on ratings with users and movies.
+"""
+
 import os
 #from apache_beam.coders import coders
 
@@ -9,6 +14,7 @@ import os
 #  sequential numbers
 
 import random
+import time
 
 from typing import Any, List, Tuple
 from movie_lens_utils import *
@@ -39,6 +45,14 @@ class ReadCSVToRecords(beam.PTransform):
 
 class WriteParquet(beam.PTransform):
   def __init__(self, infile_dict, file_path_prefix):
+    """
+     write parquet records to the given file_path_prefix.
+     The infile_dict is used to create the pyarrow schema.
+    :param infile_dict: the dictionary created
+      from movie_lens_utils.create_infile_dict
+    :param file_path_prefix: absolute path to file prefix, that is an
+       absolute pathe to a directory joined to the file name prefix
+    """
     super().__init__()
     self.infile_dict = infile_dict
     self.file_path_prefix = file_path_prefix
@@ -48,6 +62,37 @@ class WriteParquet(beam.PTransform):
     logging.debug(f'file_path_prefix={self.file_path_prefix}')
     pa_schema = pa.schema(pa_schema_list)
     logging.debug(f'pa_schema={pa_schema}')
+    pcoll \
+      | f'write_to_parquet_{time.time_ns()}' \
+      >> parquetio.WriteToParquet(\
+      file_path_prefix=self.file_path_prefix,\
+      schema=pa_schema, file_name_suffix='.parquet')
+
+class WriteJoinedRatingsParquet(beam.PTransform):
+  def __init__(self, file_path_prefix, column_name_type_list):
+    """
+    write the joined ratings file to a parquet file given the
+    file_path_prefix and the column_name_type_list returned by
+    ingest_movie_lens_beam_pa.IngestAndJoin.
+    column_name_type_list is used for creating a pyarrow schema
+    for parquetio.WriteToParquetBatched.
+    The joined ratings is a PCollection of pyarraow table and so has a schema
+    for the first, etc. but parquetio.WriteToParquetBatched input schema
+    must be deterministic, and cannot be derived from PCollection at runtime.
+    So this method is here to write the pa.schema from the list of tuples
+    of column names and types that was created after the ratings left
+    inner joins... details so I don't forget and try to use an extracted
+    schema from the ratings PCollection again...
+
+    :param file_path_prefix:
+    :param column_name_type_list:
+    """
+    super().__init__()
+    self.file_path_prefix = file_path_prefix
+    self.column_name_type_list = column_name_type_list
+
+  def expand(self, pcoll=None):
+    pa_schema = create_pa_schema_from_list(self.column_name_type_list)
     pcoll \
       | f'write_to_parquet_{time.time_ns()}' \
       >> parquetio.WriteToParquet(\

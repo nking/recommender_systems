@@ -162,6 +162,26 @@ def create_namedtuple_schemas(infiles_dict: Dict[str, Union[str, Dict]]) \
   return {key : create_namedtuple_schema(infiles_dict[key]) \
     for key in ['ratings', 'movies', 'users']}
 
+def create_pa_schema_from_list(column_name_type_list: List[Tuple[str, Any]]) \
+  -> pa.lib.Schema:
+  """
+  create a pyarrow schema from the column_name_type_list returned by
+  ingest_movie_lens_beam_pa.IngestAndJoin
+
+  :param column_name_type_list:
+  :return:
+  """
+  s = []
+  for col_name, t in column_name_type_list:
+    if t == int:
+      pa_type = pa.int64()
+    elif t == float:
+      pa_type = pa.float64()
+    else:
+      pa_type = pa.string()
+    s.append((col_name, pa_type))
+  return pa.schema(s)
+
 def create_pa_schema(infile_dict: Dict[str, Union[str, Dict]]) -> Dict[str, List[Tuple]]:
   """
   from a dictionary created with create_infile_dict, create a schema for
