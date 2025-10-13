@@ -1,6 +1,7 @@
 from tfx.proto import example_gen_pb2
 from typing import Tuple
 
+#contains tf import:
 from movie_lens_utils import *
 
 def get_test_data(use_small=True, kaggle=True) -> Tuple[str, str, list[str]]:
@@ -65,3 +66,11 @@ def get_test_data(use_small=True, kaggle=True) -> Tuple[str, str, list[str]]:
   )
   output_config_ser = serialize_proto_to_string(output_config)
   return infiles_dict_ser, output_config_ser, split_names
+
+def get_expected_col_name_feature_types() -> Dict[str, tf.train.Feature]:
+  return {"user_id": tf.train.Int64List, "movie_id":tf.train.Int64List,
+    "rating" : tf.train.FloatList, "gender" : tf.train.BytesList,
+    "age" : tf.train.Int64List, "occupation" : tf.train.Int64List,
+    "zipcode" : tf.train.BytesList, "genred" : tf.train.BytesList}
+#user_id, movie_id, rating, gender, age, occupation, zipcode, genres
+ # int,    int      int     str    int  int       str     str

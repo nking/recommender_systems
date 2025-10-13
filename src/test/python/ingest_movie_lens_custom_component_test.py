@@ -93,7 +93,7 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
     alt_output_data_dir = os.path.join(
       os.environ.get('TEST_UNDECLARED_OUTPUTS_DIR',
                      self.get_temp_dir()), self._testMethodName)
-    print(f'alt_output_data_dir={alt_output_data_dir}')
+    logging.debug(f'alt_output_data_dir={alt_output_data_dir}')
 
     ENABLE_CACHE = False
 
@@ -137,7 +137,7 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
                   f'{ratings_example_gen.outputs["output_examples"]}')
 
     for key, value in ratings_example_gen.outputs.items():
-      print(f'key={key}, value={value}')
+      log.debug(f'key={key}, value={value}')
 
     #editing
     # creates output_examples.uri=
@@ -145,10 +145,10 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
     # files are Split-train/data_*, etc
 
     #list files in alt_output_data_dir and in output_data_dir
-    print(f'listing files in output_data_dir {PIPELINE_ROOT}:')
+    logging.debug(f'listing files in output_data_dir {PIPELINE_ROOT}:')
     for dirname, _, filenames in os.walk(PIPELINE_ROOT):
       for filename in filenames:
-        print(os.path.join(dirname, filename))
+        logging.debug(os.path.join(dirname, filename))
 
     # metadata_connection = metadata.Metadata(metadata_connection_config)
     store = metadata_store.MetadataStore(metadata_connection_config)

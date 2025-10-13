@@ -70,8 +70,18 @@ def preprocessing_fn(inputs):
     indices=outputs['genres'], depth=len(genres), dtype=tf.int64), axis=-2)
   #the sum is across columns for each example.
   #assuming batch_size is the first dimension, then cols and rows follow
-  # so axis=-2 should use along columns per example whether batched or not
+  # so axis=-2 should sum along columns per example whether batched or not
 
   return outputs, labels
 
-
+#def stats_options_updater_fn(stats_type, stats_options):
+#  "define custom constraints on the pre-transform or post-transform statistics"
+#  if stats_type == stats_options_util.StatsType.PRE_TRANSFORM:
+    # Update stats_options to modify pre-transform statistics computation.
+    # Most constraints are specified in the schema which can be accessed
+    # via stats_options.schema.
+#  if stats_type == stats_options_util.StatsType.POST_TRANSFORM
+    # Update stats_options to modify post-transform statistics computation.
+    # Most constraints are specified in the schema which can be accessed
+    # via stats_options.schema.
+#  return stats_options

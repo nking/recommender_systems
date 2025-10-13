@@ -89,7 +89,7 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     alt_output_data_dir = os.path.join(
       os.environ.get('TEST_UNDECLARED_OUTPUTS_DIR',
                      self.get_temp_dir()), self._testMethodName)
-    print(f'alt_output_data_dir={alt_output_data_dir}')
+    logging.debug(f'alt_output_data_dir={alt_output_data_dir}')
 
     ENABLE_CACHE = False
 
@@ -125,12 +125,12 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     self.assertTrue(fileio.exists(os.path.join(PIPELINE_ROOT, ratings_example_gen.id)))
 
     for key, value in ratings_example_gen.outputs.items():
-      print(f'key={key}\n  value={value}')
+      logging.debug(f'key={key}\n  value={value}')
 
-    print(f'listing files in PIPELINE_ROOT {PIPELINE_ROOT}:')
+    logging.debug(f'listing files in PIPELINE_ROOT {PIPELINE_ROOT}:')
     for dirname, _, filenames in os.walk(PIPELINE_ROOT):
       for filename in filenames:
-        print(os.path.join(dirname, filename))
+        logging.debug(os.path.join(dirname, filename))
 
     #https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/types/standard_artifacts.py#L487
     #Examples
@@ -163,6 +163,26 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
       #  file_paths = get_output_files(ratings_example_gen, 'output_examples', split_name)
       self.assertGreaterEqual(len(file_paths), 1)
 
+      col_name_feature_types = get_expected_col_name_feature_types()
+      dataset = tf.data.TFRecordDataset(file_paths, compression_type="GZIP")
+      #assert features for 1 record in examples:
+      for tfrecord in dataset.take(1):
+        example = tf.train.Example()
+        example.ParseFromString(tfrecord.numpy())
+        for feature in example.features:
+          self.assertTrue(feature.key in col_name_feature_types)
+          expected_type = col_name_feature_types[feature.key].pop()
+          #for python >= 3.10, can use:
+          match expected_type:
+            case tf.train.Int64List:
+              self.assertTrue(feature.HasField('int64_list'))
+            case tf.train.FloatList:
+              self.assertTrue(feature.HasField('float_list'))
+            case tf.train.BytesList:
+              self.assertTrue(feature.HasField('bytes_list'))
+            case _:
+              self.fail(f"unexpected feature type in feature={feature}")
+        self.assertEqual(0, len(col_name_feature_types))
     #=============== verify statistics_gen results ==============
 
     logging.debug(f"statistics_gen.id={statistics_gen.id}") #StatisticsGen
@@ -211,3 +231,16 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     #TODO: consider asserting the schema:
     # user_id,movie_id,rating,gender,age,occupation,zipcode,genres
     # int,    int      int     str    int  int       str     str
+    col_name_feature_types = get_expected_col_name_feature_types()
+    for feature in schema.feature:
+      self.assertTrue(feature.name in col_name_feature_types)
+      expected_type = col_name_feature_types[feature.name].pop()
+      match feature.type:
+        case schema_pb2.INT:
+          self.assertTrue(expected_type == tf.train.Int64List)
+        case schema_pb2.FLOAT:
+          self.assertTrue(expected_type == tf.train.FloatList)
+        case schema_pb2.BYTES:
+          self.assertTrue(expected_type == tf.train.BytesList)
+        case _:
+          self.fail(f"unexpected feature type in feature={feature}")

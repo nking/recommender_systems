@@ -1,4 +1,8 @@
 import apache_beam as beam
+import pyarrow as pa
+from apache_beam.io import parquetio
+
+import os
 #from apache_beam.coders import coders
 
 #TODO: replace use of random in labels for PTransform with unique
@@ -14,9 +18,42 @@ from CustomUTF8Coder import CustomUTF8Coder
 
 import absl
 from absl import logging
-absl.logging.set_verbosity(absl.logging.INFO)
+absl.logging.set_verbosity(absl.logging.DEBUG)
 
-#@beam.typehints.with_output_types(beam.PCollection)
+class ReadCSVToRecords(beam.PTransform):
+  def __init__(self, infiles_dict):
+    super().__init__()
+    self.infiles_dict = infiles_dict
+
+  def line_to_record(self, line, infile_dict, pa_schema):
+    items = line.split(infile_dict['delim'])
+    out = {}
+    for i in range(len(items)):
+      if pa_schema[i][1] == pa.int64():
+        out[pa_schema[i][0]] = int(items[i])
+      elif pa_schema[i][1] == pa.float64():
+        out[pa_schema[i][0]] = float(items[i])
+      else:
+        out[pa_schema[i][0]] = items[i]
+    return out
+
+class WriteParquet(beam.PTransform):
+  def __init__(self, infile_dict, file_path_prefix):
+    super().__init__()
+    self.infile_dict = infile_dict
+    self.file_path_prefix = file_path_prefix
+
+  def expand(self, pcoll=None):
+    pa_schema_list = create_pa_schema(self.infile_dict)
+    logging.debug(f'file_path_prefix={self.file_path_prefix}')
+    pa_schema = pa.schema(pa_schema_list)
+    logging.debug(f'pa_schema={pa_schema}')
+    pcoll \
+      | f'write_to_parquet_{time.time_ns()}' \
+      >> parquetio.WriteToParquet(\
+      file_path_prefix=self.file_path_prefix,\
+      schema=pa_schema, file_name_suffix='.parquet')
+
 class LeftJoinFn(beam.DoFn):
   """
   left join of left PCollection rows with right PCollection row.
@@ -25,30 +62,38 @@ class LeftJoinFn(beam.DoFn):
 
   :return returns merged rows
   """
-  def __init__(self, right_filter_cols, debug_tag:str=""):
+  def __init__(self, right_filter_cols,\
+    l_key_col : int, r_key_col : int, debug_tag:str=""):
     super().__init__()
     self.right_filter_cols = right_filter_cols
     self.debug_tag = debug_tag
+    self.l_key_col = l_key_col
+    self.r_key_col = r_key_col
 
   #TODO: consider also implementing def process_batch
   def process(self, kv):
     key, grouped_elements = kv
     # grouped_elements is a dictionary with keys 'left' and 'right'
     # both are lists of lists.
+
     if len(grouped_elements['right']) != 1:
       raise ValueError(f"{self.debug_tag}: in join, right list length != 1: key={key}, grouped_elements={grouped_elements}")
 
-    right_row = grouped_elements['right'][0]
+    right_table = grouped_elements['right'][0]
 
     #does nothing if this is a right join with no left element
-    for left in grouped_elements['left']:
+    output_rows = []
+    for left_table in grouped_elements['left']:
       # join grouped_elements['left'] and grouped_elements['right'][0]
-      # merge, reorder etc. as wanted
-      row = left.copy()
-      for i, right in enumerate(right_row):
-        if i not in self.right_filter_cols:
-          row.append(right)
-      yield row
+      for left_row in left_table.to_pylist():
+        for right_row in right_table.to_pylist():
+          if left_row[self.l_key_col] == right_row[self.r_key_col]:
+            for d in self.right_filter_cols:
+              del right_row[d]
+            output_rows.append({**left_row, **right_row})
+
+    if output_rows:
+      yield pa.Table.from_pylist(output_rows)
 
 class MergeByKey(beam.PTransform):
   """
@@ -63,8 +108,8 @@ class MergeByKey(beam.PTransform):
   while the right PCollection is given as side input to the
   constructor, along with the other parameters"""
   def __init__(self, r_pc : beam.PCollection, \
-    l_key_col : int, r_key_col : int, \
-    filter_cols : List[int], debug_tag : str = ""):
+    l_key_col : str, r_key_col : str, \
+    filter_cols : List[str], debug_tag : str = ""):
     super().__init__()
     self.r_pc = r_pc
     self.l_key_col = l_key_col
@@ -73,10 +118,15 @@ class MergeByKey(beam.PTransform):
     self.debug_tag = debug_tag
 
   def expand(self, l_pc):
-    l_keyed = l_pc | f'kv_l_{random.randint(0,1000000000)}' \
-      >> beam.Map(lambda x: (x[self.l_key_col], x))
-    r_keyed = self.r_pc | f'kv_r_{random.randint(0,1000000000)}' \
-      >> beam.Map(lambda x: (x[self.r_key_col], x))
+    l_keyed = (l_pc | beam.FlatMap(
+        lambda table: [(row[self.l_key_col], table)
+          for row in table.to_pylist()])
+        )
+
+    r_keyed = (self.r_pc | beam.FlatMap(
+        lambda table: [(row[self.r_key_col], table)
+          for row in table.to_pylist()])
+        )
 
     # multiple lefts on one line, and one in right's list:
     grouped_data = ({'left': l_keyed, 'right': r_keyed} \
@@ -86,16 +136,19 @@ class MergeByKey(beam.PTransform):
     try:
       joined_data = grouped_data \
         | f'left_join_values_{random.randint(0,1000000000)}' \
-        >> beam.ParDo(LeftJoinFn(self.filter_cols, debug_tag=self.debug_tag))
+        >> beam.ParDo(LeftJoinFn(self.filter_cols, \
+           self.l_key_col, self.r_key_col, debug_tag=self.debug_tag))
     except Exception as ex:
       logging.error(f"ERROR for {self.debug_tag}: l_key_col={self.l_key_col}, r_key_col={self.r_key_col}")
       raise ex
 
     return joined_data
 
+#TODO: change the use of uris here and in the parquet writes
 class ReadFiles(beam.PTransform):
   """
-  read ratings, movies, and users independently
+  read ratings, movies, and users independently from parquet files
+  into pytables
   """
   def __init__(self, infiles_dict):
     super().__init__()
@@ -104,37 +157,16 @@ class ReadFiles(beam.PTransform):
   def expand(self, pcoll=None):
     pc = {}
     for key in ['ratings', 'movies', 'users']:
-      if self.infiles_dict[key]['headers_present']:
-        skip = 1
-      else:
-        skip = 0
-      # class 'apache_beam.transforms.ptransform._ChainedPTransform
-      pc[key] = pcoll | f"r{random.randint(0,10000000000)}" >> \
-        beam.io.ReadFromText(\
-        self.infiles_dict[key]['uri'], skip_header_lines=skip,
-        coder=CustomUTF8Coder()) \
-        | f'parse_{key}_{random.randint(0, 1000000000000)}' >> \
-        beam.Map(lambda line: line.split(self.infiles_dict[key]['delim']))
+      infile_dict = self.infiles_dict[key]
+      dir_path = os.path.dirname(os.path.abspath(infile_dict['uri']))
+      file_path_prefix = f'{dir_path}/{key}'
+
+      file_path_pattern = f"{file_path_prefix}*.parquet"
+
+      pc[key] = pcoll | f"read_parquet_{random.randint(0,10000000000)}" >> \
+        parquetio.ReadFromParquetBatched(file_path_pattern)
+
     return pc
-
-@beam.ptransform_fn
-@beam.typehints.with_input_types(beam.PCollection, List[Tuple[str, Any]])
-@beam.typehints.with_output_types(tf.train.Example)
-def convert_to_tf_example(pcollection: beam.PCollection, column_name_type_list) -> beam.PCollection:
-    return pcollection | f'ToTFExample_{random.randint(0, 1000000000000)}' >> beam.Map(create_example, column_name_type_list)
-
-@beam.ptransform_fn
-@beam.typehints.with_input_types(beam.PCollection, str, str, str)
-@beam.typehints.with_output_types(None)
-def write_to_csv(pcollection : beam.PCollection, \
-  column_names : str, prefix_path:str, delim:str='_') -> None:
-  # format the lines into a delimiter separated string then write to
-  # file
-  pcollection | f"format_for_writing_{random.randint(0, 1000000000000)}" >> beam.Map( \
-    lambda x: delim.join(x)) \
-    | f"write_to_text_{random.randint(0, 1000000000000)}"  >> beam.io.WriteToText( \
-    file_path_prefix=prefix_path, file_name_suffix='.csv', \
-    header=column_names)
 
 class IngestAndJoin(beam.PTransform):
   """
@@ -159,28 +191,25 @@ class IngestAndJoin(beam.PTransform):
     if err:
       raise ValueError(err)
 
-    pc = pcoll | f"read_{random.randint(0, 1000000000000)}" >> ReadFiles(self.infiles_dict)
+    tables_dict = pcoll | f"read_{random.randint(0, 1000000000000)}" \
+      >> ReadFiles(self.infiles_dict)
 
     # ratings: user_id,movie_id,rating
     # movie_id,title,genre
     # user_id::gender::age::occupation::zipcode
        # user_id,movie_id,rating,timestamp,gender,age,occupation,zipcode
-    ratings_1 = pc['ratings'] | \
+    ratings_1 = tables_dict['ratings'] | \
       f"left_join_ratings_users_{random.randint(0,1000000000)}" \
-      >> MergeByKey(pc['users'], \
-      self.infiles_dict['ratings']['cols']['user_id']['index'], \
-      self.infiles_dict['users']['cols']['user_id']['index'], \
-      filter_cols=[self.infiles_dict['users']['cols']['zipcode']['index'],\
-      self.infiles_dict['users']['cols']['user_id']['index']], debug_tag="R-U")
+      >> MergeByKey(tables_dict['users'], \
+      'user_id', 'user_id', \
+      filter_cols=['zipcode', 'user_id'], debug_tag="R-U")
 
     # user_id,movie_id,rating,gender,age,occupation,zipcode,genres
     ratings = ratings_1 | \
       f"left_join_ratings_users_movies_{random.randint(0,1000000000)}" \
-      >> MergeByKey(pc['movies'], \
-      self.infiles_dict['ratings']['cols']['movie_id']['index'], \
-      self.infiles_dict['movies']['cols']['movie_id']['index'], \
-      filter_cols=[self.infiles_dict['movies']['cols']['title']['index'], \
-      self.infiles_dict['movies']['cols']['movie_id']['index']], \
+      >> MergeByKey(tables_dict['movies'], \
+      'movie_id', 'movie_id', \
+      filter_cols=['title', 'movie_id'], \
       debug_tag="R-M")
 
     schemas = create_namedtuple_schemas(self.infiles_dict)

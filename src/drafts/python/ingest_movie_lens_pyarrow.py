@@ -1,4 +1,6 @@
 import apache_beam as beam
+import pyarrow as pa
+import pyarrow.csv as csv
 #from apache_beam.coders import coders
 
 #TODO: replace use of random in labels for PTransform with unique
@@ -6,7 +8,7 @@ import apache_beam as beam
 
 import random
 
-from typing import Any, List, Tuple
+from typing import Any, Dict, List, Union, Tuple
 from movie_lens_utils import *
 #from apache_beam.pvalue import TaggedOutput
 
@@ -14,7 +16,7 @@ from CustomUTF8Coder import CustomUTF8Coder
 
 import absl
 from absl import logging
-absl.logging.set_verbosity(absl.logging.INFO)
+absl.logging.set_verbosity(absl.logging.DEBUG)
 
 #@beam.typehints.with_output_types(beam.PCollection)
 class LeftJoinFn(beam.DoFn):
@@ -49,6 +51,7 @@ class LeftJoinFn(beam.DoFn):
         if i not in self.right_filter_cols:
           row.append(right)
       yield row
+
 
 class MergeByKey(beam.PTransform):
   """
@@ -93,6 +96,42 @@ class MergeByKey(beam.PTransform):
 
     return joined_data
 
+class ReadCSVIntoPyArrow(beam.DoFn):
+  def __init__(self, infile_dict: dict, debug_tag: str = ""):
+    super().__init__()
+    self.debug_tag = debug_tag
+    file_uri = infile_dict['uri']
+    self.parse_options = csv.ParseOptions(
+       delimiter="\t",
+    )
+    column_names = [name for name in infile_dict['cols'].keys()]
+    column_types = {}
+    for col_name, col_dict in infile_dict['cols'].items():
+      if col_dict['type'] == int:
+        column_types[col_name] = pa.int64()
+      elif col_dict['type'] == str:
+        column_types[col_name] = pa.string()
+      elif col_dict['type'] == float:
+        column_types[col_name] = pa.float64()
+      else:
+        raise ValueError(f"{col_dict['type']} not handled")
+    self.read_options = csv.ReadOptions(
+      use_threads=True,
+      column_names = column_names,
+      #encoding="iso-8859-1" #ik skip ReadFromText
+    )
+    self.convert_options = csv.ConvertOptions(
+      column_types = column_types
+    )
+  def process(self, element):
+    try:
+      table = csv.read_csv(element, read_options=self.read_options, \
+        parse_options=self.parse_options, convert_options=self.convert_options)
+      yield table
+    except Exception as e:
+      # Handle potential errors during CSV parsing
+      print(f"Error reading CSV: {e}")
+
 class ReadFiles(beam.PTransform):
   """
   read ratings, movies, and users independently
@@ -108,13 +147,21 @@ class ReadFiles(beam.PTransform):
         skip = 1
       else:
         skip = 0
-      # class 'apache_beam.transforms.ptransform._ChainedPTransform
-      pc[key] = pcoll | f"r{random.randint(0,10000000000)}" >> \
-        beam.io.ReadFromText(\
+      # unfortunately, the file delimeter is 2 characters '::' and
+      # the pyarrow file reader only accepts 1 character.
+      # change '::' to '\t'
+      #  either before writing pipeline (not done)
+      #   LC_ALL=UTF8 sed 's/::/\t/g' users.dat >users_tab.dat
+      #  or here using beam.Regex
+      # result is class 'apache_beam.transforms.ptransform._ChainedPTransform
+      pc[key] = (pcoll | f"{key}_read_text_{random.randint(0,10000000000)}" \
+        >> beam.io.ReadFromText( \
         self.infiles_dict[key]['uri'], skip_header_lines=skip,
         coder=CustomUTF8Coder()) \
-        | f'parse_{key}_{random.randint(0, 1000000000000)}' >> \
-        beam.Map(lambda line: line.split(self.infiles_dict[key]['delim']))
+        | f"{key}_regex_{random.randint(0,10000000000)}" \
+        >> beam.transforms.util.Regex.replace_all(":::", "\t") \
+        | f"{key}_to_pyarrow_{random.randint(0,10000000000)}" \
+        >> beam.ParDo(ReadCSVIntoPyArrow(self.infiles_dict[key])))
     return pc
 
 @beam.ptransform_fn

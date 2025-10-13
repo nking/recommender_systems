@@ -1,11 +1,7 @@
-import apache_beam as beam
-
-import absl
 import pprint
 import time
-import random
 
-from typing import Any, Dict, List, Text, Optional, Union, Tuple
+from typing import Text, Optional
 
 import tensorflow as tf
 

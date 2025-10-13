@@ -1,6 +1,7 @@
 from typing import Any, Dict, List, Literal, Union, Tuple
 from tensorflow_metadata.proto.v0 import schema_pb2
 import tensorflow as tf
+import pyarrow as pa
 
 import os
 import bisect
@@ -126,7 +127,30 @@ def create_example(row, column_name_type_list: List[Tuple[str, Any]]):
       raise ex
   return tf.train.Example(features=tf.train.Features(feature=feature_map))
 
-def create_namedtuple_schemas(infiles_dict: Dict[str, Union[str, Dict]]) -> Dict[str, List[Tuple]]:
+def create_namedtuple_schema(infile_dict: Dict[str, Union[str, Dict]])\
+  -> Dict[str, List[Tuple]]:
+  """
+  from a dictionary created with create_infile_dict, create a schema for
+  pyarrow, which is a list
+  of tuples of column names and types
+  :param infile_dict:
+  :return: a list of tuples of column name and types,
+  useable with coders.registry.register_coder and usable for a pyarrow
+  schema
+  """
+  s = []
+  for col_name in infile_dict['cols']:
+    idx = infile_dict['cols'][col_name]['index']
+    t = infile_dict['cols'][col_name]['type']
+    s.append((col_name, idx, t))
+  s.sort(key=lambda x: x[1])
+  s2 = []
+  for c, i, t in s:
+    s2.append((c, t))
+  return s2
+
+def create_namedtuple_schemas(infiles_dict: Dict[str, Union[str, Dict]]) \
+  -> Dict[str, List[Tuple]]:
   """
   from a dictionary created with create_infiles_dict, create a dictionary of
   of lists of tuples of column names and types that can be used as a
@@ -135,21 +159,34 @@ def create_namedtuple_schemas(infiles_dict: Dict[str, Union[str, Dict]]) -> Dict
   :return: a dictionary of list of tuples of column name and types,
   useable with coders.registry.register_coder
   """
-  out = {}
-  for key in infiles_dict:
-    if key == "version":
-      continue
-    s = []
-    for col_name in infiles_dict[key]['cols']:
-      idx = infiles_dict[key]['cols'][col_name]['index']
-      t = infiles_dict[key]['cols'][col_name]['type']
-      s.append((col_name, idx, t))
-    s.sort(key=lambda x: x[1])
-    s2 = []
-    for c, i, t in s:
-      s2.append((c, t))
-    out[key] = s2
-  return out
+  return {key : create_namedtuple_schema(infiles_dict[key]) \
+    for key in ['ratings', 'movies', 'users']}
+
+def create_pa_schema(infile_dict: Dict[str, Union[str, Dict]]) -> Dict[str, List[Tuple]]:
+  """
+  from a dictionary created with create_infile_dict, create a schema for
+  pyarrow, which is a list
+  of tuples of column names and types
+  :param infile_dict:
+  :return: a list of tuples of column name and types,
+  useable with coders.registry.register_coder and usable for a pyarrow schema
+  """
+  s = []
+  for col_name in infile_dict['cols']:
+    idx = infile_dict['cols'][col_name]['index']
+    t = infile_dict['cols'][col_name]['type']
+    s.append((col_name, idx, t))
+  s.sort(key=lambda x: x[1])
+  s2 = []
+  for c, i, t in s:
+    if t == int:
+      pa_type = pa.int64()
+    elif t == float:
+      pa_type = pa.float64()
+    else:
+      pa_type = pa.string()
+    s2.append((c, pa_type))
+  return s2
 
 def infiles_dict_formedness_error(ml_dict: Dict[str, Union[str, Dict]]) -> Union[str, None]:
   """
