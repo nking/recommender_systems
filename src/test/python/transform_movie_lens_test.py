@@ -175,8 +175,8 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
 
     tfrecord_filenames = [os.path.join(stats_path_train, name) for name in os.listdir(stats_path_train)]
     dataset = tf.data.TFRecordDataset(tfrecord_filenames, compression_type="GZIP")
-    for tfrecord in dataset.take(1):
+    for tfrecord in dataset.take(5):
       example = tf.train.Example()
       example.ParseFromString(tfrecord.numpy())
-      logging.debug(f"1 transform example={example}")
+      logging.debug(f"a transform example={example}")
 
