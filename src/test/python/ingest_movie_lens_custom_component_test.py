@@ -48,7 +48,7 @@ from ml_metadata.metadata_store import metadata_store
 from apache_beam.options.pipeline_options import PipelineOptions
 
 tf.get_logger().propagate = False
-absl.logging.set_verbosity(absl.logging.DEBUG)
+absl.logging.set_verbosity(absl.logging.INFO)
 
 class IngestMovieLensCustomComponentTest(tf.test.TestCase):
 
