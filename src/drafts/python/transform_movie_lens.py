@@ -11,10 +11,15 @@ from absl import logging
 logging.set_verbosity(absl.logging.DEBUG)
 
 ## fixed vocabularies, known ahead of time
-genres = ["Action", "Adventure", "Animation", "Children", "Comedy",
-          "Crime", "Documentary", "Drama", "Fantasy", "Film-Noir",
-          "Horror", "Musical", "Mystery", "Romance", "Sci-Fi",
-          "Thriller", "War", "Western"]
+#genres = ["Action", "Adventure", "Animation", "Children", "Comedy",
+#          "Crime", "Documentary", "Drama", "Fantasy", "Film-Noir",
+#          "Horror", "Musical", "Mystery", "Romance", "Sci-Fi",
+#          "Thriller", "War", "Western"]
+genres = [b'Action', b'Adventure', b'Animation', b'Children', b'Comedy',
+          b'Crime', b'Documentary', b'Drama', b'Fantasy', b'Film-Noir',
+          b'Horror', b'Musical', b'Mystery', b'Romance', b'Sci-Fi',
+          b'Thriller', b'War', b'Western']
+
 genders = ['F', 'M']
 
 ## 0-17, 18-24, 25-34, 35-44, 45-49, 50-55, >= 56
@@ -40,8 +45,8 @@ def preprocessing_fn(inputs):
   """
   :param inputs: map from feature keys to raw not-yet-transformed features.
      features have the following column names and types:
-     column_names = user_id,movie_id,rating,gender,age,occupation,zipcode,genres
-     column_types = int,    int ,     int ,  str, int, int,       str,     str
+     column_names = user_id,movie_id,rating,timestamp,gender,age,occupation,genres
+     column_types = int,    int ,     int ,  int,       str, int, int,          str
   :return: tuple of (processed features without label, label)
   """
   logging.debug(f"inputs={inputs}")
@@ -71,6 +76,7 @@ def preprocessing_fn(inputs):
   #creates a RaggedTensor of strings:
   outputs['genres'] = tf.strings.split(outputs['genres'], "|")
   genres_table = create_static_table(genres, var_dtype=tf.string)
+  logging.debug(outputs['genres'])
   # creates a RaggedTensor of tf.int64:
   outputs['genres'] = genres_table.lookup(outputs['genres'])
   #the model needs tensors to be same size, so make it dense multithot
