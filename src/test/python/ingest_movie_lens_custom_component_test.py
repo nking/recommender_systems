@@ -97,10 +97,6 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
 
     ENABLE_CACHE = False
 
-    if not ENABLE_CACHE:
-      if os.path.exists(METADATA_PATH):
-        os.remove(METADATA_PATH)
-
     #metadata_connection_config = metadata_store_pb2.ConnectionConfig()
     #metadata_connection_config.sqlite.SetInParent()
     #metadata_connection = metadata.Metadata(metadata_connection_config)
@@ -198,6 +194,7 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
                                           col_name_feature_types)
 
       try:
+        parsed_dataset = dataset.map(_parse_function)
         for parsed_example in parsed_dataset.take(1):
           pass
       except Exception as e:
