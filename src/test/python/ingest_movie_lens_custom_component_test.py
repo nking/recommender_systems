@@ -174,6 +174,44 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
       #  file_paths = get_output_files(ratings_example_gen, 'output_examples', split_name)
       self.assertGreaterEqual(len(file_paths), 1)
 
+      logging.debug(f"file_paths={file_paths}")
+      col_name_feature_types = get_expected_col_name_feature_types2()
+      dataset = tf.data.TFRecordDataset(file_paths,
+                                        compression_type="GZIP")
+      # dataset is TFRecordDatasetV2 element_spec=TensorSpec(shape=(), dtype=tf.string, name=None)
+      logging.debug(f"dataset={dataset}")
+
+      # user_id,movie_id,rating,gender,age,occupation,genres
+      logging.debug(f"tf.executing_eagerly()={tf.executing_eagerly()}")
+
+      # parse into dictionaries.
+      # {'age': <tf.Tensor: shape=(), dtype=int64, numpy=50>,
+      # 'gender': <tf.Tensor: shape=(), dtype=string, numpy=b'F'>,
+      # 'genres': <tf.Tensor: shape=(), dtype=string,
+      #   numpy=b"Animation|Children's|Comedy">,
+      # 'movie_id': <tf.Tensor: shape=(), dtype=int64, numpy=1>,
+      # 'occupation': <tf.Tensor: shape=(), dtype=int64, numpy=9>,
+      # 'rating': <tf.Tensor: shape=(), dtype=int64, numpy=4>,
+      # 'user_id': <tf.Tensor: shape=(), dtype=int64, numpy=6>}
+      def _parse_function(example_proto):
+        return tf.io.parse_single_example(example_proto,
+                                          col_name_feature_types)
+
+      try:
+        for parsed_example in parsed_dataset.take(1):
+          pass
+      except Exception as e:
+        self.fail(e)
+
+      try:
+        for tfrecord in dataset.take(1):
+          example = tf.train.Example()
+          example.ParseFromString(tfrecord.numpy())
+          # print(f"EXAMPLE={example}")
+      except Exception as e:
+        self.fail(e)
+        # =============== verify statistics_gen results ==============
+
     #=============== verify statistics_gen results ==============
 
     logging.debug(f"statistics_gen.id={statistics_gen.id}") #StatisticsGen

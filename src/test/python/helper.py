@@ -69,8 +69,18 @@ def get_test_data(use_small=True, kaggle=True) -> Tuple[str, str, list[str]]:
 
 def get_expected_col_name_feature_types() -> Dict[str, tf.train.Feature]:
   return {"user_id": tf.train.Int64List, "movie_id":tf.train.Int64List,
-    "rating" : tf.train.FloatList, "gender" : tf.train.BytesList,
+    "rating" : tf.train.Int64List, "gender" : tf.train.BytesList,
     "age" : tf.train.Int64List, "occupation" : tf.train.Int64List,
-    "zipcode" : tf.train.BytesList, "genred" : tf.train.BytesList}
+    "genres" : tf.train.BytesList}
+
+def get_expected_col_name_feature_types2():
+  return {"user_id": tf.io.FixedLenFeature([], tf.int64),
+    "movie_id":tf.io.FixedLenFeature([], tf.int64),
+    "rating" : tf.io.FixedLenFeature([], tf.int64),
+    "gender" : tf.io.FixedLenFeature([], tf.string),
+    "age" : tf.io.FixedLenFeature([], tf.int64),
+    "occupation" : tf.io.FixedLenFeature([], tf.int64),
+    "genres" : tf.io.FixedLenFeature([], tf.string)}
+
 #user_id, movie_id, rating, gender, age, occupation, zipcode, genres
  # int,    int      int     str    int  int       str     str

@@ -165,38 +165,40 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
       self.assertGreaterEqual(len(file_paths), 1)
 
       logging.debug(f"file_paths={file_paths}")
-      col_name_feature_types = get_expected_col_name_feature_types()
+      col_name_feature_types = get_expected_col_name_feature_types2()
       dataset = tf.data.TFRecordDataset(file_paths, compression_type="GZIP")
       #dataset is TFRecordDatasetV2 element_spec=TensorSpec(shape=(), dtype=tf.string, name=None)
       logging.debug(f"dataset={dataset}")
 
-      # user_id,movie_id,rating,gender,age,occupation,zipcode,genres
-      col_names = ["user_id", "movie_id", "rating", "gender", "age", \
-        "occupation", "zipcode", "genred"]
+      # user_id,movie_id,rating,gender,age,occupation,genres
       logging.debug(f"tf.executing_eagerly()={tf.executing_eagerly()}")
 
+      #parse into dictionaries.
+      #{'age': <tf.Tensor: shape=(), dtype=int64, numpy=50>,
+      # 'gender': <tf.Tensor: shape=(), dtype=string, numpy=b'F'>,
+      # 'genres': <tf.Tensor: shape=(), dtype=string,
+      #   numpy=b"Animation|Children's|Comedy">,
+      # 'movie_id': <tf.Tensor: shape=(), dtype=int64, numpy=1>,
+      # 'occupation': <tf.Tensor: shape=(), dtype=int64, numpy=9>,
+      # 'rating': <tf.Tensor: shape=(), dtype=int64, numpy=4>,
+      # 'user_id': <tf.Tensor: shape=(), dtype=int64, numpy=6>}
+      def _parse_function(example_proto):
+        return tf.io.parse_single_example(example_proto,
+          col_name_feature_types)
+      try:
+        for parsed_example in parsed_dataset.take(1):
+          pass
+      except Exception as e:
+        self.fail(e)
 
-      #assert features for 1 record in examples:
-      for tfrecord in dataset.take(1):
-        example = tf.train.Example()
-        example.ParseFromString(tfrecord.numpy())
-        loggine.debug(f"EXAMPLE={example}")
-        """
-        for feature in example.features:
-          self.assertTrue(feature.key in col_name_feature_types)
-          expected_type = col_name_feature_types[feature.key].pop()
-          #for python >= 3.10, can use:
-          match expected_type:
-            case tf.train.Int64List:
-              self.assertTrue(feature.HasField('int64_list'))
-            case tf.train.FloatList:
-              self.assertTrue(feature.HasField('float_list'))
-            case tf.train.BytesList:
-              self.assertTrue(feature.HasField('bytes_list'))
-            case _:
-              self.fail(f"unexpected feature type in feature={feature}")
-        self.assertEqual(0, len(col_name_feature_types))
-        """
+      try:
+        for tfrecord in dataset.take(1):
+          example = tf.train.Example()
+          example.ParseFromString(tfrecord.numpy())
+          # print(f"EXAMPLE={example}")
+      except Exception as e:
+        self.fail(e)
+
     #=============== verify statistics_gen results ==============
 
     logging.debug(f"statistics_gen.id={statistics_gen.id}") #StatisticsGen
@@ -243,8 +245,8 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     self.assertIsNotNone(schema)
     logging.debug(f"schema={schema}")
     #TODO: consider asserting the schema:
-    # user_id,movie_id,rating,gender,age,occupation,zipcode,genres
-    # int,    int      int     str    int  int       str     str
+    # user_id,movie_id,rating,gender,age,occupation,genres
+    # int,    int      int     str    int  int       str
     col_name_feature_types = get_expected_col_name_feature_types()
     for feature in schema.feature:
       self.assertTrue(feature.name in col_name_feature_types)
