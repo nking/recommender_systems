@@ -40,7 +40,7 @@ import pprint
 import absl
 from absl import logging
 tf.get_logger().propagate = False
-absl.logging.set_verbosity(absl.logging.INFO)
+absl.logging.set_verbosity(absl.logging.DEBUG)
 
 from ingest_movie_lens_custom_component import *
 from movie_lens_utils import *
