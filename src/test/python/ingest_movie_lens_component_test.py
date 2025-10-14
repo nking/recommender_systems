@@ -158,8 +158,7 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     artifact_uri = artifacts[0].uri
     for split_name in self.split_names:
       dir_path = f'{artifact_uri}/{get_split_dir_name(split_name)}'
-      file_paths = [os.path.join(dir_path, name) for name in
-                    os.listdir(dir_path)]
+      file_paths = [os.path.join(dir_path, name) for name in os.listdir(dir_path)]
       #  file_paths = get_output_files(ratings_example_gen, 'output_examples', split_name)
       self.assertGreaterEqual(len(file_paths), 1)
 
@@ -169,12 +168,22 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
       #dataset is TFRecordDatasetV2 element_spec=TensorSpec(shape=(), dtype=tf.string, name=None)
       logging.debug(f"dataset={dataset}")
 
-      def _parse_function(example_proto):
-        return tf.io.parse_single_example(example_proto, feature_description)
+      # user_id,movie_id,rating,gender,age,occupation,zipcode,genres
+      feature_spec = {
+        'user_id': tf.io.FixedLenFeature([], tf.int64),
+        'movie_id': tf.io.FixedLenFeature([], tf.int64),
+        'rating': tf.io.FixedLenFeature([], tf.string),
+        'gender': tf.io.FixedLenFeature([], tf.string),
+        'age': tf.io.FixedLenFeature([], tf.int64),
+        'occupation': tf.io.FixedLenFeature([], tf.int64),
+        'zipcode': tf.io.FixedLenFeature([], tf.string),
+        'genres': tf.io.FixedLenFeature([], tf.string),
+      }
+      def _parse_tf_example(serialized_example):
+        return tf.io.parse_single_example(serialized_example, feature_spec)
+      parsed_dataset = dataset.map(_parse_tf_example)
 
-      parsed_dataset = dataset.map(_parse_function)
-
-      logging.debug(f"parsed_dataset={parsed_dataset}")
+      logging.debug(f'parsed_dataset={parsed_dataset}')
 
       #assert features for 1 record in examples:
       for tfrecord in parsed_dataset.take(1):
