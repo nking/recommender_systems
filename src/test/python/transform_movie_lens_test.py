@@ -97,6 +97,11 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     #metadata_connection = metadata.Metadata(metadata_connection_config)
     metadata_connection_config = metadata.sqlite_metadata_connection_config(METADATA_PATH)
 
+    beam_pipeline_args = [
+      '--direct_running_mode=multi_processing',
+      '--direct_num_workers=0'
+    ]
+
     #imple is tfx.v1.dsl.Pipeline  where tfx is aliased in import
     my_pipeline = tfx.dsl.Pipeline(
       pipeline_name=PIPELINE_NAME,
@@ -104,15 +109,10 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
       components=components,
       enable_cache=ENABLE_CACHE,
       metadata_connection_config=metadata_connection_config,
-      #beam_pipeline_args=beam_pipeline_args,
+      beam_pipeline_args=beam_pipeline_args,
     )
 
-    direct_runner_config = direct_dag_runner.DirectDagRunner.get_default_config()
-    logging.debug(f"direct_runner_config={direct_runner_config}")
-    direct_runner_config.runner_args['direct_running_mode'] = 'multi_threading'
-    direct_runner_config.runner_args['direct_num_workers'] = 0
-
-    tfx.orchestration.LocalDagRunner(direct_runner_config).run(my_pipeline)
+    tfx.orchestration.LocalDagRunner().run(my_pipeline)
 
     #metadata_connection = metadata.Metadata(metadata_connection_config)
     store = metadata_store.MetadataStore(metadata_connection_config)
