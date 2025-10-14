@@ -39,6 +39,7 @@ from helper import *
 import pprint
 import absl
 from absl import logging
+tf.get_logger().propagate = False
 absl.logging.set_verbosity(absl.logging.DEBUG)
 
 from ingest_movie_lens_custom_component import *

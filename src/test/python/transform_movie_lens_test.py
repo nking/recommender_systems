@@ -44,6 +44,7 @@ from ml_metadata.proto import metadata_store_pb2
 from ml_metadata.metadata_store import metadata_store
 import absl
 from absl import logging
+tf.get_logger().propagate = False
 absl.logging.set_verbosity(absl.logging.DEBUG)
 
 from helper import *
