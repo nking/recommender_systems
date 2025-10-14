@@ -173,16 +173,14 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
       # user_id,movie_id,rating,gender,age,occupation,zipcode,genres
       col_names = ["user_id", "movie_id", "rating", "gender", "age", \
         "occupation", "zipcode", "genred"]
-      def extract_str_feature(dataset, feature_names):
-        np_dataset = []
-        for example in dataset:
-          for feature_name in feature_names:
-            np_example = example_coder.ExampleToNumpyDict(example.numpy())
-            np_dataset.append(np_example[feature_name][0].decode())
-        return tf.data.Dataset.from_tensor_slices(np_dataset)
-      parsed_dataset = extract_str_feature(dataset, col_names)
+      logging.debug(f"tf.executing_eagerly()={tf.executing_eagerly()}")
+      if tf.executing_eagerly():
+        examples = [e.numpy() for e in dataset]
+      else:
+        examples = list(
+          tf.compat.v1.io.tf_record_iterator(file_paths, tf.io.TFRecordOptions(compression_type='GZIP')))
 
-      logging.debug(f"parsed_dataset={parsed_dataset}")
+      logging.debug(f"from disk examples=={examples}")
 
       #assert features for 1 record in examples:
       for tfrecord in parsed_dataset.take(1):
