@@ -29,11 +29,11 @@ CTZ = pytz.timezone("America/Chicago")
 def _get_raw_feature_spec(schema):
   return schema_utils.schema_as_feature_spec(schema).feature_spec
 
-def create_static_table(var_list, key_dtype, value_dtype):
+def create_static_table(var_list, var_dtype, key_dtype, value_dtype):
   return tf.lookup.StaticHashTable( \
     tf.lookup.KeyValueTensorInitializer(\
       keys=tf.constant(var_list), \
-      values=tf.range(len(var_list), dtype=tf.int64),\
+      values=tf.range(len(var_list), dtype=var_dtype),\
       key_dtype=key_dtype, value_dtype=value_dtype), \
       default_value=-1, dtype=tf.int64)
 
@@ -55,11 +55,13 @@ def preprocessing_fn(inputs):
   #outputs['rating'] = inputs['rating']/5.0
   labels = tf.cast(inputs['rating'], tf.float32)/5.0
 
-  gender_table = create_static_table(genders, key_dtype=tf.string, value_dtype=tf.int64)
+  gender_table = create_static_table(genders, var_dtype=tf.string, \
+    key_dtype=tf.string, value_dtype=tf.int64)
   outputs['gender'] = gender_table.lookup(inputs['gender'])
   outputs['gender'] = tf.one_hot( outputs['gender'], depth=len(genders), dtype=tf.int64)
 
-  age_groups_table = create_static_table(age_groups, key_dtype=tf.int64, value_dtype=tf.int64)
+  age_groups_table = create_static_table(age_groups, \
+    var_dtype=tf.int64, key_dtype=tf.int64, value_dtype=tf.int64)
   outputs['age'] = age_groups_table.lookup(inputs['age'])
   outputs['age'] = tf.one_hot( outputs['age'], depth=len(age_groups), dtype=tf.int64)
 
@@ -72,7 +74,8 @@ def preprocessing_fn(inputs):
       input = inputs['genres'], pattern="Children's", rewrite="Children")
   #creates a RaggedTensor of strings:
   outputs['genres'] = tf.strings.split(outputs['genres'], "|")
-  genres_table = create_static_table(genres, key_dtype=tf.string, value_dtype=tf.int64)
+  genres_table = create_static_table(genres, var_dtype=tf.string,\
+    key_dtype=tf.string, value_dtype=tf.int64)
   # creates a RaggedTensor of tf.int64:
   outputs['genres'] = genres_table.lookup(outputs['genres'])
   #the model needs tensors to be same size, so make it dense multithot
