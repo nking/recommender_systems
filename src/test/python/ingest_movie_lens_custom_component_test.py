@@ -196,7 +196,7 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
         return tf.io.parse_single_example(example_proto, col_name_feature_types)
 
       try:
-        dataset = tf.data.TFRecordDataset(file_paths)
+        dataset = tf.data.TFRecordDataset(file_paths, compression_type="GZIP")
         # dataset is TFRecordDatasetV2 element_spec=TensorSpec(shape=(), dtype=tf.string, name=None)
         logging.debug(f"dataset={dataset}")
         parsed_dataset = dataset.map(_parse_function)
