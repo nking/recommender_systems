@@ -45,8 +45,12 @@ def preprocessing_fn(inputs):
      column_types = int,    int ,     int ,  str, int, int,       str,     str
   :return: tuple of (processed features without label, label)
   """
+  logging.debug(f"inputs={inputs}")
 
-  outputs = {'user_id': inputs['user_id'], 'movie_id': inputs['movie_id']}
+  outputs = {}
+
+  outputs['user_id'] = inputs['user_id']
+  outputs['movie_id'] = inputs['movie_id']
 
   #outputs['rating'] = inputs['rating']/5.0
   labels = tf.cast(inputs['rating'], tf.float32)/5.0
