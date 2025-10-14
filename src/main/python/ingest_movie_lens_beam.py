@@ -161,7 +161,7 @@ class IngestAndJoin(beam.PTransform):
 
     pc = pcoll | f"read_{random.randint(0, 1000000000000)}" >> ReadFiles(self.infiles_dict)
 
-    # ratings: user_id,movie_id,rating
+    # ratings: user_id,movie_id,rating,timestamp
     # movie_id,title,genre
     # user_id::gender::age::occupation::zipcode
        # user_id,movie_id,rating,timestamp,gender,age,occupation,zipcode
@@ -173,7 +173,7 @@ class IngestAndJoin(beam.PTransform):
       filter_cols=[self.infiles_dict['users']['cols']['zipcode']['index'],\
       self.infiles_dict['users']['cols']['user_id']['index']], debug_tag="R-U")
 
-    # user_id,movie_id,rating,gender,age,occupation,zipcode,genres
+    # user_id,movie_id,rating,timestamp,gender,age,occupation,zipcode,genres
     ratings = ratings_1 | \
       f"left_join_ratings_users_movies_{random.randint(0,1000000000)}" \
       >> MergeByKey(pc['movies'], \

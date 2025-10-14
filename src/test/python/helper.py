@@ -28,8 +28,7 @@ def get_test_data(use_small=True, kaggle=True) -> Tuple[str, str, list[str]]:
   ratings_col_types = [int, int, int, int]  # for some files, ratings are floats
   movies_col_names = ["movie_id", "title", "genres"]
   movies_col_types = [int, str, str]
-  users_col_names = ["user_id", "gender", "age", "occupation",
-                     "zipcode"]
+  users_col_names = ["user_id", "gender", "age", "occupation", "zipcode"]
   users_col_types = [int, str, int, int, str]
 
   ratings_dict = create_infile_dict(for_file='ratings',
@@ -69,7 +68,8 @@ def get_test_data(use_small=True, kaggle=True) -> Tuple[str, str, list[str]]:
 
 def get_expected_col_name_feature_types() -> Dict[str, tf.train.Feature]:
   return {"user_id": tf.train.Int64List, "movie_id":tf.train.Int64List,
-    "rating" : tf.train.Int64List, "gender" : tf.train.BytesList,
+    "rating" : tf.train.Int64List, "timestamp" : tf.train.Int64List,
+    "gender" : tf.train.BytesList,
     "age" : tf.train.Int64List, "occupation" : tf.train.Int64List,
     "genres" : tf.train.BytesList}
 
@@ -77,10 +77,11 @@ def get_expected_col_name_feature_types2():
   return {"user_id": tf.io.FixedLenFeature([], tf.int64),
     "movie_id":tf.io.FixedLenFeature([], tf.int64),
     "rating" : tf.io.FixedLenFeature([], tf.int64),
+    "timestamp": tf.io.FixedLenFeature([], tf.int64),
     "gender" : tf.io.FixedLenFeature([], tf.string),
     "age" : tf.io.FixedLenFeature([], tf.int64),
     "occupation" : tf.io.FixedLenFeature([], tf.int64),
     "genres" : tf.io.FixedLenFeature([], tf.string)}
 
-#user_id, movie_id, rating, gender, age, occupation, zipcode, genres
+#user_id, movie_id, rating, timestamp, gender, age, occupation, zipcode, genres
  # int,    int      int     str    int  int       str     str
