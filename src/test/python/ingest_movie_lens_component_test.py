@@ -166,11 +166,18 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
       logging.debug(f"file_paths={file_paths}")
       col_name_feature_types = get_expected_col_name_feature_types()
       dataset = tf.data.TFRecordDataset(file_paths, compression_type="GZIP")
-
+      #dataset is TFRecordDatasetV2 element_spec=TensorSpec(shape=(), dtype=tf.string, name=None)
       logging.debug(f"dataset={dataset}")
 
+      def _parse_function(example_proto):
+        return tf.io.parse_single_example(example_proto, feature_description)
+
+      parsed_dataset = dataset.map(_parse_function)
+
+      logging.debug(f"parsed_dataset={parsed_dataset}")
+
       #assert features for 1 record in examples:
-      for tfrecord in dataset.take(1):
+      for tfrecord in parsed_dataset.take(1):
         example = tf.train.Example()
         example.ParseFromString(tfrecord.numpy())
         for feature in example.features:
