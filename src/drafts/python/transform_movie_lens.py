@@ -49,7 +49,7 @@ def preprocessing_fn(inputs):
   outputs = {'user_id': inputs['user_id'], 'movie_id': inputs['movie_id']}
 
   #outputs['rating'] = inputs['rating']/5.0
-  labels = inputs['rating']/5.0
+  labels = tf.cast(inputs['rating'], tf.float32)/5.0
 
   gender_table = create_static_table(genders, key_dtype=tf.string, value_dtype=tf.int64)
   outputs['gender'] = gender_table.lookup(inputs['gender'])
