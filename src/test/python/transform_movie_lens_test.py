@@ -68,8 +68,7 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
 
     statistics_gen = StatisticsGen(examples = ratings_example_gen.outputs['output_examples'])
 
-    schema_gen = SchemaGen(
-      statistics=statistics_gen.outputs['statistics'],
+    schema_gen = SchemaGen(statistics=statistics_gen.outputs['statistics'],
       infer_feature_shape=True)
 
     ratings_transform = tfx.components.Transform(
