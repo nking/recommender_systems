@@ -3,6 +3,9 @@ import tensorflow_transform as tft
 from tensorflow_transform.tf_metadata import schema_utils
 #from tfx.components.trainer import fn_args_utils
 #from tfx_bsl.tfxio import dataset_options
+from datetime import datetime
+import pytz
+
 import absl
 from absl import logging
 logging.set_verbosity(absl.logging.DEBUG)
@@ -18,6 +21,9 @@ genders = ['F', 'M']
 age_groups = [1, 18, 25, 35, 45, 50, 56]
 
 num_occupations = 21
+
+#for now, fudging timezones:
+CTZ = pytz.timezone("America/Chicago")
 
 # Tf.Transform considers these features as "raw"
 def _get_raw_feature_spec(schema):
@@ -71,6 +77,11 @@ def preprocessing_fn(inputs):
   #the sum is across columns for each example.
   #assuming batch_size is the first dimension, then cols and rows follow
   # so axis=-2 should sum along columns per example whether batched or not
+
+  local_time = datetime.fromtimestamp(inputs["timestamp"], tz=CTZ)
+  outputs["hr"] = int(round(local_time.hour + (local_time.minute / 60.)))
+  outputs["weekday"] = local_time.weekday()
+  outputs["hr_wk"] = outputs["hr"] * 7 + outputs["weekday"]
 
   return outputs, labels
 
