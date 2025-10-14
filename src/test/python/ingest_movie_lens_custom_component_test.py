@@ -172,8 +172,7 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
 
       logging.debug(f"file_paths={file_paths}")
       col_name_feature_types = get_expected_col_name_feature_types2()
-      dataset = tf.data.TFRecordDataset(file_paths,
-                                        compression_type="GZIP")
+      dataset = tf.data.TFRecordDataset(file_paths)
       # dataset is TFRecordDatasetV2 element_spec=TensorSpec(shape=(), dtype=tf.string, name=None)
       logging.debug(f"dataset={dataset}")
 

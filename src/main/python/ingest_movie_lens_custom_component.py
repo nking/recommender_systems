@@ -301,7 +301,7 @@ def inspect_examples(component, channel_name='examples', split_name='train', num
   tfrecord_filenames = [os.path.join(train_uri, name) for name in os.listdir(train_uri)]
 
   # Create a `TFRecordDataset` to read these files
-  dataset = tf.data.TFRecordDataset(tfrecord_filenames, compression_type="GZIP")
+  dataset = tf.data.TFRecordDataset(tfrecord_filenames)
 
   # Iterate over the records and print them
   for tfrecord in dataset.take(num_examples):

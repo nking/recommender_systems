@@ -170,7 +170,7 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     self.assertTrue(os.path.exists(stats_path_test))
 
     tfrecord_filenames = [os.path.join(stats_path_train, name) for name in os.listdir(stats_path_train)]
-    dataset = tf.data.TFRecordDataset(tfrecord_filenames, compression_type="GZIP")
+    dataset = tf.data.TFRecordDataset(tfrecord_filenames)
     for tfrecord in dataset.take(5):
       example = tf.train.Example()
       example.ParseFromString(tfrecord.numpy())

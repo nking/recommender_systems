@@ -161,11 +161,11 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
       self.assertGreaterEqual(len(file_paths), 1)
 
       logging.debug(f"file_paths={file_paths}")
-      col_name_feature_types = get_expected_col_name_feature_types2()
+      for file_path in file_paths:
+        self.assertTrue(fileio.exists(file_path))
+        self.assertGreater(fileio.stat(file_path).stat_info.length, 0)
 
-      dataset = tf.data.TFRecordDataset(file_paths, compression_type="GZIP")
-      #dataset is TFRecordDatasetV2 element_spec=TensorSpec(shape=(), dtype=tf.string, name=None)
-      logging.debug(f"dataset={dataset}")
+      col_name_feature_types = get_expected_col_name_feature_types2()
 
       # user_id,movie_id,rating,gender,age,occupation,genres
       logging.debug(f"tf.executing_eagerly()={tf.executing_eagerly()}")
@@ -180,12 +180,15 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
       # 'rating': <tf.Tensor: shape=(), dtype=int64, numpy=4>,
       # 'user_id': <tf.Tensor: shape=(), dtype=int64, numpy=6>}
       def _parse_function(example_proto):
-        return tf.io.parse_single_example(example_proto,
-          col_name_feature_types)
+        return tf.io.parse_single_example(example_proto, col_name_feature_types)
+
       try:
+        dataset = tf.data.TFRecordDataset(file_paths)
+        # dataset is TFRecordDatasetV2 element_spec=TensorSpec(shape=(), dtype=tf.string, name=None)
+        logging.debug(f"dataset={dataset}")
         parsed_dataset = dataset.map(_parse_function)
         for parsed_example in parsed_dataset.take(1):
-          pass
+          logging.debug(parsed_example)
       except Exception as e:
         self.fail(e)
 
@@ -193,7 +196,7 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
         for tfrecord in dataset.take(1):
           example = tf.train.Example()
           example.ParseFromString(tfrecord.numpy())
-          # print(f"EXAMPLE={example}")
+          logging.debug(example)
       except Exception as e:
         self.fail(e)
 
