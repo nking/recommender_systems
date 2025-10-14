@@ -39,7 +39,7 @@ from helper import *
 import pprint
 import absl
 from absl import logging
-absl.logging.set_verbosity(absl.logging.INFO)
+absl.logging.set_verbosity(absl.logging.DEBUG)
 
 from ingest_movie_lens_custom_component import *
 from movie_lens_utils import *
@@ -146,7 +146,7 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
       for filename in filenames:
         logging.debug(os.path.join(dirname, filename))
 
-    # metadata_connection = metadata.Metadata(metadata_connection_config)
+    #metadata_connection = metadata.Metadata(metadata_connection_config)
     store = metadata_store.MetadataStore(metadata_connection_config)
     artifact_types = store.get_artifact_types()
     logging.debug(f"MLMD store artifact_types={artifact_types}")
@@ -157,10 +157,11 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
     self.assertEqual(3, len(artifact_types))
     self.assertEqual(3, len(artifacts))
     self.assertEqual(3, len(executions))
-    #executions has custom_properties.key: "infiles_dict_ser"
+    # executions has custom_properties.key: "infiles_dict_ser"
     #    and custom_properties.key: "output_config_ser"
     artifact_count = len(artifacts)
     execution_count = len(executions)
+    self.assertGreaterEqual(artifact_count, execution_count)
     self.assertGreaterEqual(artifact_count, execution_count)
 
     artifact_uri = artifacts[0].uri
@@ -171,16 +172,19 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
       self.assertGreaterEqual(len(file_paths), 1)
 
       logging.debug(f"file_paths={file_paths}")
+      for file_path in file_paths:
+        self.assertTrue(fileio.exists(file_path))
+        file_stats = fileio.stat(file_path)
+        logging.debug(file_stats)
+        #self.assertGreater(fileio.stat(file_path).stat_info.length, 0)
+
       col_name_feature_types = get_expected_col_name_feature_types2()
-      dataset = tf.data.TFRecordDataset(file_paths)
-      # dataset is TFRecordDatasetV2 element_spec=TensorSpec(shape=(), dtype=tf.string, name=None)
-      logging.debug(f"dataset={dataset}")
 
       # user_id,movie_id,rating,gender,age,occupation,genres
       logging.debug(f"tf.executing_eagerly()={tf.executing_eagerly()}")
 
-      # parse into dictionaries.
-      # {'age': <tf.Tensor: shape=(), dtype=int64, numpy=50>,
+      #parse into dictionaries.
+      #{'age': <tf.Tensor: shape=(), dtype=int64, numpy=50>,
       # 'gender': <tf.Tensor: shape=(), dtype=string, numpy=b'F'>,
       # 'genres': <tf.Tensor: shape=(), dtype=string,
       #   numpy=b"Animation|Children's|Comedy">,
@@ -192,6 +196,9 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
         return tf.io.parse_single_example(example_proto, col_name_feature_types)
 
       try:
+        dataset = tf.data.TFRecordDataset(file_paths)
+        # dataset is TFRecordDatasetV2 element_spec=TensorSpec(shape=(), dtype=tf.string, name=None)
+        logging.debug(f"dataset={dataset}")
         parsed_dataset = dataset.map(_parse_function)
         for parsed_example in parsed_dataset.take(1):
           logging.debug(parsed_example)
@@ -205,14 +212,11 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
           logging.debug(example)
       except Exception as e:
         self.fail(e)
-        # =============== verify statistics_gen results ==============
 
     #=============== verify statistics_gen results ==============
 
-    #/kaggle/working/bin/fully_custom_comp_1/testRun2/TestFullyCustomCompPipeline/SchemaGen/schema/3/schema.pbtxt
-
     logging.debug(f"statistics_gen.id={statistics_gen.id}") #StatisticsGen
-    #logging.debug(f"statistics_gen={statistics_gen}")
+    logging.debug(f"statistics_gen={statistics_gen}")
     self.assertTrue(fileio.exists(os.path.join(PIPELINE_ROOT, statistics_gen.id)))
 
     stats_artifacts_list = store.get_artifacts_by_type("ExampleStatistics")
@@ -239,7 +243,7 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
 
     # =============== verify schema_gen results ==============
     logging.debug(f"schema_gen.id={schema_gen.id}")
-    logging.debug(f"schema_gen={schema_gen}")
+    #logging.debug(f"schema_gen={schema_gen}")
     self.assertTrue(fileio.exists(os.path.join(PIPELINE_ROOT, schema_gen.id)))
 
     schema_artifacts_list = store.get_artifacts_by_type("Schema")
@@ -255,8 +259,22 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
     self.assertIsNotNone(schema)
     logging.debug(f"schema={schema}")
     #TODO: consider asserting the schema:
-    # user_id,movie_id,rating,gender,age,occupation,zipcode,genres
-    # int,    int      int     str    int  int       str     str
+    # user_id,movie_id,rating,gender,age,occupation,genres
+    # int,    int      int     str    int  int       str
+    col_name_feature_types = get_expected_col_name_feature_types()
+    for feature in schema.feature:
+      self.assertTrue(feature.name in col_name_feature_types)
+      expected_type = col_name_feature_types.pop(feature.name)
+      match feature.type:
+        case schema_pb2.INT:
+          self.assertTrue(expected_type == tf.train.Int64List)
+        case schema_pb2.FLOAT:
+          self.assertTrue(expected_type == tf.train.FloatList)
+        case schema_pb2.BYTES:
+          self.assertTrue(expected_type == tf.train.BytesList)
+        case _:
+          self.fail(f"unexpected feature type in feature={feature}")
+    self.assertEqual(0, len(col_name_feature_types))
 
   def testDo(self):
     #EXECUTOR_SPEC = executor_spec.BeamExecutorSpec(IngestMovieLensExecutor)
