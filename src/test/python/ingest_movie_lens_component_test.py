@@ -23,6 +23,8 @@ import base64
 import pprint
 import random
 
+import numpy as np
+
 import tensorflow as tf
 import tensorflow_data_validation as tfdv
 from tfx.dsl.components.base import executor_spec
@@ -169,21 +171,18 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
       logging.debug(f"dataset={dataset}")
 
       # user_id,movie_id,rating,gender,age,occupation,zipcode,genres
-      feature_spec = {
-        'user_id': tf.io.FixedLenFeature([], tf.int64),
-        'movie_id': tf.io.FixedLenFeature([], tf.int64),
-        'rating': tf.io.FixedLenFeature([], tf.string),
-        'gender': tf.io.FixedLenFeature([], tf.string),
-        'age': tf.io.FixedLenFeature([], tf.int64),
-        'occupation': tf.io.FixedLenFeature([], tf.int64),
-        'zipcode': tf.io.FixedLenFeature([], tf.string),
-        'genres': tf.io.FixedLenFeature([], tf.string),
-      }
-      def _parse_tf_example(serialized_example):
-        return tf.io.parse_single_example(serialized_example, feature_spec)
-      parsed_dataset = dataset.map(_parse_tf_example)
+      col_names = ["user_id", "movie_id", "rating", "gender", "age", \
+        "occupation", "zipcode", "genred"]
+      def extract_str_feature(dataset, feature_names):
+        np_dataset = []
+        for example in dataset:
+          for feature_name in feature_names:
+            np_example = example_coder.ExampleToNumpyDict(example.numpy())
+            np_dataset.append(np_example[feature_name][0].decode())
+        return tf.data.Dataset.from_tensor_slices(np_dataset)
+      parsed_dataset = extract_str_feature(dataset, col_names)
 
-      logging.debug(f'parsed_dataset={parsed_dataset}')
+      logging.debug(f"parsed_dataset={parsed_dataset}")
 
       #assert features for 1 record in examples:
       for tfrecord in parsed_dataset.take(1):
