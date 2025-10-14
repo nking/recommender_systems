@@ -35,13 +35,9 @@ from tfx.types import standard_component_specs
 from tfx.utils import proto_utils
 
 from helper import *
-
 import pprint
 import absl
 from absl import logging
-
-tf.get_logger().propagate = False
-absl.logging.set_verbosity(absl.logging.DEBUG)
 
 from ingest_movie_lens_custom_component import *
 from movie_lens_utils import *
@@ -49,8 +45,10 @@ from movie_lens_utils import *
 import ml_metadata as mlmd
 from ml_metadata.proto import metadata_store_pb2
 from ml_metadata.metadata_store import metadata_store
-
 from apache_beam.options.pipeline_options import PipelineOptions
+
+tf.get_logger().propagate = False
+absl.logging.set_verbosity(absl.logging.DEBUG)
 
 class IngestMovieLensCustomComponentTest(tf.test.TestCase):
 
