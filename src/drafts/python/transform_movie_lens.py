@@ -3,6 +3,7 @@ import tensorflow_transform as tft
 from tensorflow_transform.tf_metadata import schema_utils
 #from tfx.components.trainer import fn_args_utils
 #from tfx_bsl.tfxio import dataset_options
+import absl
 from absl import logging
 logging.set_verbosity(absl.logging.DEBUG)
 
