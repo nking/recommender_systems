@@ -40,8 +40,7 @@ def preprocessing_fn(inputs):
   :return: tuple of (processed features without label, label)
   """
 
-  outputs = {'user_id': inputs['user_id'].copy(),
-             'movie_id': inputs['movie_id'].copy()}
+  outputs = {'user_id': inputs['user_id'], 'movie_id': inputs['movie_id']}
 
   #outputs['rating'] = inputs['rating']/5.0
   labels = inputs['rating']/5.0
