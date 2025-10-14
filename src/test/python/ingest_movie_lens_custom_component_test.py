@@ -137,7 +137,7 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
                   f'{ratings_example_gen.outputs["output_examples"]}')
 
     for key, value in ratings_example_gen.outputs.items():
-      log.debug(f'key={key}, value={value}')
+      logging.debug(f'key={key}, value={value}')
 
     #editing
     # creates output_examples.uri=

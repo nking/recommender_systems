@@ -90,12 +90,11 @@ class IngestMovieLensBeamTest(tf.test.TestCase):
     # https://beam.apache.org/documentation/runners/spark/
     #from pyspark import SparkConf
     options = PipelineOptions(\
-      runner='DirectRunner',\
+      runner='DirectRunner', \
+      direct_num_workers = 0, \
+      direct_running_mode='multi_processing', \
+      #direct_running_mode='multi_threading', \
     )
-    options.view_as(
-      options.direct_runner_options).direct_running_mode = 'multi_threading'
-    options.view_as(
-      options.direct_runner_options).direct_num_workers = 0
 
     with beam.Pipeline(options=options) as pipeline:
 

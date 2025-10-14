@@ -43,7 +43,7 @@ from ml_metadata.proto import metadata_store_pb2
 from ml_metadata.metadata_store import metadata_store
 import absl
 from absl import logging
-absl.logging.set_verbosity(absl.logging.INFO)
+absl.logging.set_verbosity(absl.logging.DEBUG)
 
 from helper import *
 
@@ -163,8 +163,12 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
       #  file_paths = get_output_files(ratings_example_gen, 'output_examples', split_name)
       self.assertGreaterEqual(len(file_paths), 1)
 
+      logging.debug(f"file_paths={file_paths}")
       col_name_feature_types = get_expected_col_name_feature_types()
       dataset = tf.data.TFRecordDataset(file_paths, compression_type="GZIP")
+
+      logging.debug(f"dataset={dataset}")
+
       #assert features for 1 record in examples:
       for tfrecord in dataset.take(1):
         example = tf.train.Example()

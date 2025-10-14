@@ -40,11 +40,10 @@ class IngestMovieLensBeamPATest(tf.test.TestCase):
     # from pyspark import SparkConf
     options = PipelineOptions( \
       runner='DirectRunner', \
-      )
-    options.view_as(
-      options.direct_runner_options).direct_running_mode = 'multi_threading'
-    options.view_as(
-      options.direct_runner_options).direct_num_workers = 0
+      direct_num_workers=0, \
+      direct_running_mode='multi_processing', \
+      # direct_running_mode='multi_threading', \
+    )
 
     infiles_dict = deserialize(self.infiles_dict_ser)
 
@@ -74,11 +73,12 @@ class IngestMovieLensBeamPATest(tf.test.TestCase):
 
     infiles_dict = deserialize(self.infiles_dict_ser)
 
-    options = PipelineOptions(runner='DirectRunner')
-    options.view_as(
-      options.direct_runner_options).direct_running_mode = 'multi_threading'
-    options.view_as(
-      options.direct_runner_options).direct_num_workers = 0
+    options = PipelineOptions( \
+      runner='DirectRunner', \
+      direct_num_workers=0, \
+      direct_running_mode='multi_processing', \
+      # direct_running_mode='multi_threading', \
+    )
 
     # write Parquet files if they do not already exist
     dir_path = os.path.dirname(
