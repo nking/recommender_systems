@@ -62,8 +62,7 @@ def preprocessing_fn(inputs):
   outputs['age'] = age_groups_table.lookup(inputs['age'])
   outputs['age'] = tf.one_hot( outputs['age'], depth=len(age_groups), dtype=tf.int64)
 
-  outputs['occupation'] = inputs['occupation'].copy()
-  outputs['occupation'] = tf.one_hot( outputs['occupation'], depth=num_occupations, dtype=tf.int64)
+  outputs['occupation'] = tf.one_hot(inputs['occupation'], depth=num_occupations, dtype=tf.int64)
 
   #omitting zipcode for now, but considering ZCTAs for future
 
