@@ -253,7 +253,7 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     col_name_feature_types = get_expected_col_name_feature_types()
     for feature in schema.feature:
       self.assertTrue(feature.name in col_name_feature_types)
-      expected_type = col_name_feature_types[feature.name].pop()
+      expected_type = col_name_feature_types.pop(feature.name)
       match feature.type:
         case schema_pb2.INT:
           self.assertTrue(expected_type == tf.train.Int64List)
@@ -263,3 +263,4 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
           self.assertTrue(expected_type == tf.train.BytesList)
         case _:
           self.fail(f"unexpected feature type in feature={feature}")
+    self.assertEqual(0, len(col_name_feature_types))
