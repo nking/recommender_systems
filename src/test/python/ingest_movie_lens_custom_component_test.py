@@ -189,13 +189,12 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
       # 'rating': <tf.Tensor: shape=(), dtype=int64, numpy=4>,
       # 'user_id': <tf.Tensor: shape=(), dtype=int64, numpy=6>}
       def _parse_function(example_proto):
-        return tf.io.parse_single_example(example_proto,
-                                          col_name_feature_types)
+        return tf.io.parse_single_example(example_proto, col_name_feature_types)
 
       try:
         parsed_dataset = dataset.map(_parse_function)
         for parsed_example in parsed_dataset.take(1):
-          pass
+          logging.debug(parsed_example)
       except Exception as e:
         self.fail(e)
 
@@ -203,12 +202,14 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
         for tfrecord in dataset.take(1):
           example = tf.train.Example()
           example.ParseFromString(tfrecord.numpy())
-          # print(f"EXAMPLE={example}")
+          logging.debug(example)
       except Exception as e:
         self.fail(e)
         # =============== verify statistics_gen results ==============
 
     #=============== verify statistics_gen results ==============
+
+    #/kaggle/working/bin/fully_custom_comp_1/testRun2/TestFullyCustomCompPipeline/SchemaGen/schema/3/schema.pbtxt
 
     logging.debug(f"statistics_gen.id={statistics_gen.id}") #StatisticsGen
     #logging.debug(f"statistics_gen={statistics_gen}")
