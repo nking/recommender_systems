@@ -174,10 +174,10 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
       col_names = ["user_id", "movie_id", "rating", "gender", "age", \
         "occupation", "zipcode", "genred"]
       logging.debug(f"tf.executing_eagerly()={tf.executing_eagerly()}")
-      if tf.executing_eagerly():
-        examples = [e.numpy() for e in dataset]
-      else:
-        examples = list(
+      #if tf.executing_eagerly(): #True
+      #  examples = [e.numpy() for e in dataset]
+      #else:
+      examples = list(
           tf.compat.v1.io.tf_record_iterator(file_paths, tf.io.TFRecordOptions(compression_type='GZIP')))
 
       logging.debug(f"from disk examples=={examples}")
