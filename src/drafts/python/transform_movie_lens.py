@@ -75,9 +75,11 @@ def preprocessing_fn(inputs):
     multihot = []
     for i, split_str in enumerate(split_str_batch):
       tf.print('split string:', split_str)
+      logging.debug(f'split string: {split_str}')
       m_genres = [0 for i in range(len(genres))]
       for s in split_str:
         tf.print('s:', s)
+        logging.debug(f's: {s}')
         m_genres[genres_to_idx[s.numpy()]] = 1
       multihot.append(m_genres)
     return tf.constant(multihot)
