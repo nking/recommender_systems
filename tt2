@@ -1,0 +1,169 @@
+d02f1021cb08667-py3-none-any.whl'.
+INFO:absl:udf_utils.get_fn {'module_file': None, 'module_path': 'transform_movie_lens@/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+856c7d881e4a0228acd3df097c80d9287c82591b0c692ff7ed02f1021cb08667-py3-none-any.whl', 'stats_options_updater_fn': None} 'stats_options_updater_fn'
+INFO:absl:Installing '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+856c7d881e4a0228acd3df097c80d9287c82591b0c692ff7ed02f1021cb08667-py3-none-any.whl' to a temporary directory.
+INFO:absl:Executing: ['/usr/local/envs/my_tfx_env/bin/python', '-m', 'pip', 'install', '--target', '/tmp/tmpxbr74bzo', '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+856c7d881e4a0228acd3df097c80d9287c82591b0c692ff7ed02f1021cb08667-py3-none-any.whl']
+INFO:absl:Successfully installed '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+856c7d881e4a0228acd3df097c80d9287c82591b0c692ff7ed02f1021cb08667-py3-none-any.whl'.
+INFO:absl:Installing '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+856c7d881e4a0228acd3df097c80d9287c82591b0c692ff7ed02f1021cb08667-py3-none-any.whl' to a temporary directory.
+INFO:absl:Executing: ['/usr/local/envs/my_tfx_env/bin/python', '-m', 'pip', 'install', '--target', '/tmp/tmp5x7w0u0j', '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+856c7d881e4a0228acd3df097c80d9287c82591b0c692ff7ed02f1021cb08667-py3-none-any.whl']
+INFO:absl:Successfully installed '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+856c7d881e4a0228acd3df097c80d9287c82591b0c692ff7ed02f1021cb08667-py3-none-any.whl'.
+DEBUG:absl:Inputs to executor.Transform function: {'disable_statistics': False, 'schema_path': '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/SchemaGen/schema/3/schema.pbtxt', 'examples_data_format': 6, 'data_view_uri': None, 'analyze_data_paths': ['/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/output_examples/1/Split-train/*'], 'analyze_paths_file_formats': ['tfrecords_gzip'], 'transform_data_paths': ['/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/output_examples/1/Split-train/*', '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/output_examples/1/Split-test/*', '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/output_examples/1/Split-eval/*'], 'transform_paths_file_formats': ['tfrecords_gzip', 'tfrecords_gzip', 'tfrecords_gzip'], 'preprocessing_fn': <function preprocessing_fn at 0x79054b447760>, 'stats_options_updater_fn': None, 'make_beam_pipeline_fn': <bound method BaseBeamExecutor._make_beam_pipeline of <tfx.components.transform.executor.Executor object at 0x790520d177c0>>, 'force_tf_compat_v1': False, 'save_options': None}
+DEBUG:absl:Outputs to executor.Transform function: {'transform_output_path': '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/transform_graph/4', 'transform_materialize_output_paths': ['/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/transformed_examples/4/Split-train/transformed_examples', '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/transformed_examples/4/Split-test/transformed_examples', '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/transformed_examples/4/Split-eval/transformed_examples'], 'temp_path': '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/transform_graph/4/.temp_path', 'pre_transform_output_stats_path': '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/pre_transform_stats/4', 'pre_transform_output_schema_path': '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/pre_transform_schema/4', 'post_transform_output_anomalies_path': '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/post_transform_anomalies/4', 'post_transform_output_stats_path': '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/post_transform_stats/4', 'post_transform_output_schema_path': '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/post_transform_schema/4', 'cache_output_path': '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/updated_analyzer_cache/4'}
+DEBUG:absl:Force tf.compat.v1: False
+DEBUG:absl:SaveOptions: None
+DEBUG:absl:Analyze data patterns: [(0, '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/output_examples/1/Split-train/*')]
+DEBUG:absl:Transform data patterns: [(0, '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/output_examples/1/Split-train/*'), (1, '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/output_examples/1/Split-test/*'), (2, '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/output_examples/1/Split-eval/*')]
+DEBUG:absl:Transform materialization output paths: [(0, '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/transformed_examples/4/Split-train/transformed_examples'), (1, '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/transformed_examples/4/Split-test/transformed_examples'), (2, '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/transformed_examples/4/Split-eval/transformed_examples')]
+DEBUG:absl:Transform output path: /kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/transform_graph/4
+INFO:absl:Feature gender has a shape dim {
+  size: 1
+}
+. Setting to DenseTensor.
+INFO:absl:Feature genres has a shape dim {
+  size: 1
+}
+. Setting to DenseTensor.
+INFO:absl:Feature age has a shape dim {
+  size: 1
+}
+. Setting to DenseTensor.
+INFO:absl:Feature movie_id has a shape dim {
+  size: 1
+}
+. Setting to DenseTensor.
+INFO:absl:Feature occupation has a shape dim {
+  size: 1
+}
+. Setting to DenseTensor.
+INFO:absl:Feature rating has a shape dim {
+  size: 1
+}
+. Setting to DenseTensor.
+INFO:absl:Feature timestamp has a shape dim {
+  size: 1
+}
+. Setting to DenseTensor.
+INFO:absl:Feature user_id has a shape dim {
+  size: 1
+}
+. Setting to DenseTensor.
+DEBUG:absl:inputs={'gender': <tf.Tensor 'inputs_copy:0' shape=(None, 1) dtype=string>, 'genres': <tf.Tensor 'inputs_1_copy:0' shape=(None, 1) dtype=string>, 'age': <tf.Tensor 'inputs_2_copy:0' shape=(None, 1) dtype=int64>, 'movie_id': <tf.Tensor 'inputs_3_copy:0' shape=(None, 1) dtype=int64>, 'occupation': <tf.Tensor 'inputs_4_copy:0' shape=(None, 1) dtype=int64>, 'rating': <tf.Tensor 'inputs_5_copy:0' shape=(None, 1) dtype=int64>, 'timestamp': <tf.Tensor 'inputs_6_copy:0' shape=(None, 1) dtype=int64>, 'user_id': <tf.Tensor 'inputs_7_copy:0' shape=(None, 1) dtype=int64>}
+
+DEBUG:absl:outputs['genres']=tf.RaggedTensor(values=tf.RaggedTensor(values=Tensor("StringSplit/StringSplit/StringSplit/StringSplitV2:1", shape=(None,), dtype=string), row_splits=Tensor("StringSplit/StringSplit/StringSplit/RaggedFromValueRowIds/RowPartitionFromValueRowIds/concat:0", shape=(None,), dtype=int64)), row_splits=Tensor("StringSplit/RaggedFromTensor/RaggedFromUniformRowLength/RowPartitionFromUniformRowLength/mul:0", shape=(None,), dtype=int64))
+
+DEBUG:absl:padded_tensor=Tensor("RaggedToTensor/RaggedTensorToTensor:0", shape=(None, 1, None), dtype=string)
+   DEBUG:absl:padded_tensor.shape=(2, 1, 3)
+
+DEBUG:absl:flattened_tensor=Tensor("Reshape:0", shape=(None,), dtype=string)
+
+DEBUG:absl:lookup_results_flat=Tensor("None_Lookup_2/LookupTableFindV2:0", shape=(None,), dtype=int64)
+   DEBUG:absl:lookup_results_flat=[-1  6 -1 11 17  8]
+
+DEBUG:absl:padded_tensor.shape=(None, 1, None)
+
+INFO:absl:MetadataStore with DB connection initialized
+DEBUG:absl:ConnectionConfig: sqlite {
+  filename_uri: "/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/tfx_metadata/metadata.db"
+  connection_mode: READWRITE_OPENCREATE
+}
+
+ERROR:absl:Execution 4 failed.
+INFO:absl:Cleaning up stateless execution info.
+Es
+======================================================================
+ERROR: test_MovieLensExampleGen (transform_movie_lens_test.IngestMovieLensComponentTest)
+transform_movie_lens_test.IngestMovieLensComponentTest.test_MovieLensExampleGen
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tensorflow/python/framework/op_def_library.py", line 531, in _ExtractInputsAndAttrs
+    inferred = ops.convert_to_tensor(
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tensorflow/python/profiler/trace.py", line 183, in wrapped
+    return func(*args, **kwargs)
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tensorflow/python/framework/ops.py", line 713, in convert_to_tensor
+    return tensor_conversion_registry.convert(
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tensorflow/python/framework/tensor_conversion_registry.py", line 234, in convert
+    ret = conversion_func(value, dtype=dtype, name=name, as_ref=as_ref)
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tensorflow/python/framework/constant_op.py", line 344, in _tensor_shape_tensor_conversion_function
+    raise ValueError(
+ValueError: Cannot convert a partially known TensorShape (None, 1, None) to a Tensor.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tensorflow/python/framework/op_def_library.py", line 569, in _ExtractInputsAndAttrs
+    observed = ops.convert_to_tensor(
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tensorflow/python/profiler/trace.py", line 183, in wrapped
+    return func(*args, **kwargs)
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tensorflow/python/framework/ops.py", line 713, in convert_to_tensor
+    return tensor_conversion_registry.convert(
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tensorflow/python/framework/tensor_conversion_registry.py", line 234, in convert
+    ret = conversion_func(value, dtype=dtype, name=name, as_ref=as_ref)
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tensorflow/python/framework/constant_op.py", line 344, in _tensor_shape_tensor_conversion_function
+    raise ValueError(
+ValueError: Cannot convert a partially known TensorShape (None, 1, None) to a Tensor.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/kaggle/working/transform_movie_lens_test.py", line 115, in test_MovieLensExampleGen
+    tfx.orchestration.LocalDagRunner().run(my_pipeline)
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tfx/orchestration/portable/tfx_runner.py", line 124, in run
+    return self.run_with_ir(pipeline_pb, run_options=run_options_pb, **kwargs)
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tfx/orchestration/local/local_dag_runner.py", line 109, in run_with_ir
+    component_launcher.launch()
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tfx/orchestration/portable/launcher.py", line 613, in launch
+    executor_output = self._run_executor(execution_info)
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tfx/orchestration/portable/launcher.py", line 487, in _run_executor
+    executor_output = self._executor_operator.run_executor(execution_info)
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tfx/orchestration/portable/beam_executor_operator.py", line 112, in run_executor
+    return python_executor_operator.run_with_executor(execution_info, executor)
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tfx/orchestration/portable/python_executor_operator.py", line 84, in run_with_executor
+    result = executor.Do(
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tfx/components/transform/executor.py", line 641, in Do
+    TransformProcessor().Transform(label_inputs, label_outputs, status_file)
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tfx/components/transform/executor.py", line 1216, in Transform
+    analyze_input_columns = tft.get_analyze_input_columns(
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tensorflow_transform/inspect_preprocessing_fn.py", line 49, in get_analyze_input_columns
+    impl_helper.trace_preprocessing_function(
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tensorflow_transform/impl_helper.py", line 441, in trace_preprocessing_function
+    return _trace_preprocessing_fn_v2(
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tensorflow_transform/impl_helper.py", line 409, in _trace_preprocessing_fn_v2
+    preprocessing_fn, specs, tf_graph_context).get_concrete_function()
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tensorflow/python/eager/polymorphic_function/polymorphic_function.py", line 1251, in get_concrete_function
+    concrete = self._get_concrete_function_garbage_collected(*args, **kwargs)
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tensorflow/python/eager/polymorphic_function/polymorphic_function.py", line 1221, in _get_concrete_function_garbage_collected
+    self._initialize(args, kwargs, add_initializers_to=initializers)
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tensorflow/python/eager/polymorphic_function/polymorphic_function.py", line 696, in _initialize
+    self._concrete_variable_creation_fn = tracing_compilation.trace_function(
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tensorflow/python/eager/polymorphic_function/tracing_compilation.py", line 178, in trace_function
+    concrete_function = _maybe_define_function(
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tensorflow/python/eager/polymorphic_function/tracing_compilation.py", line 283, in _maybe_define_function
+    concrete_function = _create_concrete_function(
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tensorflow/python/eager/polymorphic_function/tracing_compilation.py", line 310, in _create_concrete_function
+    traced_func_graph = func_graph_module.func_graph_from_py_func(
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tensorflow/python/framework/func_graph.py", line 1059, in func_graph_from_py_func
+    func_outputs = python_func(*func_args, **func_kwargs)
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tensorflow/python/eager/polymorphic_function/polymorphic_function.py", line 599, in wrapped_fn
+    out = weak_wrapped_fn().__wrapped__(*args, **kwds)
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tensorflow_transform/impl_helper.py", line 365, in transform_fn
+    transformed_features = preprocessing_fn(inputs_copy)
+
+
+  File "/kaggle/working/transform_movie_lens.py", line 87, in preprocessing_fn
+    lookup_results_padded = tf.reshape(lookup_results_flat, padded_tensor.shape)
+
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tensorflow/python/ops/weak_tensor_ops.py", line 88, in wrapper
+    return op(*args, **kwargs)
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tensorflow/python/util/traceback_utils.py", line 141, in error_handler
+    return fn(*args, **kwargs)
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tensorflow/python/util/dispatch.py", line 1260, in op_dispatch_handler
+    return dispatch_target(*args, **kwargs)
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tensorflow/python/ops/array_ops.py", line 199, in reshape
+    result = gen_array_ops.reshape(tensor, shape, name)
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tensorflow/python/ops/gen_array_ops.py", line 8758, in reshape
+    _, _, _op, _outputs = _op_def_library._apply_op_helper(
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tensorflow/python/framework/op_def_library.py", line 778, in _apply_op_helper
+    _ExtractInputsAndAttrs(op_type_name, op_def, allowed_list_attr_map,
+  File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tensorflow/python/framework/op_def_library.py", line 572, in _ExtractInputsAndAttrs
+    raise ValueError(
+ValueError: Tried to convert 'shape' to a tensor and failed. Error: Cannot convert a partially known TensorShape (None, 1, None) to a Tensor.
+
