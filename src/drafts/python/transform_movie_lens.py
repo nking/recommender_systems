@@ -70,16 +70,12 @@ def preprocessing_fn(inputs):
   outputs['occupation'] = tf.one_hot(inputs['occupation'], depth=num_occupations, dtype=tf.int64)
 
   #omitting zipcode for now, but considering ZCTAs for future
-  logging.debug(f"inputs['genres']=\n"
-                f"{inputs['genres']} => "
-                f"{inputs['genres'].numpy()}")
+  logging.debug(f"inputs['genres']={inputs['genres']}")
   outputs['genres'] = tf.strings.regex_replace(
       input = inputs['genres'], pattern="Children's", rewrite="Children")
   #creates a RaggedTensor of strings
   outputs['genres'] = tf.strings.split(outputs['genres'], "|")
-  logging.debug(f"outputs['genres']=\n"
-                f"{outputs['genres']} => "
-                f"{outputs['genres'].numpy()}")
+  logging.debug(f"outputs['genres']={outputs['genres']}")
   padded_tensor = outputs['genres'].to_tensor(default_value="<PAD>")
   #padded_tensor = outputs['genres'].to_tensor(default_value="<PAD>", shape=p_shape)
   logging.debug(f"padded_tensor={padded_tensor}")
