@@ -71,16 +71,22 @@ def preprocessing_fn(inputs):
 
   #omitting zipcode for now, but considering ZCTAs for future
   logging.debug(f"inputs['genres']={inputs['genres']}")
+  tf.print(inputs['genres'])
   outputs['genres'] = tf.strings.regex_replace(
       input = inputs['genres'], pattern="Children's", rewrite="Children")
   #creates a RaggedTensor of strings
   outputs['genres'] = tf.strings.split(outputs['genres'], "|")
   logging.debug(f"outputs['genres']={outputs['genres']}")
+  tf.print(outputs['genres'])
+  tf.print(outputs['genres'].shape)
   padded_tensor = outputs['genres'].to_tensor(default_value="<PAD>")
   #padded_tensor = outputs['genres'].to_tensor(default_value="<PAD>", shape=p_shape)
   logging.debug(f"padded_tensor={padded_tensor}")
+  tf.print(padded_tensor)
+  tf.print(padded_tensor.shape)
   flattened_tensor = tf.reshape(padded_tensor, [-1])
   logging.debug(f"flattened_tensor={flattened_tensor}")
+  tf.print(flattened_tensor)
   genres_table = create_static_table(genres, var_dtype=tf.string)
   lookup_results_flat = genres_table.lookup(flattened_tensor)
   logging.debug(f"lookup_results_flat={lookup_results_flat}")
