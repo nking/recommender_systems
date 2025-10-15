@@ -70,9 +70,9 @@ def preprocessing_fn(inputs):
   outputs['occupation'] = tf.one_hot(inputs['occupation'], depth=num_occupations, dtype=tf.int64)
 
   #omitting zipcode for now, but considering ZCTAs for future
-  logging.debug(f"outputs['genres']=\n"
-                f"{outputs['genres']} => "
-                f"{outputs['genres'].numpy()}")
+  logging.debug(f"inputs['genres']=\n"
+                f"{inputs['genres']} => "
+                f"{inputs['genres'].numpy()}")
   outputs['genres'] = tf.strings.regex_replace(
       input = inputs['genres'], pattern="Children's", rewrite="Children")
   #creates a RaggedTensor of strings
