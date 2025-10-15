@@ -83,7 +83,7 @@ def preprocessing_fn(inputs):
   genres_table = create_static_table(genres, var_dtype=tf.string)
   lookup_results_flat = genres_table.lookup(flattened_tensor)
   logging.debug(f"lookup_results_flat={lookup_results_flat}")
-  loggin.debug(f"padded_tensor.shape={padded_tensor.shape}")
+  logging.debug(f"padded_tensor.shape={padded_tensor.shape}")
   lookup_results_padded = tf.reshape(lookup_results_flat, padded_tensor.shape)
   logging.debug(f"lookup_results_padded={lookup_results_flat}")
   outputs['genres']  = tf.ragged.boolean_mask(
