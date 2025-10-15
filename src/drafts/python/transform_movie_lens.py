@@ -8,14 +8,10 @@ import pytz
 
 import absl
 from absl import logging
-tf.get_logger().propagate = True
 logging.set_verbosity(absl.logging.DEBUG)
 
-import os
-import io
-import sys
-old_stdout = sys.stdout
-sys.stdout = capture_output = io.StringIO()
+#temporary:
+tf.config.run_functions_eagerly(True)
 
 ## fixed vocabularies, known ahead of time
 #genres = ["Action", "Adventure", "Animation", "Children", "Comedy",

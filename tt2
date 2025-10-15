@@ -1,8 +1,22 @@
+DEBUG:absl:outputs['genres']=
+  tf.RaggedTensor(
+    values=tf.RaggedTensor(
+      values=Tensor("StringSplit/StringSplit/StringSplit/StringSplitV2:1", shape=(None,), dtype=string)
+      , row_splits
+        =Tensor("StringSplit/StringSplit/StringSplit/RaggedFromValueRowIds/RowPartitionFromValueRowIds/concat:0", shape=(None,), dtype=int64)
+    )
+    , row_splits
+      =Tensor("StringSplit/RaggedFromTensor/RaggedFromUniformRowLength/RowPartitionFromUniformRowLength/mul:0", shape=(None,), dtype=int64)
+  )
+
+  RaggedTensor of a string Tensor of shape=(None,)
+
+====
 INFO:absl:Excluding no splits because exclude_splits is not set.
 INFO:absl:Excluding no splits because exclude_splits is not set.
 INFO:absl:Generating ephemeral wheel package for '/kaggle/working/transform_movie_lens.py' (including modules: ['ingest_movie_lens_beam_pa', 'ingest_movie_lens_custom_component', 'csv_example_gen_test', 'ingest_movie_lens_component_test', 'CustomUTF8Coder', 'helper', 'ingest_movie_lens_component', 'dataset_tfxio_example', 'movie_lens_utils_test', 'transform_movie_lens_test', 'transform_movie_lens', 'movie_lens_utils', 'ingest_movie_lens_custom_component_test', 'ingest_movie_lens_beam_test', 'ingest_movie_lens_beam_pa_test', 'ingest_movie_lens_beam']).
-INFO:absl:User module package has hash fingerprint version 885d6edc9a6e34c4858e5e5f81490dcd26f8916f4798fe22f1b19305fc5889e9.
-INFO:absl:Executing: ['/usr/local/envs/my_tfx_env/bin/python', '/tmp/tmp3pq5tkqu/_tfx_generated_setup.py', 'bdist_wheel', '--bdist-dir', '/tmp/tmp3of2qslr', '--dist-dir', '/tmp/tmpwhlopv2l']
+INFO:absl:User module package has hash fingerprint version 8465016ecbbdbb6c887c4b6f3e5e2bb3cd22a98799b06268938441ecef30619a.
+INFO:absl:Executing: ['/usr/local/envs/my_tfx_env/bin/python', '/tmp/tmpmfmk7fc0/_tfx_generated_setup.py', 'bdist_wheel', '--bdist-dir', '/tmp/tmp2j6gvn4m', '--dist-dir', '/tmp/tmpshtezqgo']
 /usr/local/envs/my_tfx_env/lib/python3.10/site-packages/setuptools/_distutils/cmd.py:90: SetuptoolsDeprecationWarning: setup.py install is deprecated.
 !!
 
@@ -19,8 +33,8 @@ INFO:absl:Executing: ['/usr/local/envs/my_tfx_env/bin/python', '/tmp/tmp3pq5tkqu
 
 !!
   self.initialize_options()
-INFO:absl:Successfully built user code wheel distribution at '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+885d6edc9a6e34c4858e5e5f81490dcd26f8916f4798fe22f1b19305fc5889e9-py3-none-any.whl'; target user module is 'transform_movie_lens'.
-INFO:absl:Full user module path is 'transform_movie_lens@/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+885d6edc9a6e34c4858e5e5f81490dcd26f8916f4798fe22f1b19305fc5889e9-py3-none-any.whl'
+INFO:absl:Successfully built user code wheel distribution at '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+8465016ecbbdbb6c887c4b6f3e5e2bb3cd22a98799b06268938441ecef30619a-py3-none-any.whl'; target user module is 'transform_movie_lens'.
+INFO:absl:Full user module path is 'transform_movie_lens@/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+8465016ecbbdbb6c887c4b6f3e5e2bb3cd22a98799b06268938441ecef30619a-py3-none-any.whl'
 INFO:absl:Using deployment config:
  executor_specs {
   key: "MovieLensExampleGen"
@@ -135,7 +149,7 @@ contexts {
     }
     name {
       field_value {
-        string_value: "2025-10-15T18:21:14.982988"
+        string_value: "2025-10-15T19:51:34.676953"
       }
     }
   }
@@ -216,13 +230,13 @@ name {
   }
 }
  is 1.
-DEBUG:absl:Failed to get context of type pipeline_run and name 2025-10-15T18:21:14.982988
+DEBUG:absl:Failed to get context of type pipeline_run and name 2025-10-15T19:51:34.676953
 DEBUG:absl:ID of context type {
   name: "pipeline_run"
 }
 name {
   field_value {
-    string_value: "2025-10-15T18:21:14.982988"
+    string_value: "2025-10-15T19:51:34.676953"
   }
 }
  is 2.
@@ -256,7 +270,7 @@ custom_properties {
     string_value: "Gh8KCQoFdHJhaW4QUAoICgRldmFsEAoKCAoEdGVzdBAK"
   }
 }
-name: "601bb4aa-5f79-408d-9fcb-22a76892030d"
+name: "e6909b52-0394-4f3a-9658-ec676ae6e617"
 
 DEBUG:absl:Creating output artifact uri /kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/output_examples/1
 INFO:absl:MetadataStore with DB connection initialized
@@ -277,7 +291,7 @@ name {
  is 4.
 INFO:absl:Going to run a new execution 1
 WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
-I0000 00:00:1760552475.150689    5633 chttp2_server.cc:712] WARNING: UNKNOWN:Only 1 addresses added out of total 2 resolved {children:[UNKNOWN:socket: Address family not supported by protocol (97)]}
+I0000 00:00:1760557894.848602    6957 chttp2_server.cc:712] WARNING: UNKNOWN:Only 1 addresses added out of total 2 resolved {children:[UNKNOWN:socket: Address family not supported by protocol (97)]}
 INFO:absl:Going to run a new execution: ExecutionInfo(execution_id=1, input_dict={}, output_dict=defaultdict(<class 'list'>, {'output_examples': [Artifact(artifact: uri: "/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/output_examples/1"
 , artifact_type: name: "Examples"
 properties {
@@ -293,7 +307,7 @@ properties {
   value: INT
 }
 base_type: DATASET
-)]}), exec_properties={'output_config_ser': 'Gh8KCQoFdHJhaW4QUAoICgRldmFsEAoKCAoEdGVzdBAK', 'infiles_dict_ser': 'gASVEgIAAAAAAAB9lCiMB3JhdGluZ3OUfZQojARjb2xzlH2UKIwHdXNlcl9pZJR9lCiMBWluZGV4lEsAjAR0eXBllIwIYnVpbHRpbnOUjANpbnSUk5R1jAhtb3ZpZV9pZJR9lChoB0sBaAhoC3WMBnJhdGluZ5R9lChoB0sCaAhoC3WMCXRpbWVzdGFtcJR9lChoB0sDaAhoC3V1jAN1cmmUjCYva2FnZ2xlL3dvcmtpbmcvbWwtMW0vcmF0aW5nc18xMDAwLmRhdJSMD2hlYWRlcnNfcHJlc2VudJSJjAVkZWxpbZSMAjo6lHWMBm1vdmllc5R9lChoA32UKGgMfZQoaAdLAGgIaAt1jAV0aXRsZZR9lChoB0sBaAhoCYwDc3RylJOUdYwGZ2VucmVzlH2UKGgHSwJoCGgedXVoEowgL2thZ2dsZS93b3JraW5nL21sLTFtL21vdmllcy5kYXSUaBSJaBVoFnWMBXVzZXJzlH2UKGgDfZQoaAV9lChoB0sAaAhoC3WMBmdlbmRlcpR9lChoB0sBaAhoHnWMA2FnZZR9lChoB0sCaAhoC3WMCm9jY3VwYXRpb26UfZQoaAdLA2gIaAt1jAd6aXBjb2RllH2UKGgHSwRoCGgedXVoEowjL2thZ2dsZS93b3JraW5nL21sLTFtL3VzZXJzXzEwMC5kYXSUaBSJaBVoFnWMB3ZlcnNpb26USwF1Lg=='}, execution_output_uri='/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/.system/executor_execution/1/executor_output.pb', stateful_working_dir='/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/.system/stateful_working_dir/0a3ce594-d1f9-4fad-8fb9-3d7180261231', tmp_dir='/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/.system/executor_execution/1/.temp/', pipeline_node=node_info {
+)]}), exec_properties={'infiles_dict_ser': 'gASVEgIAAAAAAAB9lCiMB3JhdGluZ3OUfZQojARjb2xzlH2UKIwHdXNlcl9pZJR9lCiMBWluZGV4lEsAjAR0eXBllIwIYnVpbHRpbnOUjANpbnSUk5R1jAhtb3ZpZV9pZJR9lChoB0sBaAhoC3WMBnJhdGluZ5R9lChoB0sCaAhoC3WMCXRpbWVzdGFtcJR9lChoB0sDaAhoC3V1jAN1cmmUjCYva2FnZ2xlL3dvcmtpbmcvbWwtMW0vcmF0aW5nc18xMDAwLmRhdJSMD2hlYWRlcnNfcHJlc2VudJSJjAVkZWxpbZSMAjo6lHWMBm1vdmllc5R9lChoA32UKGgMfZQoaAdLAGgIaAt1jAV0aXRsZZR9lChoB0sBaAhoCYwDc3RylJOUdYwGZ2VucmVzlH2UKGgHSwJoCGgedXVoEowgL2thZ2dsZS93b3JraW5nL21sLTFtL21vdmllcy5kYXSUaBSJaBVoFnWMBXVzZXJzlH2UKGgDfZQoaAV9lChoB0sAaAhoC3WMBmdlbmRlcpR9lChoB0sBaAhoHnWMA2FnZZR9lChoB0sCaAhoC3WMCm9jY3VwYXRpb26UfZQoaAdLA2gIaAt1jAd6aXBjb2RllH2UKGgHSwRoCGgedXVoEowjL2thZ2dsZS93b3JraW5nL21sLTFtL3VzZXJzXzEwMC5kYXSUaBSJaBVoFnWMB3ZlcnNpb26USwF1Lg==', 'output_config_ser': 'Gh8KCQoFdHJhaW4QUAoICgRldmFsEAoKCAoEdGVzdBAK'}, execution_output_uri='/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/.system/executor_execution/1/executor_output.pb', stateful_working_dir='/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/.system/stateful_working_dir/f8a3588c-c8b2-4dbe-bc90-973005ddfe07', tmp_dir='/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/.system/executor_execution/1/.temp/', pipeline_node=node_info {
   type {
     name: "ingest_movie_lens_component.MovieLensExampleGen"
   }
@@ -316,7 +330,7 @@ contexts {
     }
     name {
       field_value {
-        string_value: "2025-10-15T18:21:14.982988"
+        string_value: "2025-10-15T19:51:34.676953"
       }
     }
   }
@@ -381,12 +395,12 @@ execution_options {
   }
 }
 , pipeline_info=id: "TestPythonTransformPipeline"
-, pipeline_run_id='2025-10-15T18:21:14.982988', top_level_pipeline_run_id=None, frontend_url=None)
+, pipeline_run_id='2025-10-15T19:51:34.676953', top_level_pipeline_run_id=None, frontend_url=None)
 INFO:absl:Attempting to infer TFX Python dependency for beam
-INFO:absl:Copying all content from install dir /usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tfx to temp dir /tmp/tmprg24n3tm/build/tfx
-INFO:absl:Generating a temp setup file at /tmp/tmprg24n3tm/build/tfx/setup.py
-INFO:absl:Creating temporary sdist package, logs available at /tmp/tmprg24n3tm/build/tfx/setup.log
-INFO:absl:Added --extra_package=/tmp/tmprg24n3tm/build/tfx/dist/tfx_ephemeral-1.16.0.tar.gz to beam args
+INFO:absl:Copying all content from install dir /usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tfx to temp dir /tmp/tmp0eqf5fko/build/tfx
+INFO:absl:Generating a temp setup file at /tmp/tmp0eqf5fko/build/tfx/setup.py
+INFO:absl:Creating temporary sdist package, logs available at /tmp/tmp0eqf5fko/build/tfx/setup.log
+INFO:absl:Added --extra_package=/tmp/tmp0eqf5fko/build/tfx/dist/tfx_ephemeral-1.16.0.tar.gz to beam args
 INFO:absl:MovieLensExampleGen
 DEBUG:absl:output_examples was passed in to component
 DEBUG:absl:output_examples TYPE=<class 'tfx.types.standard_artifacts.Examples'>
@@ -432,22 +446,22 @@ DEBUG:absl:prefix_path=/kaggle/working/bin/transform_1/test_MovieLensExampleGen/
 DEBUG:absl:prefix_path=/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/output_examples/1/Split-eval/data_tfrecord
 DEBUG:absl:prefix_path=/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/output_examples/1/Split-test/data_tfrecord
 INFO:absl:output_examples written as TFRecords
-WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760552481   nanos: 98775148 } message: "No semi_persistent_directory found: Functions defined in __main__ (interactive session) may fail." log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/runners/worker/sdk_worker_main.py:361" thread: "MainThread" 
-WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760552481   nanos: 106040477 } message: "Discarding unparseable args: [\'--direct_runner_use_stacked_bundle\', \'--pipeline_type_check\']" log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/options/pipeline_options.py:386" thread: "MainThread" 
-WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760552481   nanos: 110731840 } message: "No semi_persistent_directory found: Functions defined in __main__ (interactive session) may fail." log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/runners/worker/sdk_worker_main.py:361" thread: "MainThread" 
-WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760552481   nanos: 117663145 } message: "Discarding unparseable args: [\'--direct_runner_use_stacked_bundle\', \'--pipeline_type_check\']" log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/options/pipeline_options.py:386" thread: "MainThread" 
-WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760552481   nanos: 126104354 } message: "No semi_persistent_directory found: Functions defined in __main__ (interactive session) may fail." log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/runners/worker/sdk_worker_main.py:361" thread: "MainThread" 
-WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760552481   nanos: 135364770 } message: "Discarding unparseable args: [\'--direct_runner_use_stacked_bundle\', \'--pipeline_type_check\']" log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/options/pipeline_options.py:386" thread: "MainThread" 
-WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760552481   nanos: 145302057 } message: "No semi_persistent_directory found: Functions defined in __main__ (interactive session) may fail." log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/runners/worker/sdk_worker_main.py:361" thread: "MainThread" 
-WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760552481   nanos: 153333902 } message: "Discarding unparseable args: [\'--direct_runner_use_stacked_bundle\', \'--pipeline_type_check\']" log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/options/pipeline_options.py:386" thread: "MainThread" 
-WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760552492   nanos: 726884365 } message: "Couldn\'t find python-snappy so the implementation of _TFRecordUtil._masked_crc32c is not as fast as it could be." instruction_id: "bundle_52" transform_id: "write_to_tfrecord_421920178746/Write/WriteImpl/WriteBundles" log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/io/tfrecordio.py:59" thread: "Thread-14" 
-WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760552492   nanos: 774333238 } message: "Couldn\'t find python-snappy so the implementation of _TFRecordUtil._masked_crc32c is not as fast as it could be." instruction_id: "bundle_49" transform_id: "write_to_tfrecord_421920178746/Write/WriteImpl/WriteBundles" log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/io/tfrecordio.py:59" thread: "Thread-14" 
-WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760552493   nanos: 362018346 } message: "Couldn\'t find python-snappy so the implementation of _TFRecordUtil._masked_crc32c is not as fast as it could be." instruction_id: "bundle_51" transform_id: "write_to_tfrecord_421920178746/Write/WriteImpl/WriteBundles" log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/io/tfrecordio.py:59" thread: "Thread-12" 
-WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760552493   nanos: 480974435 } message: "Couldn\'t find python-snappy so the implementation of _TFRecordUtil._masked_crc32c is not as fast as it could be." instruction_id: "bundle_50" transform_id: "write_to_tfrecord_341158322707/Write/WriteImpl/WriteBundles" log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/io/tfrecordio.py:59" thread: "Thread-13" 
+WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760557900   nanos: 394519329 } message: "No semi_persistent_directory found: Functions defined in __main__ (interactive session) may fail." log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/runners/worker/sdk_worker_main.py:361" thread: "MainThread" 
+WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760557900   nanos: 399531126 } message: "Discarding unparseable args: [\'--pipeline_type_check\', \'--direct_runner_use_stacked_bundle\']" log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/options/pipeline_options.py:386" thread: "MainThread" 
+WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760557900   nanos: 398397684 } message: "No semi_persistent_directory found: Functions defined in __main__ (interactive session) may fail." log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/runners/worker/sdk_worker_main.py:361" thread: "MainThread" 
+WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760557900   nanos: 403666973 } message: "Discarding unparseable args: [\'--pipeline_type_check\', \'--direct_runner_use_stacked_bundle\']" log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/options/pipeline_options.py:386" thread: "MainThread" 
+WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760557900   nanos: 438807964 } message: "No semi_persistent_directory found: Functions defined in __main__ (interactive session) may fail." log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/runners/worker/sdk_worker_main.py:361" thread: "MainThread" 
+WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760557900   nanos: 445314884 } message: "Discarding unparseable args: [\'--pipeline_type_check\', \'--direct_runner_use_stacked_bundle\']" log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/options/pipeline_options.py:386" thread: "MainThread" 
+WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760557900   nanos: 464097976 } message: "No semi_persistent_directory found: Functions defined in __main__ (interactive session) may fail." log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/runners/worker/sdk_worker_main.py:361" thread: "MainThread" 
+WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760557900   nanos: 469828844 } message: "Discarding unparseable args: [\'--pipeline_type_check\', \'--direct_runner_use_stacked_bundle\']" log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/options/pipeline_options.py:386" thread: "MainThread" 
+WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760557911   nanos: 44667720 } message: "Couldn\'t find python-snappy so the implementation of _TFRecordUtil._masked_crc32c is not as fast as it could be." instruction_id: "bundle_50" transform_id: "write_to_tfrecord_421920178746/Write/WriteImpl/WriteBundles" log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/io/tfrecordio.py:59" thread: "Thread-14" 
+WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760557911   nanos: 44403791 } message: "Couldn\'t find python-snappy so the implementation of _TFRecordUtil._masked_crc32c is not as fast as it could be." instruction_id: "bundle_51" transform_id: "write_to_tfrecord_421920178746/Write/WriteImpl/WriteBundles" log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/io/tfrecordio.py:59" thread: "Thread-14" 
+WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760557911   nanos: 64056634 } message: "Couldn\'t find python-snappy so the implementation of _TFRecordUtil._masked_crc32c is not as fast as it could be." instruction_id: "bundle_52" transform_id: "write_to_tfrecord_421920178746/Write/WriteImpl/WriteBundles" log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/io/tfrecordio.py:59" thread: "Thread-12" 
+WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760557911   nanos: 131616830 } message: "Couldn\'t find python-snappy so the implementation of _TFRecordUtil._masked_crc32c is not as fast as it could be." instruction_id: "bundle_49" transform_id: "write_to_tfrecord_281587505522/Write/WriteImpl/WriteBundles" log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/io/tfrecordio.py:59" thread: "Thread-13" 
 INFO:absl:Cleaning up stateless execution info.
 INFO:absl:Execution 1 succeeded.
 INFO:absl:Cleaning up stateful execution info.
-INFO:absl:Deleted stateful_working_dir /kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/.system/stateful_working_dir/0a3ce594-d1f9-4fad-8fb9-3d7180261231
+INFO:absl:Deleted stateful_working_dir /kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/.system/stateful_working_dir/f8a3588c-c8b2-4dbe-bc90-973005ddfe07
 INFO:absl:Publishing output artifacts defaultdict(<class 'list'>, {'output_examples': [Artifact(artifact: uri: "/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/output_examples/1"
 , artifact_type: name: "Examples"
 properties {
@@ -496,7 +510,7 @@ contexts {
     }
     name {
       field_value {
-        string_value: "2025-10-15T18:21:14.982988"
+        string_value: "2025-10-15T19:51:34.676953"
       }
     }
   }
@@ -535,7 +549,7 @@ inputs {
           }
           name {
             field_value {
-              string_value: "2025-10-15T18:21:14.982988"
+              string_value: "2025-10-15T19:51:34.676953"
             }
           }
         }
@@ -658,8 +672,8 @@ custom_properties {
 }
 state: LIVE
 type: "Examples"
-create_time_since_epoch: 1760552504176
-last_update_time_since_epoch: 1760552504176
+create_time_since_epoch: 1760557919866
+last_update_time_since_epoch: 1760557919866
 , artifact_type: id: 15
 name: "Examples"
 properties {
@@ -685,7 +699,7 @@ custom_properties {
     string_value: "[]"
   }
 }
-name: "216aea72-b9c6-47db-ad33-7fceb48e6810"
+name: "257c5da3-8ede-41ee-a816-8938661fb776"
 
 DEBUG:absl:Creating output artifact uri /kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/StatisticsGen/statistics/2
 INFO:absl:MetadataStore with DB connection initialized
@@ -694,18 +708,18 @@ DEBUG:absl:ConnectionConfig: sqlite {
   connection_mode: READWRITE_OPENCREATE
 }
 
-DEBUG:absl:Failed to get context of type execution_cache and name b40c760541c9576a5b771f5d56fe2b5dcc84969326b9070fa7c4cd2af1d15b01
+DEBUG:absl:Failed to get context of type execution_cache and name b5013f3f49f26aa8abd74da60b1b5d40152fe02f76498cd5fd47b6c45e068677
 DEBUG:absl:ID of context type {
   name: "execution_cache"
 }
 name {
   field_value {
-    string_value: "b40c760541c9576a5b771f5d56fe2b5dcc84969326b9070fa7c4cd2af1d15b01"
+    string_value: "b5013f3f49f26aa8abd74da60b1b5d40152fe02f76498cd5fd47b6c45e068677"
   }
 }
  is 6.
 INFO:absl:Going to run a new execution 2
-I0000 00:00:1760552504.280774    5633 chttp2_server.cc:712] WARNING: UNKNOWN:Only 1 addresses added out of total 2 resolved {children:[UNKNOWN:socket: Address family not supported by protocol (97)]}
+I0000 00:00:1760557919.931333    6957 chttp2_server.cc:712] WARNING: UNKNOWN:Only 1 addresses added out of total 2 resolved {children:[UNKNOWN:socket: Address family not supported by protocol (97)]}
 INFO:absl:Going to run a new execution: ExecutionInfo(execution_id=2, input_dict={'examples': [Artifact(artifact: id: 1
 type_id: 15
 uri: "/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/output_examples/1"
@@ -741,8 +755,8 @@ custom_properties {
 }
 state: LIVE
 type: "Examples"
-create_time_since_epoch: 1760552504176
-last_update_time_since_epoch: 1760552504176
+create_time_since_epoch: 1760557919866
+last_update_time_since_epoch: 1760557919866
 , artifact_type: id: 15
 name: "Examples"
 properties {
@@ -769,7 +783,7 @@ properties {
   value: STRING
 }
 base_type: STATISTICS
-)]}), exec_properties={'exclude_splits': '[]'}, execution_output_uri='/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/StatisticsGen/.system/executor_execution/2/executor_output.pb', stateful_working_dir='/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/StatisticsGen/.system/stateful_working_dir/f5404033-0aca-480e-8d96-3cd69aeb4e0b', tmp_dir='/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/StatisticsGen/.system/executor_execution/2/.temp/', pipeline_node=node_info {
+)]}), exec_properties={'exclude_splits': '[]'}, execution_output_uri='/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/StatisticsGen/.system/executor_execution/2/executor_output.pb', stateful_working_dir='/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/StatisticsGen/.system/stateful_working_dir/45bc1a0c-8c42-4d4e-b4cd-f173c358beaa', tmp_dir='/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/StatisticsGen/.system/executor_execution/2/.temp/', pipeline_node=node_info {
   type {
     name: "tfx.components.statistics_gen.component.StatisticsGen"
     base_type: PROCESS
@@ -793,7 +807,7 @@ contexts {
     }
     name {
       field_value {
-        string_value: "2025-10-15T18:21:14.982988"
+        string_value: "2025-10-15T19:51:34.676953"
       }
     }
   }
@@ -832,7 +846,7 @@ inputs {
           }
           name {
             field_value {
-              string_value: "2025-10-15T18:21:14.982988"
+              string_value: "2025-10-15T19:51:34.676953"
             }
           }
         }
@@ -896,12 +910,12 @@ execution_options {
   }
 }
 , pipeline_info=id: "TestPythonTransformPipeline"
-, pipeline_run_id='2025-10-15T18:21:14.982988', top_level_pipeline_run_id=None, frontend_url=None)
+, pipeline_run_id='2025-10-15T19:51:34.676953', top_level_pipeline_run_id=None, frontend_url=None)
 INFO:absl:Attempting to infer TFX Python dependency for beam
-INFO:absl:Copying all content from install dir /usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tfx to temp dir /tmp/tmpohezxgae/build/tfx
-INFO:absl:Generating a temp setup file at /tmp/tmpohezxgae/build/tfx/setup.py
-INFO:absl:Creating temporary sdist package, logs available at /tmp/tmpohezxgae/build/tfx/setup.log
-INFO:absl:Added --extra_package=/tmp/tmpohezxgae/build/tfx/dist/tfx_ephemeral-1.16.0.tar.gz to beam args
+INFO:absl:Copying all content from install dir /usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tfx to temp dir /tmp/tmp41fqvony/build/tfx
+INFO:absl:Generating a temp setup file at /tmp/tmp41fqvony/build/tfx/setup.py
+INFO:absl:Creating temporary sdist package, logs available at /tmp/tmp41fqvony/build/tfx/setup.log
+INFO:absl:Added --extra_package=/tmp/tmp41fqvony/build/tfx/dist/tfx_ephemeral-1.16.0.tar.gz to beam args
 DEBUG:absl:Starting Executor execution.
 WARNING:absl:Examples artifact does not have payload_format custom property. Falling back to FORMAT_TF_EXAMPLE
 WARNING:absl:Examples artifact does not have payload_format custom property. Falling back to FORMAT_TF_EXAMPLE
@@ -912,22 +926,22 @@ INFO:absl:Generating statistics for split eval.
 INFO:absl:Statistics for split eval written to /kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/StatisticsGen/statistics/2/Split-eval.
 INFO:absl:Generating statistics for split test.
 INFO:absl:Statistics for split test written to /kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/StatisticsGen/statistics/2/Split-test.
-WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760552513   nanos: 140390396 } message: "No semi_persistent_directory found: Functions defined in __main__ (interactive session) may fail." log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/runners/worker/sdk_worker_main.py:361" thread: "MainThread" 
-WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760552513   nanos: 139848470 } message: "No semi_persistent_directory found: Functions defined in __main__ (interactive session) may fail." log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/runners/worker/sdk_worker_main.py:361" thread: "MainThread" 
-WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760552513   nanos: 145567893 } message: "Discarding unparseable args: [\'--pipeline_type_check\', \'--direct_runner_use_stacked_bundle\']" log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/options/pipeline_options.py:386" thread: "MainThread" 
-WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760552513   nanos: 148628234 } message: "Discarding unparseable args: [\'--pipeline_type_check\', \'--direct_runner_use_stacked_bundle\']" log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/options/pipeline_options.py:386" thread: "MainThread" 
-WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760552513   nanos: 235493421 } message: "No semi_persistent_directory found: Functions defined in __main__ (interactive session) may fail." log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/runners/worker/sdk_worker_main.py:361" thread: "MainThread" 
-WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760552513   nanos: 242850303 } message: "Discarding unparseable args: [\'--pipeline_type_check\', \'--direct_runner_use_stacked_bundle\']" log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/options/pipeline_options.py:386" thread: "MainThread" 
-WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760552513   nanos: 256427526 } message: "No semi_persistent_directory found: Functions defined in __main__ (interactive session) may fail." log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/runners/worker/sdk_worker_main.py:361" thread: "MainThread" 
-WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760552513   nanos: 262474298 } message: "Discarding unparseable args: [\'--pipeline_type_check\', \'--direct_runner_use_stacked_bundle\']" log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/options/pipeline_options.py:386" thread: "MainThread" 
-WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760552518   nanos: 211581230 } message: "Couldn\'t find python-snappy so the implementation of _TFRecordUtil._masked_crc32c is not as fast as it could be." instruction_id: "bundle_137" transform_id: "TFXIORead[train]/RawRecordBeamSource/ReadRawRecords/ReadFromTFRecord[0]/Read/SDFBoundedSourceReader/ParDo(SDFBoundedSourceDoFn)/Process" log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/io/tfrecordio.py:59" thread: "Thread-13" 
-WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760552518   nanos: 215517282 } message: "Couldn\'t find python-snappy so the implementation of _TFRecordUtil._masked_crc32c is not as fast as it could be." instruction_id: "bundle_139" transform_id: "TFXIORead[train]/RawRecordBeamSource/ReadRawRecords/ReadFromTFRecord[0]/Read/SDFBoundedSourceReader/ParDo(SDFBoundedSourceDoFn)/Process" log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/io/tfrecordio.py:59" thread: "Thread-13" 
-WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760552518   nanos: 218683242 } message: "Couldn\'t find python-snappy so the implementation of _TFRecordUtil._masked_crc32c is not as fast as it could be." instruction_id: "bundle_140" transform_id: "TFXIORead[train]/RawRecordBeamSource/ReadRawRecords/ReadFromTFRecord[0]/Read/SDFBoundedSourceReader/ParDo(SDFBoundedSourceDoFn)/Process" log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/io/tfrecordio.py:59" thread: "Thread-12" 
-WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760552518   nanos: 222246170 } message: "Couldn\'t find python-snappy so the implementation of _TFRecordUtil._masked_crc32c is not as fast as it could be." instruction_id: "bundle_138" transform_id: "TFXIORead[train]/RawRecordBeamSource/ReadRawRecords/ReadFromTFRecord[0]/Read/SDFBoundedSourceReader/ParDo(SDFBoundedSourceDoFn)/Process" log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/io/tfrecordio.py:59" thread: "Thread-13" 
+WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760557926   nanos: 675874710 } message: "No semi_persistent_directory found: Functions defined in __main__ (interactive session) may fail." log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/runners/worker/sdk_worker_main.py:361" thread: "MainThread" 
+WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760557926   nanos: 681647062 } message: "Discarding unparseable args: [\'--pipeline_type_check\', \'--direct_runner_use_stacked_bundle\']" log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/options/pipeline_options.py:386" thread: "MainThread" 
+WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760557926   nanos: 707295417 } message: "No semi_persistent_directory found: Functions defined in __main__ (interactive session) may fail." log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/runners/worker/sdk_worker_main.py:361" thread: "MainThread" 
+WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760557926   nanos: 713232040 } message: "Discarding unparseable args: [\'--pipeline_type_check\', \'--direct_runner_use_stacked_bundle\']" log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/options/pipeline_options.py:386" thread: "MainThread" 
+WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760557926   nanos: 728281021 } message: "No semi_persistent_directory found: Functions defined in __main__ (interactive session) may fail." log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/runners/worker/sdk_worker_main.py:361" thread: "MainThread" 
+WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760557926   nanos: 736550569 } message: "Discarding unparseable args: [\'--pipeline_type_check\', \'--direct_runner_use_stacked_bundle\']" log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/options/pipeline_options.py:386" thread: "MainThread" 
+WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760557926   nanos: 735099554 } message: "No semi_persistent_directory found: Functions defined in __main__ (interactive session) may fail." log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/runners/worker/sdk_worker_main.py:361" thread: "MainThread" 
+WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760557926   nanos: 740375041 } message: "Discarding unparseable args: [\'--pipeline_type_check\', \'--direct_runner_use_stacked_bundle\']" log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/options/pipeline_options.py:386" thread: "MainThread" 
+WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760557930   nanos: 793683052 } message: "Couldn\'t find python-snappy so the implementation of _TFRecordUtil._masked_crc32c is not as fast as it could be." instruction_id: "bundle_137" transform_id: "TFXIORead[eval]/RawRecordBeamSource/ReadRawRecords/ReadFromTFRecord[0]/Read/SDFBoundedSourceReader/ParDo(SDFBoundedSourceDoFn)/Process" log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/io/tfrecordio.py:59" thread: "Thread-13" 
+WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760557930   nanos: 800972223 } message: "Couldn\'t find python-snappy so the implementation of _TFRecordUtil._masked_crc32c is not as fast as it could be." instruction_id: "bundle_138" transform_id: "TFXIORead[eval]/RawRecordBeamSource/ReadRawRecords/ReadFromTFRecord[0]/Read/SDFBoundedSourceReader/ParDo(SDFBoundedSourceDoFn)/Process" log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/io/tfrecordio.py:59" thread: "Thread-12" 
+WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760557930   nanos: 805353641 } message: "Couldn\'t find python-snappy so the implementation of _TFRecordUtil._masked_crc32c is not as fast as it could be." instruction_id: "bundle_140" transform_id: "TFXIORead[eval]/RawRecordBeamSource/ReadRawRecords/ReadFromTFRecord[0]/Read/SDFBoundedSourceReader/ParDo(SDFBoundedSourceDoFn)/Process" log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/io/tfrecordio.py:59" thread: "Thread-13" 
+WARNING:apache_beam.runners.portability.local_job_service:Worker: severity: WARN timestamp {   seconds: 1760557930   nanos: 807521104 } message: "Couldn\'t find python-snappy so the implementation of _TFRecordUtil._masked_crc32c is not as fast as it could be." instruction_id: "bundle_139" transform_id: "TFXIORead[eval]/RawRecordBeamSource/ReadRawRecords/ReadFromTFRecord[0]/Read/SDFBoundedSourceReader/ParDo(SDFBoundedSourceDoFn)/Process" log_location: "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/apache_beam/io/tfrecordio.py:59" thread: "Thread-14" 
 INFO:absl:Cleaning up stateless execution info.
 INFO:absl:Execution 2 succeeded.
 INFO:absl:Cleaning up stateful execution info.
-INFO:absl:Deleted stateful_working_dir /kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/StatisticsGen/.system/stateful_working_dir/f5404033-0aca-480e-8d96-3cd69aeb4e0b
+INFO:absl:Deleted stateful_working_dir /kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/StatisticsGen/.system/stateful_working_dir/45bc1a0c-8c42-4d4e-b4cd-f173c358beaa
 INFO:absl:Publishing output artifacts defaultdict(<class 'list'>, {'statistics': [Artifact(artifact: uri: "/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/StatisticsGen/statistics/2"
 , artifact_type: name: "ExampleStatistics"
 properties {
@@ -972,7 +986,7 @@ contexts {
     }
     name {
       field_value {
-        string_value: "2025-10-15T18:21:14.982988"
+        string_value: "2025-10-15T19:51:34.676953"
       }
     }
   }
@@ -1011,7 +1025,7 @@ inputs {
           }
           name {
             field_value {
-              string_value: "2025-10-15T18:21:14.982988"
+              string_value: "2025-10-15T19:51:34.676953"
             }
           }
         }
@@ -1146,8 +1160,8 @@ custom_properties {
 }
 state: LIVE
 type: "ExampleStatistics"
-create_time_since_epoch: 1760552525502
-last_update_time_since_epoch: 1760552525502
+create_time_since_epoch: 1760557938907
+last_update_time_since_epoch: 1760557938907
 , artifact_type: id: 17
 name: "ExampleStatistics"
 properties {
@@ -1175,7 +1189,7 @@ custom_properties {
     int_value: 1
   }
 }
-name: "74d6a97b-6d7d-4ecd-b70a-cc02fc639ad7"
+name: "d9c71d13-f146-42a5-8892-cbfa2f9f0a78"
 
 DEBUG:absl:Creating output artifact uri /kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/SchemaGen/schema/3
 INFO:absl:MetadataStore with DB connection initialized
@@ -1184,18 +1198,18 @@ DEBUG:absl:ConnectionConfig: sqlite {
   connection_mode: READWRITE_OPENCREATE
 }
 
-DEBUG:absl:Failed to get context of type execution_cache and name e12f34b11511bbab66f590e1b6e4da0530b66148f64e8317adc865c45e5d57fe
+DEBUG:absl:Failed to get context of type execution_cache and name 6cefa0833d0167b1458f9a95fca519664fa273f9e6ce2aa0f9f94c7e7030c09f
 DEBUG:absl:ID of context type {
   name: "execution_cache"
 }
 name {
   field_value {
-    string_value: "e12f34b11511bbab66f590e1b6e4da0530b66148f64e8317adc865c45e5d57fe"
+    string_value: "6cefa0833d0167b1458f9a95fca519664fa273f9e6ce2aa0f9f94c7e7030c09f"
   }
 }
  is 8.
 INFO:absl:Going to run a new execution 3
-I0000 00:00:1760552525.569338    5633 chttp2_server.cc:712] WARNING: UNKNOWN:Only 1 addresses added out of total 2 resolved {children:[UNKNOWN:socket: Address family not supported by protocol (97)]}
+I0000 00:00:1760557938.984184    6957 chttp2_server.cc:712] WARNING: UNKNOWN:Only 1 addresses added out of total 2 resolved {children:[UNKNOWN:socket: Address family not supported by protocol (97)]}
 INFO:absl:Going to run a new execution: ExecutionInfo(execution_id=3, input_dict={'statistics': [Artifact(artifact: id: 2
 type_id: 17
 uri: "/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/StatisticsGen/statistics/2"
@@ -1244,8 +1258,8 @@ custom_properties {
 }
 state: LIVE
 type: "ExampleStatistics"
-create_time_since_epoch: 1760552525502
-last_update_time_since_epoch: 1760552525502
+create_time_since_epoch: 1760557938907
+last_update_time_since_epoch: 1760557938907
 , artifact_type: id: 17
 name: "ExampleStatistics"
 properties {
@@ -1259,7 +1273,7 @@ properties {
 base_type: STATISTICS
 )]}, output_dict=defaultdict(<class 'list'>, {'schema': [Artifact(artifact: uri: "/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/SchemaGen/schema/3"
 , artifact_type: name: "Schema"
-)]}), exec_properties={'infer_feature_shape': 1, 'exclude_splits': '[]'}, execution_output_uri='/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/SchemaGen/.system/executor_execution/3/executor_output.pb', stateful_working_dir='/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/SchemaGen/.system/stateful_working_dir/66ad8fb4-3891-49fd-a4a4-87c2e867424e', tmp_dir='/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/SchemaGen/.system/executor_execution/3/.temp/', pipeline_node=node_info {
+)]}), exec_properties={'exclude_splits': '[]', 'infer_feature_shape': 1}, execution_output_uri='/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/SchemaGen/.system/executor_execution/3/executor_output.pb', stateful_working_dir='/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/SchemaGen/.system/stateful_working_dir/c862b53e-d913-447f-b50c-44c008742208', tmp_dir='/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/SchemaGen/.system/executor_execution/3/.temp/', pipeline_node=node_info {
   type {
     name: "tfx.components.schema_gen.component.SchemaGen"
     base_type: PROCESS
@@ -1283,7 +1297,7 @@ contexts {
     }
     name {
       field_value {
-        string_value: "2025-10-15T18:21:14.982988"
+        string_value: "2025-10-15T19:51:34.676953"
       }
     }
   }
@@ -1322,7 +1336,7 @@ inputs {
           }
           name {
             field_value {
-              string_value: "2025-10-15T18:21:14.982988"
+              string_value: "2025-10-15T19:51:34.676953"
             }
           }
         }
@@ -1385,7 +1399,7 @@ execution_options {
   }
 }
 , pipeline_info=id: "TestPythonTransformPipeline"
-, pipeline_run_id='2025-10-15T18:21:14.982988', top_level_pipeline_run_id=None, frontend_url=None)
+, pipeline_run_id='2025-10-15T19:51:34.676953', top_level_pipeline_run_id=None, frontend_url=None)
 INFO:absl:Processing schema from statistics for split train.
 INFO:absl:Processing schema from statistics for split eval.
 INFO:absl:Processing schema from statistics for split test.
@@ -1393,7 +1407,7 @@ INFO:absl:Schema written to /kaggle/working/bin/transform_1/test_MovieLensExampl
 INFO:absl:Cleaning up stateless execution info.
 INFO:absl:Execution 3 succeeded.
 INFO:absl:Cleaning up stateful execution info.
-INFO:absl:Deleted stateful_working_dir /kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/SchemaGen/.system/stateful_working_dir/66ad8fb4-3891-49fd-a4a4-87c2e867424e
+INFO:absl:Deleted stateful_working_dir /kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/SchemaGen/.system/stateful_working_dir/c862b53e-d913-447f-b50c-44c008742208
 INFO:absl:Publishing output artifacts defaultdict(<class 'list'>, {'schema': [Artifact(artifact: uri: "/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/SchemaGen/schema/3"
 , artifact_type: name: "Schema"
 )]}) for execution 3
@@ -1429,7 +1443,7 @@ contexts {
     }
     name {
       field_value {
-        string_value: "2025-10-15T18:21:14.982988"
+        string_value: "2025-10-15T19:51:34.676953"
       }
     }
   }
@@ -1468,7 +1482,7 @@ inputs {
           }
           name {
             field_value {
-              string_value: "2025-10-15T18:21:14.982988"
+              string_value: "2025-10-15T19:51:34.676953"
             }
           }
         }
@@ -1516,7 +1530,7 @@ inputs {
           }
           name {
             field_value {
-              string_value: "2025-10-15T18:21:14.982988"
+              string_value: "2025-10-15T19:51:34.676953"
             }
           }
         }
@@ -1691,7 +1705,7 @@ parameters {
     key: "module_path"
     value {
       field_value {
-        string_value: "transform_movie_lens@/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+885d6edc9a6e34c4858e5e5f81490dcd26f8916f4798fe22f1b19305fc5889e9-py3-none-any.whl"
+        string_value: "transform_movie_lens@/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+8465016ecbbdbb6c887c4b6f3e5e2bb3cd22a98799b06268938441ecef30619a-py3-none-any.whl"
       }
     }
   }
@@ -1748,8 +1762,8 @@ custom_properties {
 }
 state: LIVE
 type: "Schema"
-create_time_since_epoch: 1760552525590
-last_update_time_since_epoch: 1760552525590
+create_time_since_epoch: 1760557939014
+last_update_time_since_epoch: 1760557939014
 , artifact_type: id: 19
 name: "Schema"
 )], 'examples': [Artifact(artifact: id: 1
@@ -1787,8 +1801,8 @@ custom_properties {
 }
 state: LIVE
 type: "Examples"
-create_time_since_epoch: 1760552504176
-last_update_time_since_epoch: 1760552504176
+create_time_since_epoch: 1760557919866
+last_update_time_since_epoch: 1760557919866
 , artifact_type: id: 15
 name: "Examples"
 properties {
@@ -1829,37 +1843,37 @@ custom_properties {
 custom_properties {
   key: "module_path"
   value {
-    string_value: "transform_movie_lens@/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+885d6edc9a6e34c4858e5e5f81490dcd26f8916f4798fe22f1b19305fc5889e9-py3-none-any.whl"
+    string_value: "transform_movie_lens@/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+8465016ecbbdbb6c887c4b6f3e5e2bb3cd22a98799b06268938441ecef30619a-py3-none-any.whl"
   }
 }
-name: "063fdc21-f28d-45f8-9247-51c059a6d7c7"
+name: "f6ddabb1-982e-431a-9bf0-09b5ad46678a"
 
-DEBUG:absl:Creating output artifact uri /kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/pre_transform_schema/4
-DEBUG:absl:Creating output artifact uri /kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/transformed_examples/4
-DEBUG:absl:Creating output artifact uri /kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/pre_transform_stats/4
-DEBUG:absl:Creating output artifact uri /kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/transform_graph/4
-DEBUG:absl:Creating output artifact uri /kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/post_transform_stats/4
+DEBUG:absl:Creating output artifact uri /kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/post_transform_schema/4
 DEBUG:absl:Creating output artifact uri /kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/updated_analyzer_cache/4
 DEBUG:absl:Creating output artifact uri /kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/post_transform_anomalies/4
-DEBUG:absl:Creating output artifact uri /kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/post_transform_schema/4
+DEBUG:absl:Creating output artifact uri /kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/transform_graph/4
+DEBUG:absl:Creating output artifact uri /kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/transformed_examples/4
+DEBUG:absl:Creating output artifact uri /kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/post_transform_stats/4
+DEBUG:absl:Creating output artifact uri /kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/pre_transform_stats/4
+DEBUG:absl:Creating output artifact uri /kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/pre_transform_schema/4
 INFO:absl:MetadataStore with DB connection initialized
 DEBUG:absl:ConnectionConfig: sqlite {
   filename_uri: "/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/tfx_metadata/metadata.db"
   connection_mode: READWRITE_OPENCREATE
 }
 
-DEBUG:absl:Failed to get context of type execution_cache and name 302c4937af319d94cd3caf865d716191baa899ea26b35bf4551e58af8582dc54
+DEBUG:absl:Failed to get context of type execution_cache and name c173ba1543229a7107dc5790caeb158cf10dc80bc3674d7b5cb829638c20dad6
 DEBUG:absl:ID of context type {
   name: "execution_cache"
 }
 name {
   field_value {
-    string_value: "302c4937af319d94cd3caf865d716191baa899ea26b35bf4551e58af8582dc54"
+    string_value: "c173ba1543229a7107dc5790caeb158cf10dc80bc3674d7b5cb829638c20dad6"
   }
 }
  is 10.
 INFO:absl:Going to run a new execution 4
-I0000 00:00:1760552525.656185    5633 chttp2_server.cc:712] WARNING: UNKNOWN:Only 1 addresses added out of total 2 resolved {children:[UNKNOWN:socket: Address family not supported by protocol (97)]}
+I0000 00:00:1760557939.096676    6957 chttp2_server.cc:712] WARNING: UNKNOWN:Only 1 addresses added out of total 2 resolved {children:[UNKNOWN:socket: Address family not supported by protocol (97)]}
 INFO:absl:Going to run a new execution: ExecutionInfo(execution_id=4, input_dict={'schema': [Artifact(artifact: id: 3
 type_id: 19
 uri: "/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/SchemaGen/schema/3"
@@ -1877,8 +1891,8 @@ custom_properties {
 }
 state: LIVE
 type: "Schema"
-create_time_since_epoch: 1760552525590
-last_update_time_since_epoch: 1760552525590
+create_time_since_epoch: 1760557939014
+last_update_time_since_epoch: 1760557939014
 , artifact_type: id: 19
 name: "Schema"
 )], 'examples': [Artifact(artifact: id: 1
@@ -1916,8 +1930,8 @@ custom_properties {
 }
 state: LIVE
 type: "Examples"
-create_time_since_epoch: 1760552504176
-last_update_time_since_epoch: 1760552504176
+create_time_since_epoch: 1760557919866
+last_update_time_since_epoch: 1760557919866
 , artifact_type: id: 15
 name: "Examples"
 properties {
@@ -1933,8 +1947,22 @@ properties {
   value: INT
 }
 base_type: DATASET
-)]}, output_dict=defaultdict(<class 'list'>, {'pre_transform_schema': [Artifact(artifact: uri: "/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/pre_transform_schema/4"
+)]}, output_dict=defaultdict(<class 'list'>, {'post_transform_schema': [Artifact(artifact: uri: "/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/post_transform_schema/4"
 , artifact_type: name: "Schema"
+)], 'updated_analyzer_cache': [Artifact(artifact: uri: "/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/updated_analyzer_cache/4"
+, artifact_type: name: "TransformCache"
+)], 'post_transform_anomalies': [Artifact(artifact: uri: "/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/post_transform_anomalies/4"
+, artifact_type: name: "ExampleAnomalies"
+properties {
+  key: "span"
+  value: INT
+}
+properties {
+  key: "split_names"
+  value: STRING
+}
+)], 'transform_graph': [Artifact(artifact: uri: "/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/transform_graph/4"
+, artifact_type: name: "TransformGraph"
 )], 'transformed_examples': [Artifact(artifact: uri: "/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/transformed_examples/4"
 , artifact_type: name: "Examples"
 properties {
@@ -1950,19 +1978,6 @@ properties {
   value: INT
 }
 base_type: DATASET
-)], 'pre_transform_stats': [Artifact(artifact: uri: "/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/pre_transform_stats/4"
-, artifact_type: name: "ExampleStatistics"
-properties {
-  key: "span"
-  value: INT
-}
-properties {
-  key: "split_names"
-  value: STRING
-}
-base_type: STATISTICS
-)], 'transform_graph': [Artifact(artifact: uri: "/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/transform_graph/4"
-, artifact_type: name: "TransformGraph"
 )], 'post_transform_stats': [Artifact(artifact: uri: "/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/post_transform_stats/4"
 , artifact_type: name: "ExampleStatistics"
 properties {
@@ -1974,10 +1989,8 @@ properties {
   value: STRING
 }
 base_type: STATISTICS
-)], 'updated_analyzer_cache': [Artifact(artifact: uri: "/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/updated_analyzer_cache/4"
-, artifact_type: name: "TransformCache"
-)], 'post_transform_anomalies': [Artifact(artifact: uri: "/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/post_transform_anomalies/4"
-, artifact_type: name: "ExampleAnomalies"
+)], 'pre_transform_stats': [Artifact(artifact: uri: "/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/pre_transform_stats/4"
+, artifact_type: name: "ExampleStatistics"
 properties {
   key: "span"
   value: INT
@@ -1986,9 +1999,10 @@ properties {
   key: "split_names"
   value: STRING
 }
-)], 'post_transform_schema': [Artifact(artifact: uri: "/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/post_transform_schema/4"
+base_type: STATISTICS
+)], 'pre_transform_schema': [Artifact(artifact: uri: "/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/pre_transform_schema/4"
 , artifact_type: name: "Schema"
-)]}), exec_properties={'force_tf_compat_v1': 0, 'module_path': 'transform_movie_lens@/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+885d6edc9a6e34c4858e5e5f81490dcd26f8916f4798fe22f1b19305fc5889e9-py3-none-any.whl', 'custom_config': 'null', 'disable_statistics': 0}, execution_output_uri='/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/.system/executor_execution/4/executor_output.pb', stateful_working_dir='/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/.system/stateful_working_dir/46cd654d-ad1f-40ef-a464-b2e59f9eddc8', tmp_dir='/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/.system/executor_execution/4/.temp/', pipeline_node=node_info {
+)]}), exec_properties={'module_path': 'transform_movie_lens@/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+8465016ecbbdbb6c887c4b6f3e5e2bb3cd22a98799b06268938441ecef30619a-py3-none-any.whl', 'disable_statistics': 0, 'custom_config': 'null', 'force_tf_compat_v1': 0}, execution_output_uri='/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/.system/executor_execution/4/executor_output.pb', stateful_working_dir='/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/.system/stateful_working_dir/2878ca63-d930-4629-837b-db29b254feb0', tmp_dir='/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/.system/executor_execution/4/.temp/', pipeline_node=node_info {
   type {
     name: "tfx.components.transform.component.Transform"
     base_type: TRANSFORM
@@ -2012,7 +2026,7 @@ contexts {
     }
     name {
       field_value {
-        string_value: "2025-10-15T18:21:14.982988"
+        string_value: "2025-10-15T19:51:34.676953"
       }
     }
   }
@@ -2051,7 +2065,7 @@ inputs {
           }
           name {
             field_value {
-              string_value: "2025-10-15T18:21:14.982988"
+              string_value: "2025-10-15T19:51:34.676953"
             }
           }
         }
@@ -2099,7 +2113,7 @@ inputs {
           }
           name {
             field_value {
-              string_value: "2025-10-15T18:21:14.982988"
+              string_value: "2025-10-15T19:51:34.676953"
             }
           }
         }
@@ -2274,7 +2288,7 @@ parameters {
     key: "module_path"
     value {
       field_value {
-        string_value: "transform_movie_lens@/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+885d6edc9a6e34c4858e5e5f81490dcd26f8916f4798fe22f1b19305fc5889e9-py3-none-any.whl"
+        string_value: "transform_movie_lens@/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+8465016ecbbdbb6c887c4b6f3e5e2bb3cd22a98799b06268938441ecef30619a-py3-none-any.whl"
       }
     }
   }
@@ -2286,44 +2300,44 @@ execution_options {
   }
 }
 , pipeline_info=id: "TestPythonTransformPipeline"
-, pipeline_run_id='2025-10-15T18:21:14.982988', top_level_pipeline_run_id=None, frontend_url=None)
+, pipeline_run_id='2025-10-15T19:51:34.676953', top_level_pipeline_run_id=None, frontend_url=None)
 INFO:absl:Attempting to infer TFX Python dependency for beam
-INFO:absl:Copying all content from install dir /usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tfx to temp dir /tmp/tmp2va91wl9/build/tfx
-INFO:absl:Generating a temp setup file at /tmp/tmp2va91wl9/build/tfx/setup.py
-INFO:absl:Creating temporary sdist package, logs available at /tmp/tmp2va91wl9/build/tfx/setup.log
-INFO:absl:Added --extra_package=/tmp/tmp2va91wl9/build/tfx/dist/tfx_ephemeral-1.16.0.tar.gz to beam args
+INFO:absl:Copying all content from install dir /usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tfx to temp dir /tmp/tmpx1za7_78/build/tfx
+INFO:absl:Generating a temp setup file at /tmp/tmpx1za7_78/build/tfx/setup.py
+INFO:absl:Creating temporary sdist package, logs available at /tmp/tmpx1za7_78/build/tfx/setup.log
+INFO:absl:Added --extra_package=/tmp/tmpx1za7_78/build/tfx/dist/tfx_ephemeral-1.16.0.tar.gz to beam args
 DEBUG:absl:Starting Executor execution.
 INFO:absl:Analyze the 'train' split and transform all splits when splits_config is not set.
 WARNING:absl:Examples artifact does not have payload_format custom property. Falling back to FORMAT_TF_EXAMPLE
 DEBUG:absl:Using temp path /kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/transform_graph/4/.temp_path for tft.beam
-INFO:absl:udf_utils.get_fn {'module_file': None, 'module_path': 'transform_movie_lens@/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+885d6edc9a6e34c4858e5e5f81490dcd26f8916f4798fe22f1b19305fc5889e9-py3-none-any.whl', 'preprocessing_fn': None} 'preprocessing_fn'
-INFO:absl:Installing '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+885d6edc9a6e34c4858e5e5f81490dcd26f8916f4798fe22f1b19305fc5889e9-py3-none-any.whl' to a temporary directory.
-INFO:absl:Executing: ['/usr/local/envs/my_tfx_env/bin/python', '-m', 'pip', 'install', '--target', '/tmp/tmpdals0ws1', '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+885d6edc9a6e34c4858e5e5f81490dcd26f8916f4798fe22f1b19305fc5889e9-py3-none-any.whl']
-INFO:absl:Successfully installed '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+885d6edc9a6e34c4858e5e5f81490dcd26f8916f4798fe22f1b19305fc5889e9-py3-none-any.whl'.
-INFO:absl:udf_utils.get_fn {'module_file': None, 'module_path': 'transform_movie_lens@/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+885d6edc9a6e34c4858e5e5f81490dcd26f8916f4798fe22f1b19305fc5889e9-py3-none-any.whl', 'stats_options_updater_fn': None} 'stats_options_updater_fn'
-INFO:absl:Installing '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+885d6edc9a6e34c4858e5e5f81490dcd26f8916f4798fe22f1b19305fc5889e9-py3-none-any.whl' to a temporary directory.
-INFO:absl:Executing: ['/usr/local/envs/my_tfx_env/bin/python', '-m', 'pip', 'install', '--target', '/tmp/tmpgf3bgrvr', '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+885d6edc9a6e34c4858e5e5f81490dcd26f8916f4798fe22f1b19305fc5889e9-py3-none-any.whl']
-INFO:absl:Successfully installed '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+885d6edc9a6e34c4858e5e5f81490dcd26f8916f4798fe22f1b19305fc5889e9-py3-none-any.whl'.
-INFO:absl:Installing '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+885d6edc9a6e34c4858e5e5f81490dcd26f8916f4798fe22f1b19305fc5889e9-py3-none-any.whl' to a temporary directory.
-INFO:absl:Executing: ['/usr/local/envs/my_tfx_env/bin/python', '-m', 'pip', 'install', '--target', '/tmp/tmp3v1inzlv', '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+885d6edc9a6e34c4858e5e5f81490dcd26f8916f4798fe22f1b19305fc5889e9-py3-none-any.whl']
-INFO:absl:Successfully installed '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+885d6edc9a6e34c4858e5e5f81490dcd26f8916f4798fe22f1b19305fc5889e9-py3-none-any.whl'.
-DEBUG:absl:Inputs to executor.Transform function: {'disable_statistics': False, 'schema_path': '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/SchemaGen/schema/3/schema.pbtxt', 'examples_data_format': 6, 'data_view_uri': None, 'analyze_data_paths': ['/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/output_examples/1/Split-train/*'], 'analyze_paths_file_formats': ['tfrecords_gzip'], 'transform_data_paths': ['/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/output_examples/1/Split-train/*', '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/output_examples/1/Split-eval/*', '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/output_examples/1/Split-test/*'], 'transform_paths_file_formats': ['tfrecords_gzip', 'tfrecords_gzip', 'tfrecords_gzip'], 'preprocessing_fn': <function preprocessing_fn at 0x7da78413e8c0>, 'stats_options_updater_fn': None, 'make_beam_pipeline_fn': <bound method BaseBeamExecutor._make_beam_pipeline of <tfx.components.transform.executor.Executor object at 0x7da767738130>>, 'force_tf_compat_v1': False, 'save_options': None}
-DEBUG:absl:Outputs to executor.Transform function: {'transform_output_path': '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/transform_graph/4', 'transform_materialize_output_paths': ['/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/transformed_examples/4/Split-train/transformed_examples', '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/transformed_examples/4/Split-eval/transformed_examples', '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/transformed_examples/4/Split-test/transformed_examples'], 'temp_path': '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/transform_graph/4/.temp_path', 'pre_transform_output_stats_path': '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/pre_transform_stats/4', 'pre_transform_output_schema_path': '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/pre_transform_schema/4', 'post_transform_output_anomalies_path': '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/post_transform_anomalies/4', 'post_transform_output_stats_path': '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/post_transform_stats/4', 'post_transform_output_schema_path': '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/post_transform_schema/4', 'cache_output_path': '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/updated_analyzer_cache/4'}
+INFO:absl:udf_utils.get_fn {'module_file': None, 'module_path': 'transform_movie_lens@/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+8465016ecbbdbb6c887c4b6f3e5e2bb3cd22a98799b06268938441ecef30619a-py3-none-any.whl', 'preprocessing_fn': None} 'preprocessing_fn'
+INFO:absl:Installing '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+8465016ecbbdbb6c887c4b6f3e5e2bb3cd22a98799b06268938441ecef30619a-py3-none-any.whl' to a temporary directory.
+INFO:absl:Executing: ['/usr/local/envs/my_tfx_env/bin/python', '-m', 'pip', 'install', '--target', '/tmp/tmpk5usaz9_', '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+8465016ecbbdbb6c887c4b6f3e5e2bb3cd22a98799b06268938441ecef30619a-py3-none-any.whl']
+INFO:absl:Successfully installed '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+8465016ecbbdbb6c887c4b6f3e5e2bb3cd22a98799b06268938441ecef30619a-py3-none-any.whl'.
+INFO:absl:udf_utils.get_fn {'module_file': None, 'module_path': 'transform_movie_lens@/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+8465016ecbbdbb6c887c4b6f3e5e2bb3cd22a98799b06268938441ecef30619a-py3-none-any.whl', 'stats_options_updater_fn': None} 'stats_options_updater_fn'
+INFO:absl:Installing '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+8465016ecbbdbb6c887c4b6f3e5e2bb3cd22a98799b06268938441ecef30619a-py3-none-any.whl' to a temporary directory.
+INFO:absl:Executing: ['/usr/local/envs/my_tfx_env/bin/python', '-m', 'pip', 'install', '--target', '/tmp/tmpt1ikqnws', '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+8465016ecbbdbb6c887c4b6f3e5e2bb3cd22a98799b06268938441ecef30619a-py3-none-any.whl']
+INFO:absl:Successfully installed '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+8465016ecbbdbb6c887c4b6f3e5e2bb3cd22a98799b06268938441ecef30619a-py3-none-any.whl'.
+INFO:absl:Installing '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+8465016ecbbdbb6c887c4b6f3e5e2bb3cd22a98799b06268938441ecef30619a-py3-none-any.whl' to a temporary directory.
+INFO:absl:Executing: ['/usr/local/envs/my_tfx_env/bin/python', '-m', 'pip', 'install', '--target', '/tmp/tmp5vwf0219', '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+8465016ecbbdbb6c887c4b6f3e5e2bb3cd22a98799b06268938441ecef30619a-py3-none-any.whl']
+INFO:absl:Successfully installed '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/_wheels/tfx_user_code_transform-0.0+8465016ecbbdbb6c887c4b6f3e5e2bb3cd22a98799b06268938441ecef30619a-py3-none-any.whl'.
+DEBUG:absl:Inputs to executor.Transform function: {'disable_statistics': False, 'schema_path': '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/SchemaGen/schema/3/schema.pbtxt', 'examples_data_format': 6, 'data_view_uri': None, 'analyze_data_paths': ['/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/output_examples/1/Split-train/*'], 'analyze_paths_file_formats': ['tfrecords_gzip'], 'transform_data_paths': ['/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/output_examples/1/Split-test/*', '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/output_examples/1/Split-train/*', '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/output_examples/1/Split-eval/*'], 'transform_paths_file_formats': ['tfrecords_gzip', 'tfrecords_gzip', 'tfrecords_gzip'], 'preprocessing_fn': <function preprocessing_fn at 0x7d24540ba0e0>, 'stats_options_updater_fn': None, 'make_beam_pipeline_fn': <bound method BaseBeamExecutor._make_beam_pipeline of <tfx.components.transform.executor.Executor object at 0x7d243ef79600>>, 'force_tf_compat_v1': False, 'save_options': None}
+DEBUG:absl:Outputs to executor.Transform function: {'transform_output_path': '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/transform_graph/4', 'transform_materialize_output_paths': ['/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/transformed_examples/4/Split-test/transformed_examples', '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/transformed_examples/4/Split-train/transformed_examples', '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/transformed_examples/4/Split-eval/transformed_examples'], 'temp_path': '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/transform_graph/4/.temp_path', 'pre_transform_output_stats_path': '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/pre_transform_stats/4', 'pre_transform_output_schema_path': '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/pre_transform_schema/4', 'post_transform_output_anomalies_path': '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/post_transform_anomalies/4', 'post_transform_output_stats_path': '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/post_transform_stats/4', 'post_transform_output_schema_path': '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/post_transform_schema/4', 'cache_output_path': '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/updated_analyzer_cache/4'}
 DEBUG:absl:Force tf.compat.v1: False
 DEBUG:absl:SaveOptions: None
 DEBUG:absl:Analyze data patterns: [(0, '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/output_examples/1/Split-train/*')]
-DEBUG:absl:Transform data patterns: [(0, '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/output_examples/1/Split-train/*'), (1, '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/output_examples/1/Split-eval/*'), (2, '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/output_examples/1/Split-test/*')]
-DEBUG:absl:Transform materialization output paths: [(0, '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/transformed_examples/4/Split-train/transformed_examples'), (1, '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/transformed_examples/4/Split-eval/transformed_examples'), (2, '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/transformed_examples/4/Split-test/transformed_examples')]
+DEBUG:absl:Transform data patterns: [(0, '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/output_examples/1/Split-test/*'), (1, '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/output_examples/1/Split-train/*'), (2, '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/MovieLensExampleGen/output_examples/1/Split-eval/*')]
+DEBUG:absl:Transform materialization output paths: [(0, '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/transformed_examples/4/Split-test/transformed_examples'), (1, '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/transformed_examples/4/Split-train/transformed_examples'), (2, '/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/transformed_examples/4/Split-eval/transformed_examples')]
 DEBUG:absl:Transform output path: /kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/Transform/transform_graph/4
-INFO:absl:Feature gender has a shape dim {
-  size: 1
-}
-. Setting to DenseTensor.
 INFO:absl:Feature genres has a shape dim {
   size: 1
 }
 . Setting to DenseTensor.
 INFO:absl:Feature age has a shape dim {
+  size: 1
+}
+. Setting to DenseTensor.
+INFO:absl:Feature gender has a shape dim {
   size: 1
 }
 . Setting to DenseTensor.
@@ -2347,24 +2361,9 @@ INFO:absl:Feature user_id has a shape dim {
   size: 1
 }
 . Setting to DenseTensor.
-DEBUG:absl:inputs={'gender': <tf.Tensor 'inputs_copy:0' shape=(None, 1) dtype=string>, 'genres': <tf.Tensor 'inputs_1_copy:0' shape=(None, 1) dtype=string>, 'age': <tf.Tensor 'inputs_2_copy:0' shape=(None, 1) dtype=int64>, 'movie_id': <tf.Tensor 'inputs_3_copy:0' shape=(None, 1) dtype=int64>, 'occupation': <tf.Tensor 'inputs_4_copy:0' shape=(None, 1) dtype=int64>, 'rating': <tf.Tensor 'inputs_5_copy:0' shape=(None, 1) dtype=int64>, 'timestamp': <tf.Tensor 'inputs_6_copy:0' shape=(None, 1) dtype=int64>, 'user_id': <tf.Tensor 'inputs_7_copy:0' shape=(None, 1) dtype=int64>}
-
-DEBUG:absl:inputs['genres']=Tensor("inputs_1_copy:0", shape=(None, 1), dtype=string)
-
-DEBUG:absl:outputs['genres']=
-  tf.RaggedTensor(
-    values=tf.RaggedTensor(
-      values=Tensor("StringSplit/StringSplit/StringSplit/StringSplitV2:1", shape=(None,), dtype=string)
-      , row_splits
-        =Tensor("StringSplit/StringSplit/StringSplit/RaggedFromValueRowIds/RowPartitionFromValueRowIds/concat:0", shape=(None,), dtype=int64)
-    )
-    , row_splits
-      =Tensor("StringSplit/RaggedFromTensor/RaggedFromUniformRowLength/RowPartitionFromUniformRowLength/mul:0", shape=(None,), dtype=int64)
-  )
-
-  RaggedTensor of a string Tensor of shape=(None,)
-
-
+DEBUG:absl:inputs={'genres': <tf.Tensor 'inputs_copy:0' shape=(None, 1) dtype=string>, 'age': <tf.Tensor 'inputs_1_copy:0' shape=(None, 1) dtype=int64>, 'gender': <tf.Tensor 'inputs_2_copy:0' shape=(None, 1) dtype=string>, 'movie_id': <tf.Tensor 'inputs_3_copy:0' shape=(None, 1) dtype=int64>, 'occupation': <tf.Tensor 'inputs_4_copy:0' shape=(None, 1) dtype=int64>, 'rating': <tf.Tensor 'inputs_5_copy:0' shape=(None, 1) dtype=int64>, 'timestamp': <tf.Tensor 'inputs_6_copy:0' shape=(None, 1) dtype=int64>, 'user_id': <tf.Tensor 'inputs_7_copy:0' shape=(None, 1) dtype=int64>}
+DEBUG:absl:inputs['genres']=Tensor("inputs_copy:0", shape=(None, 1), dtype=string)
+DEBUG:absl:outputs['genres']=tf.RaggedTensor(values=tf.RaggedTensor(values=Tensor("StringSplit/StringSplit/StringSplit/StringSplitV2:1", shape=(None,), dtype=string), row_splits=Tensor("StringSplit/StringSplit/StringSplit/RaggedFromValueRowIds/RowPartitionFromValueRowIds/concat:0", shape=(None,), dtype=int64)), row_splits=Tensor("StringSplit/RaggedFromTensor/RaggedFromUniformRowLength/RowPartitionFromUniformRowLength/mul:0", shape=(None,), dtype=int64))
 DEBUG:absl:padded_tensor=Tensor("RaggedToTensor/RaggedTensorToTensor:0", shape=(None, 1, None), dtype=string)
 DEBUG:absl:flattened_tensor=Tensor("Reshape:0", shape=(None,), dtype=string)
 DEBUG:absl:lookup_results_flat=Tensor("None_Lookup_2/LookupTableFindV2:0", shape=(None,), dtype=int64)
@@ -2455,7 +2454,7 @@ Traceback (most recent call last):
     out = weak_wrapped_fn().__wrapped__(*args, **kwds)
   File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tensorflow_transform/impl_helper.py", line 365, in transform_fn
     transformed_features = preprocessing_fn(inputs_copy)
-  File "/kaggle/working/transform_movie_lens.py", line 94, in preprocessing_fn
+  File "/kaggle/working/transform_movie_lens.py", line 105, in preprocessing_fn
     lookup_results_padded = tf.reshape(lookup_results_flat, padded_tensor.shape)
   File "/usr/local/envs/my_tfx_env/lib/python3.10/site-packages/tensorflow/python/ops/weak_tensor_ops.py", line 88, in wrapper
     return op(*args, **kwargs)
@@ -2474,6 +2473,6 @@ Traceback (most recent call last):
 ValueError: Tried to convert 'shape' to a tensor and failed. Error: Cannot convert a partially known TensorShape (None, 1, None) to a Tensor.
 
 ----------------------------------------------------------------------
-Ran 2 tests in 56.471s
+Ran 2 tests in 50.600s
 
 FAILED (errors=1, skipped=1)
