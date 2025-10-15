@@ -81,8 +81,7 @@ def preprocessing_fn(inputs):
   tf.print(f"before to_tensor outputs['genres']=", outputs['genres'])
   tf.print(f"before to_tensor outputs['genres'].shape=", outputs['genres'].shape)
   p_shape = [i for i in outputs['genres'].shape]
-  p_shape[-2] = len(genres) # pad up to mulithot length
-  #still have p_shape[-1] is none though
+  p_shape[-1] = len(genres) # pad up to mulithot length
   logging.debug(f"p_shape={p_shape}")
 
   padded_tensor = outputs['genres'].to_tensor(default_value="<PAD>",\
