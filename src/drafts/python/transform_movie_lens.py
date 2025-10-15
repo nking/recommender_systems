@@ -75,12 +75,17 @@ def preprocessing_fn(inputs):
       input = inputs['genres'], pattern="Children's", rewrite="Children")
   #creates a RaggedTensor of strings
   outputs['genres'] = tf.strings.split(outputs['genres'], "|")
-  genres_table = create_static_table(genres, var_dtype=tf.string)
+  logging.debug(f"outputs['genres']={outputs['genres']}")
   padded_tensor = outputs['genres'].to_tensor(default_value="<PAD>")
+  logging.debug(f"padded_tensor={padded_tensor}")
   flattened_tensor = tf.reshape(padded_tensor, [-1])
+  logging.debug(f"flattened_tensor={flattened_tensor}")
+  genres_table = create_static_table(genres, var_dtype=tf.string)
   lookup_results_flat = genres_table.lookup(flattened_tensor)
-  lookup_results_padded = tf.reshape(lookup_results_flat,
-    padded_tensor.shape)
+  logging.debug(f"lookup_results_flat={lookup_results_flat}")
+  loggin.debug(f"padded_tensor.shape={padded_tensor.shape}")
+  lookup_results_padded = tf.reshape(lookup_results_flat, padded_tensor.shape)
+  logging.debug(f"lookup_results_padded={lookup_results_flat}")
   outputs['genres']  = tf.ragged.boolean_mask(
     lookup_results_padded, lookup_results_padded != -1)
   #the model needs tensors to be same size, so make it dense multithot
