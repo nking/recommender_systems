@@ -73,15 +73,19 @@ def preprocessing_fn(inputs):
 
   outputs['genres'] = tf.strings.regex_replace(
       input = inputs['genres'], pattern="Children's", rewrite="Children")
-  #creates a RaggedTensor of strings:
+  #creates a RaggedTensor of strings
   outputs['genres'] = tf.strings.split(outputs['genres'], "|")
   genres_table = create_static_table(genres, var_dtype=tf.string)
-  logging.debug(outputs['genres'])
-  # creates a RaggedTensor of tf.int64:
-  outputs['genres'] = genres_table.lookup(outputs['genres'])
+  padded_tensor = outputs['genres'].to_tensor(default_value="<PAD>")
+  flattened_tensor = tf.reshape(padded_tensor, [-1])
+  lookup_results_flat = genres_table.lookup(flattened_tensor)
+  lookup_results_padded = tf.reshape(lookup_results_flat,
+    padded_tensor.shape)
+  outputs['genres']  = tf.ragged.boolean_mask(
+    lookup_results_padded, lookup_results_padded != -1)
   #the model needs tensors to be same size, so make it dense multithot
   outputs['genres'] = tf.reduce_sum(tf.one_hot(\
-    indices=outputs['genres'], depth=len(genres), dtype=tf.int64), axis=-2)
+    indices=outputs['genres'], depth=len(genres)), axis=-2)
   #the sum is across columns for each example.
   #assuming batch_size is the first dimension, then cols and rows follow
   # so axis=-2 should sum along columns per example whether batched or not
