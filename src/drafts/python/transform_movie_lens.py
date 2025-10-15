@@ -8,7 +8,14 @@ import pytz
 
 import absl
 from absl import logging
+tf.get_logger().propagate = True
 logging.set_verbosity(absl.logging.DEBUG)
+
+import os
+import io
+import sys
+old_stdout = sys.stdout
+sys.stdout = capture_output = io.StringIO()
 
 ## fixed vocabularies, known ahead of time
 #genres = ["Action", "Adventure", "Animation", "Children", "Comedy",
@@ -71,22 +78,26 @@ def preprocessing_fn(inputs):
 
   #omitting zipcode for now, but considering ZCTAs for future
   logging.debug(f"inputs['genres']={inputs['genres']}")
-  tf.print("inputs['genres']=", inputs['genres'])
+  tf.print(f"inputs['genres']=", inputs['genres'])
+  tf.print(f"inputs['genres'].shape=", inputs['genres'].shape)
   outputs['genres'] = tf.strings.regex_replace(
       input = inputs['genres'], pattern="Children's", rewrite="Children")
   #creates a RaggedTensor of strings
   outputs['genres'] = tf.strings.split(outputs['genres'], "|")
   logging.debug(f"outputs['genres']={outputs['genres']}")
-  tf.print("outputs['genres']=", outputs['genres'])
-  tf.print("outputs['genres'].shape=", outputs['genres'].shape)
+  tf.print(f"before to_tensor outputs['genres']=", outputs['genres'])
+  tf.print(f"before to_tensor outputs['genres'].shape=", outputs['genres'].shape)
+  p_shape = [i for i in outputs['genres'].shape]
+  p_shape[-2] = len(genres) # pad up to mulithot length
+
   padded_tensor = outputs['genres'].to_tensor(default_value="<PAD>")
   #padded_tensor = outputs['genres'].to_tensor(default_value="<PAD>", shape=p_shape)
   logging.debug(f"padded_tensor={padded_tensor}")
-  tf.print(padded_tensor)
-  tf.print(padded_tensor.shape)
+  tf.print(f"padded_tensor=", padded_tensor)
+  tf.print(f"padded_tensor.shape=", padded_tensor.shape)
   flattened_tensor = tf.reshape(padded_tensor, [-1])
   logging.debug(f"flattened_tensor={flattened_tensor}")
-  tf.print("ned_tensor=", flattened_tensor)
+  tf.print(f"flattened_tensor=", flattened_tensor)
   genres_table = create_static_table(genres, var_dtype=tf.string)
   lookup_results_flat = genres_table.lookup(flattened_tensor)
   logging.debug(f"lookup_results_flat={lookup_results_flat}")
@@ -106,6 +117,8 @@ def preprocessing_fn(inputs):
   outputs["hr"] = int(round(local_time.hour + (local_time.minute / 60.)))
   outputs["weekday"] = local_time.weekday()
   outputs["hr_wk"] = outputs["hr"] * 7 + outputs["weekday"]
+
+  logging.debug(f'from pipe to stdout={capture_output.getvalue()}')
 
   return outputs, labels
 
