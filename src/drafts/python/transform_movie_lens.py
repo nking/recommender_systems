@@ -10,9 +10,6 @@ import absl
 from absl import logging
 logging.set_verbosity(absl.logging.DEBUG)
 
-#temporary:
-tf.config.run_functions_eagerly(True)
-
 ## fixed vocabularies, known ahead of time
 #genres = ["Action", "Adventure", "Animation", "Children", "Comedy",
 #          "Crime", "Documentary", "Drama", "Fantasy", "Film-Noir",
@@ -85,8 +82,11 @@ def preprocessing_fn(inputs):
   tf.print(f"before to_tensor outputs['genres'].shape=", outputs['genres'].shape)
   p_shape = [i for i in outputs['genres'].shape]
   p_shape[-2] = len(genres) # pad up to mulithot length
+  #still have p_shape[-1] is none though
+  logging.debug(f"p_shape={p_shape}")
 
-  padded_tensor = outputs['genres'].to_tensor(default_value="<PAD>")
+  padded_tensor = outputs['genres'].to_tensor(default_value="<PAD>",\
+    shape=tuple(p_shape))
   #padded_tensor = outputs['genres'].to_tensor(default_value="<PAD>", shape=p_shape)
   logging.debug(f"padded_tensor={padded_tensor}")
   tf.print(f"padded_tensor=", padded_tensor)
