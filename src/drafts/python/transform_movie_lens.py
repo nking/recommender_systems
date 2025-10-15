@@ -19,6 +19,7 @@ genres = [b'Action', b'Adventure', b'Animation', b'Children', b'Comedy',
           b'Crime', b'Documentary', b'Drama', b'Fantasy', b'Film-Noir',
           b'Horror', b'Musical', b'Mystery', b'Romance', b'Sci-Fi',
           b'Thriller', b'War', b'Western']
+genres_to_idx = {g: i for i, g in enumerate(genres)}
 
 genders = ['F', 'M']
 
@@ -69,41 +70,27 @@ def preprocessing_fn(inputs):
 
   outputs['occupation'] = tf.one_hot(inputs['occupation'], depth=num_occupations, dtype=tf.int64)
 
+  @tf.function
+  def transform_genres(split_str_batch):
+    multihot = []
+    for i, split_str in enumerate(split_str_batch):
+      tf.print('split string:', split_str)
+      m_genres = [0 for i in range(len(genres))]
+      for s in split_str:
+        tf.print('s:', s)
+        m_genres[genres_to_idx[s.numpy()]] = 1
+      multihot.append(m_genres)
+    return tf.constant(multihot)
+
   #omitting zipcode for now, but considering ZCTAs for future
+
   logging.debug(f"inputs['genres']={inputs['genres']}")
-  tf.print(f"inputs['genres']=", inputs['genres'])
-  tf.print(f"inputs['genres'].shape=", inputs['genres'].shape)
   outputs['genres'] = tf.strings.regex_replace(
       input = inputs['genres'], pattern="Children's", rewrite="Children")
   #creates a RaggedTensor of strings
+  # the model needs tensors to be same size, so make it dense multithot
   outputs['genres'] = tf.strings.split(outputs['genres'], "|")
-  logging.debug(f"outputs['genres']={outputs['genres']}")
-  tf.print(f"before to_tensor outputs['genres']=", outputs['genres'])
-  tf.print(f"before to_tensor outputs['genres'].shape=", outputs['genres'].shape)
-  p_shape = [i for i in outputs['genres'].shape]
-  p_shape[-1] = len(genres) # pad up to mulithot length
-  logging.debug(f"p_shape={p_shape}")
-
-  padded_tensor = outputs['genres'].to_tensor(default_value="<PAD>",\
-    shape=tuple(p_shape))
-  #padded_tensor = outputs['genres'].to_tensor(default_value="<PAD>", shape=p_shape)
-  logging.debug(f"padded_tensor={padded_tensor}")
-  tf.print(f"padded_tensor=", padded_tensor)
-  tf.print(f"padded_tensor.shape=", padded_tensor.shape)
-  flattened_tensor = tf.reshape(padded_tensor, [-1])
-  logging.debug(f"flattened_tensor={flattened_tensor}")
-  tf.print(f"flattened_tensor=", flattened_tensor)
-  genres_table = create_static_table(genres, var_dtype=tf.string)
-  lookup_results_flat = genres_table.lookup(flattened_tensor)
-  logging.debug(f"lookup_results_flat={lookup_results_flat}")
-  logging.debug(f"padded_tensor.shape={padded_tensor.shape}")
-  lookup_results_padded = tf.reshape(lookup_results_flat, padded_tensor.shape)
-  logging.debug(f"lookup_results_padded={lookup_results_flat}")
-  outputs['genres']  = tf.ragged.boolean_mask(
-    lookup_results_padded, lookup_results_padded != -1)
-  #the model needs tensors to be same size, so make it dense multithot
-  outputs['genres'] = tf.reduce_sum(tf.one_hot(\
-    indices=outputs['genres'], depth=len(genres)), axis=-2)
+  outputs['genres'] = transform_genres(outputs['genres'])
   #the sum is across columns for each example.
   #assuming batch_size is the first dimension, then cols and rows follow
   # so axis=-2 should sum along columns per example whether batched or not
@@ -112,8 +99,6 @@ def preprocessing_fn(inputs):
   outputs["hr"] = int(round(local_time.hour + (local_time.minute / 60.)))
   outputs["weekday"] = local_time.weekday()
   outputs["hr_wk"] = outputs["hr"] * 7 + outputs["weekday"]
-
-  logging.debug(f'from pipe to stdout={capture_output.getvalue()}')
 
   return outputs, labels
 
