@@ -19,7 +19,6 @@ genres = [b'Action', b'Adventure', b'Animation', b'Children', b'Comedy',
           b'Crime', b'Documentary', b'Drama', b'Fantasy', b'Film-Noir',
           b'Horror', b'Musical', b'Mystery', b'Romance', b'Sci-Fi',
           b'Thriller', b'War', b'Western']
-genres_to_idx = {g: i for i, g in enumerate(genres)}
 
 genders = ['F', 'M']
 
@@ -57,7 +56,6 @@ def preprocessing_fn(inputs):
   outputs['user_id'] = inputs['user_id']
   outputs['movie_id'] = inputs['movie_id']
 
-  #outputs['rating'] = inputs['rating']/5.0
   labels = tf.cast(inputs['rating'], tf.float32)/5.0
 
   gender_table = create_static_table(genders, var_dtype=tf.string)
@@ -70,27 +68,20 @@ def preprocessing_fn(inputs):
 
   outputs['occupation'] = tf.one_hot(inputs['occupation'], depth=num_occupations, dtype=tf.int64)
 
-  @tf.function
+  #@tf.function
   def transform_genres(split_str_batch, genres_table):
     multihot = []
     for i, split_str in enumerate(split_str_batch):
       tf.print('split string:', split_str)
       logging.debug(f'split string: {split_str}')
-      #m_genres = [0 for i in range(len(genres))]
       mh = []
       for s in split_str:
         tf.print('s:', s)
         logging.debug(f's: {s}')
-        #idx = genres_to_idx[s.numpy()]
-        #m_genres[idx] = 1
-        #tensor:
         idx = genres_table.lookup(s)
-        #tf.reduce_sum(
         oh = tf.one_hot(indices=idx, depth=len(genres))
         mh.append(oh)
         logging.debug(f'mh={mh}\n{type(mh)}')
-      #t_mh = tf.constant(mh, dtype=tf.int64)
-      #logging.debug(f't_mh={t_mh}\n{type(t_mh)}')
       m_genres = tf.reduce_sum(mh, axis=-2)
       m_genres = tf.divide(m_genres, tf.reduce_sum(m_genres, axis=-1))
       logging.debug(f'm_genres={m_genres}\n{type(m_genres)}')
