@@ -180,7 +180,7 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
         if event.type == metadata_store_pb2.Event.OUTPUT:
           artifact = store.get_artifacts_by_id([event.artifact_id])[0]
           if artifact.type_id == store.get_artifact_type('Examples').id:
-            print(artifact.uri)
+            logging.debug(f"artifact={artifact}\nuri={artifact.uri}")
 
     #!find /kaggle/working/bin -type f -iname "transformed_examples*.gz"
     """
