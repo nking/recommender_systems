@@ -45,14 +45,14 @@ def preprocessing_fn(inputs):
      features have the following keys (column names) and types:
      column_names = user_id,movie_id,rating,timestamp,gender,age,occupation,genres
      column_types = int,    int ,     int ,  int,       str, int, int,          str
-  :return: tuple of (preprocessed features without label, label)
+  :return: dictionary preprocessed features
   """
   logging.debug(f"inputs={inputs}")
 
   outputs = {'user_id': inputs['user_id'],
              'movie_id': inputs['movie_id']}
 
-  labels = tf.divide(tf.cast(inputs['rating'], tf.float32), \
+  outputs['rating'] = tf.divide(tf.cast(inputs['rating'], tf.float32), \
     tf.constant(5.0, dtype=tf.float32))
 
   gender_table = create_static_table(genders, var_dtype=tf.string)
@@ -129,7 +129,7 @@ def preprocessing_fn(inputs):
 
   logging.debug(f"outputs={outputs}")
 
-  return outputs, labels
+  return outputs
 
 #def stats_options_updater_fn(stats_type, stats_options):
 #  "define custom constraints on the pre-transform or post-transform statistics"
