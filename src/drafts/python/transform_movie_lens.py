@@ -72,17 +72,11 @@ def preprocessing_fn(inputs):
   def transform_genres(split_str_batch, genres_table):
     multihot = []
     for i, split_str in enumerate(split_str_batch):
-      tf.print('split string:', split_str)
+      #tf.print('split string:', split_str)
       logging.debug(f'split string: {split_str}')
-      mh = []
-      for s in split_str:
-        tf.print('s:', s)
-        logging.debug(f's: {s}')
-        idx = genres_table.lookup(s)
-        oh = tf.one_hot(indices=idx, depth=len(genres))
-        mh.append(oh)
-        logging.debug(f'mh={mh}\n{type(mh)}')
-      m_genres = tf.reduce_sum(mh, axis=-2)
+      idx = genres_table.lookup(split_str)
+      oh = tf.one_hot(indices=idx, depth=len(genres))
+      m_genres = tf.reduce_sum(oh, axis=-2)
       m_genres = tf.divide(m_genres, tf.reduce_sum(m_genres, axis=-1))
       logging.debug(f'm_genres={m_genres}\n{type(m_genres)}')
       multihot.append(m_genres)
