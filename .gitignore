@@ -6,6 +6,7 @@ __pycache__/
 tt
 tt.sw?
 bin/
+tt?
 
 # C extensions
 *.so
