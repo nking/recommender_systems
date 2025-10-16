@@ -1,13 +1,10 @@
 import tensorflow as tf
 import tensorflow_transform as tft
-from tensorflow_transform.tf_metadata import schema_utils
-#from tfx.components.trainer import fn_args_utils
-#from tfx_bsl.tfxio import dataset_options
-from datetime import datetime
-import pytz
-
-import absl
 from absl import logging
+from tensorflow_transform.tf_metadata import schema_utils
+
+# from tfx.components.trainer import fn_args_utils
+# from tfx_bsl.tfxio import dataset_options
 logging.set_verbosity(logging.DEBUG)
 logging.set_stderrthreshold(logging.DEBUG)
 
@@ -29,7 +26,6 @@ age_groups = [1, 18, 25, 35, 45, 50, 56]
 num_occupations = 21
 
 #for now, fudging timezones:
-CTZ = pytz.timezone("America/Chicago")
 
 # Tf.Transform considers these features as "raw"
 def _get_raw_feature_spec(schema):
@@ -38,8 +34,8 @@ def _get_raw_feature_spec(schema):
 def create_static_table(var_list, var_dtype):
   init = tf.lookup.KeyValueTensorInitializer(\
       keys=tf.constant(var_list, dtype=var_dtype), \
-      values=tf.range(len(var_list), dtype=tf.int64),\
-      key_dtype=var_dtype, value_dtype=tf.int64)
+      values=tf.range(len(var_list), dtype=tf.int32),\
+      key_dtype=var_dtype, value_dtype=tf.int32)
   return tf.lookup.StaticHashTable(init, default_value=-1)
 
 def preprocessing_fn(inputs):
@@ -58,17 +54,18 @@ def preprocessing_fn(inputs):
   outputs['user_id'] = inputs['user_id']
   outputs['movie_id'] = inputs['movie_id']
 
-  labels = tf.cast(inputs['rating'], tf.float32)/5.0
+  labels = tf.divide(tf.cast(inputs['rating'], tf.float32), \
+    tf.constant(5.0, dypte=tf.float32))
 
   gender_table = create_static_table(genders, var_dtype=tf.string)
   outputs['gender'] = gender_table.lookup(inputs['gender'])
-  outputs['gender'] = tf.one_hot( outputs['gender'], depth=len(genders), dtype=tf.int64)
+  outputs['gender'] = tf.one_hot( outputs['gender'], depth=len(genders), dtype=tf.int32)
 
-  age_groups_table = create_static_table(age_groups, var_dtype=tf.int64)
+  age_groups_table = create_static_table(age_groups, var_dtype=tf.int32)
   outputs['age'] = age_groups_table.lookup(inputs['age'])
-  outputs['age'] = tf.one_hot( outputs['age'], depth=len(age_groups), dtype=tf.int64)
+  outputs['age'] = tf.one_hot( outputs['age'], depth=len(age_groups), dtype=tf.int32)
 
-  outputs['occupation'] = tf.one_hot(inputs['occupation'], depth=num_occupations, dtype=tf.int64)
+  outputs['occupation'] = tf.one_hot(inputs['occupation'], depth=num_occupations, dtype=tf.int32)
 
   def transform_genres(input_genres):
     genres_table = create_static_table(genres, var_dtype=tf.string)
@@ -77,7 +74,7 @@ def preprocessing_fn(inputs):
     out = tf.strings.split(out, "|")
     # need fixed length tensors for tf.lookup.StaticHashTable
     pad_shape = [i for i in out.shape]
-    pad_shape[-1] = len(genres) #or is is [-2]?
+    pad_shape[-1] = len(genres) #or [-2]?
     fixed = out.to_tensor(default_value="<PAD>", shape=pad_shape)
     idx = genres_table.lookup(fixed)
     filtered = tf.ragged.boolean_mask(idx, tf.not_equal(idx, -1))
@@ -92,10 +89,47 @@ def preprocessing_fn(inputs):
   logging.debug(f"inputs['genres']={inputs['genres']}")
   outputs['genres'] = transform_genres(inputs['genres'])
 
-  local_time = datetime.fromtimestamp(inputs["timestamp"], tz=CTZ)
-  outputs["hr"] = int(round(local_time.hour + (local_time.minute / 60.)))
-  outputs["weekday"] = local_time.weekday()
-  outputs["hr_wk"] = outputs["hr"] * 7 + outputs["weekday"]
+  #diff due to leap sec is < 1 minute total since 1972
+
+  #chicago is -5 hours from UTC = 60sec*60min*5hr = 18000
+  chicago_tz_offset = tf.constant(18000, dtype=tf.int64)
+  #ts is w.r.t. 1970 01 01, Thursday, 0 hr
+  ts = tf.subtract(inputs["timestamp"], chicago_tz_offset)
+
+  outputs["hr"] = tf.cast(tf.round(tf.divide(\
+    tf.cast(ts, dtype=tf.float64), tf.constant(3600., dtype=tf.float64))),\
+    dtype=tf.int64)
+  outputs["hr"] = tf.cast(tf.math.mod(outputs['hr'], tf.constant(24, dtype=tf.int64)), dtype=tf.int32)
+
+  days_since_1970 = tf.cast(tf.round(tf.divide(\
+    tf.cast(ts, dtype=tf.float64), tf.constant(86400., dtype=tf.float64))),\
+    dtype=tf.int32)
+
+  outputs["weekday"] = tf.math.mod(days_since_1970, tf.constant(7, dtype=tf.int32))
+  #week starting on Monday
+  outputs["weekday"] = tf.add(outputs["weekday"], tf.constant(4, dtype=tf.int32))
+  #a cross of hour and weekday: hr * 7 + weekday
+  outputs["hr_wk"] = tf.add(tf.multiply(outputs["hr"], tf.constant(7, dtype=tf.int32)),\
+      outputs["weekday"])
+
+  #there is probably a relationship between genres and month, so calc month too.
+  outputs["month"] = tf.cast(tf.round(\
+    tf.divide(tf.cast(days_since_1970, tf.float64), tf.constant(30, dtype=tf.float64))), dtype=tf.int32)
+
+  ## year can be useful for timeseries analysis.
+  ## there is a leap year every 4 years, starting at 1972.
+  ## month calc using 30 days for every month, roughly.
+  ## 365 days for non-leap years, 366 for leap years
+  ## nLeap years = (dY // 4)
+  ## (dY - (dY//4)) * 365 + (dY//4) * 366 = days_since_1970
+  ## dY = d / (365 - 365/4 + 366/4)
+  #dy = tf.cast(tf.round(\
+  #  tf.divide(\
+  #    tf.cast(days_since_1970, dtype=tf.float32),\
+  #    tf.constant(365 - (365./4) + (366./4), dtype=tf.float32))), dtype=tf.int32)
+  #outputs["year"] = tf.add(tf.constant(1970, dtype=tf.int32), dy)
+
+  logging.debug(f"outputs={outputs}")
 
   return outputs, labels
 
