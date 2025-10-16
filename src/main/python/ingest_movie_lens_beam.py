@@ -14,7 +14,8 @@ from CustomUTF8Coder import CustomUTF8Coder
 
 import absl
 from absl import logging
-absl.logging.set_verbosity(absl.logging.INFO)
+logging.set_verbosity(logging.WARNING)
+logging.set_stderrthreshold(logging.WARNING)
 
 #@beam.typehints.with_output_types(beam.PCollection)
 class LeftJoinFn(beam.DoFn):

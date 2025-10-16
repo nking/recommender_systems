@@ -8,7 +8,8 @@ import pytz
 
 import absl
 from absl import logging
-logging.set_verbosity(absl.logging.INFO)
+logging.set_verbosity(logging.DEBUG)
+logging.set_stderrthreshold(logging.DEBUG)
 
 ## fixed vocabularies, known ahead of time
 #genres = ["Action", "Adventure", "Animation", "Children", "Comedy",
@@ -74,8 +75,13 @@ def preprocessing_fn(inputs):
     out = tf.strings.regex_replace(
       input=input_genres, pattern="Children's", rewrite="Children")
     out = tf.strings.split(out, "|")
-    idx = genres_table.lookup(out)
-    oh = tf.one_hot(indices=idx, depth=len(genres))
+    # need fixed length tensors for tf.lookup.StaticHashTable
+    pad_shape = [i for i in out.shape]
+    pad_shape[-1] = len(genres) #or is is [-2]?
+    fixed = out.to_tensor(default_value="<PAD>", shape=pad_shape)
+    idx = genres_table.lookup(fixed)
+    filtered = tf.ragged.boolean_mask(idx, tf.not_equal(idx, -1))
+    oh = tf.one_hot(indices=filtered, depth=len(genres))
     m_genres = tf.reduce_sum(oh, axis=-2)
     norm = tf.reduce_sum(m_genres, axis=-1)
     norm = tf.expand_dims(norm, axis=-1)
