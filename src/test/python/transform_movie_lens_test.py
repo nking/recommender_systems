@@ -174,7 +174,7 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     #transformed_examples: Channel of type standard_artifacts.Examples
     #   for materialized transformed examples, which includes transform splits as specified in splits_config
 
-    executions = store.get_executions_by_type(transform.component.Transform)
+    executions = store.get_executions_by_type(type_name="Transform")
     for execution in executions:
       events = store.get_events_by_execution_ids([execution.id])
       for event in events:
