@@ -34,8 +34,8 @@ def _get_raw_feature_spec(schema):
 def create_static_table(var_list, var_dtype):
   init = tf.lookup.KeyValueTensorInitializer(\
       keys=tf.constant(var_list, dtype=var_dtype), \
-      values=tf.range(len(var_list), dtype=tf.int32),\
-      key_dtype=var_dtype, value_dtype=tf.int32)
+      values=tf.range(len(var_list), dtype=tf.int64),\
+      key_dtype=var_dtype, value_dtype=tf.int64)
   return tf.lookup.StaticHashTable(init, default_value=-1)
 
 def preprocessing_fn(inputs):
@@ -57,13 +57,13 @@ def preprocessing_fn(inputs):
 
   gender_table = create_static_table(genders, var_dtype=tf.string)
   outputs['gender'] = gender_table.lookup(inputs['gender'])
-  outputs['gender'] = tf.one_hot( outputs['gender'], depth=len(genders), dtype=tf.int32)
+  outputs['gender'] = tf.one_hot( outputs['gender'], depth=len(genders), dtype=tf.int64)
 
-  age_groups_table = create_static_table(age_groups, var_dtype=tf.int32)
+  age_groups_table = create_static_table(age_groups, var_dtype=tf.int64)
   outputs['age'] = age_groups_table.lookup(inputs['age'])
-  outputs['age'] = tf.one_hot( outputs['age'], depth=len(age_groups), dtype=tf.int32)
+  outputs['age'] = tf.one_hot( outputs['age'], depth=len(age_groups), dtype=tf.int64)
 
-  outputs['occupation'] = tf.one_hot(inputs['occupation'], depth=num_occupations, dtype=tf.int32)
+  outputs['occupation'] = tf.one_hot(inputs['occupation'], depth=num_occupations, dtype=tf.int64)
 
   def transform_genres(input_genres):
     genres_table = create_static_table(genres, var_dtype=tf.string)
