@@ -8,7 +8,7 @@ import pytz
 
 import absl
 from absl import logging
-logging.set_verbosity(absl.logging.DEBUG)
+logging.set_verbosity(absl.logging.INFO)
 
 ## fixed vocabularies, known ahead of time
 #genres = ["Action", "Adventure", "Animation", "Children", "Comedy",
