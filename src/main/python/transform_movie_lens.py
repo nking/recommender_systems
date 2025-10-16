@@ -49,13 +49,11 @@ def preprocessing_fn(inputs):
   """
   logging.debug(f"inputs={inputs}")
 
-  outputs = {}
-
-  outputs['user_id'] = inputs['user_id']
-  outputs['movie_id'] = inputs['movie_id']
+  outputs = {'user_id': inputs['user_id'],
+             'movie_id': inputs['movie_id']}
 
   labels = tf.divide(tf.cast(inputs['rating'], tf.float32), \
-    tf.constant(5.0, dypte=tf.float32))
+    tf.constant(5.0, dtype=tf.float32))
 
   gender_table = create_static_table(genders, var_dtype=tf.string)
   outputs['gender'] = gender_table.lookup(inputs['gender'])
@@ -120,9 +118,9 @@ def preprocessing_fn(inputs):
   ## there is a leap year every 4 years, starting at 1972.
   ## month calc using 30 days for every month, roughly.
   ## 365 days for non-leap years, 366 for leap years
-  ## nLeap years = (dY // 4)
+  ## number of Leap years = (dY // 4)
   ## (dY - (dY//4)) * 365 + (dY//4) * 366 = days_since_1970
-  ## dY = d / (365 - 365/4 + 366/4)
+  ## dY = days_since_1970 / (365 - 365/4 + 366/4)
   #dy = tf.cast(tf.round(\
   #  tf.divide(\
   #    tf.cast(days_since_1970, dtype=tf.float32),\
