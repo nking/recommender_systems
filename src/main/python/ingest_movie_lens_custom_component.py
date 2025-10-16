@@ -36,7 +36,8 @@ building a custom component
 
 # Set up logging.
 tf.get_logger().propagate = False
-absl.logging.set_verbosity(absl.logging.INFO)
+logging.set_verbosity(logging.WARNING)
+logging.set_stderrthreshold(logging.WARNING)
 pp = pprint.PrettyPrinter()
 
 print(f"TensorFlow version: {tf.__version__}")

@@ -9,7 +9,8 @@ from tfx.proto import example_gen_pb2
 
 import absl
 from absl import logging
-absl.logging.set_verbosity(absl.logging.INFO)
+logging.set_verbosity(logging.WARNING)
+logging.set_stderrthreshold(logging.WARNING)
 
 class TestInfileDictUtils(unittest.TestCase):
 

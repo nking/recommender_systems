@@ -19,7 +19,6 @@ from tfx.utils import name_utils
 import pprint
 import absl
 from absl import logging
-absl.logging.set_verbosity(absl.logging.INFO)
 
 from ingest_movie_lens_custom_component import *
 from movie_lens_utils import *
@@ -27,6 +26,9 @@ from movie_lens_utils import *
 import ml_metadata as mlmd
 from ml_metadata.proto import metadata_store_pb2
 from ml_metadata.metadata_store import metadata_store
+
+logging.set_verbosity(logging.WARNING)
+logging.set_stderrthreshold(logging.WARNING)
 
 class CSVExampleGenTest(tf.test.TestCase):
 

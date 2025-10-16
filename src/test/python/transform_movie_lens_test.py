@@ -42,12 +42,14 @@ from transform_movie_lens import *
 import ml_metadata as mlmd
 from ml_metadata.proto import metadata_store_pb2
 from ml_metadata.metadata_store import metadata_store
+
+from helper import *
+
 import absl
 from absl import logging
 tf.get_logger().propagate = False
-absl.logging.set_verbosity(absl.logging.INFO)
-
-from helper import *
+logging.set_verbosity(logging.DEBUG)
+logging.set_stderrthreshold(logging.DEBUG)
 
 class IngestMovieLensComponentTest(tf.test.TestCase):
 

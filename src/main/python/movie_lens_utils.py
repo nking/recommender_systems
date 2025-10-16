@@ -11,7 +11,8 @@ import base64
 import absl
 from absl import logging
 tf.get_logger().propagate = False
-absl.logging.set_verbosity(absl.logging.INFO)
+logging.set_verbosity(logging.WARNING)
+logging.set_stderrthreshold(logging.WARNING)
 
 from tfx.proto import example_gen_pb2
 

@@ -24,7 +24,8 @@ from CustomUTF8Coder import CustomUTF8Coder
 
 import absl
 from absl import logging
-absl.logging.set_verbosity(absl.logging.DEBUG)
+logging.set_verbosity(logging.WARNING)
+logging.set_stderrthreshold(logging.WARNING)
 
 class ReadCSVToRecords(beam.PTransform):
   def __init__(self, infiles_dict):

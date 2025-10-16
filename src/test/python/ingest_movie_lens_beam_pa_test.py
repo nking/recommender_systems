@@ -19,7 +19,8 @@ from apache_beam.options.pipeline_options import PipelineOptions
 import os
 import glob
 tf.get_logger().propagate = False
-absl.logging.set_verbosity(absl.logging.INFO)
+logging.set_verbosity(logging.WARNING)
+logging.set_stderrthreshold(logging.WARNING)
 pp = pprint.PrettyPrinter()
 
 class IngestMovieLensBeamPATest(tf.test.TestCase):

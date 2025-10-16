@@ -46,7 +46,8 @@ from ml_metadata.metadata_store import metadata_store
 import absl
 from absl import logging
 tf.get_logger().propagate = False
-absl.logging.set_verbosity(absl.logging.INFO)
+logging.set_verbosity(logging.WARNING)
+logging.set_stderrthreshold(logging.WARNING)
 
 from helper import *
 
