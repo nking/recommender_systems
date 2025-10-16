@@ -122,6 +122,12 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     logging.debug(f"MLMD store artifact_types={artifact_types}")
     artifacts = store.get_artifacts()
     logging.debug(f"MLMD store artifacts={artifacts}")
+    #id: 8
+    #type_id: 15
+    #uri:
+    # "/kaggle/working/bin/transform_1/test_MovieLensExampleGen/
+    #   TestPythonTransformPipeline/Transform/transformed_examples/4"
+
     executions = store.get_executions()
     logging.debug(f"MLMD store executions={executions}")
     self.assertLessEqual(4, len(artifact_types))
@@ -155,13 +161,29 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
       key=lambda x: x.create_time_since_epoch, reverse=True)[0]
     #or use last_update_time_since_epoch
     transform_graph_uri = latest_transform_graph_artifact.uri
-    logging.debug(f"loading transform_graph_uri={transform_graph_uri}")
+    logging.debug(f"transform_graph_uri={transform_graph_uri}")
 
-    #component outpurs contains: https://www.tensorflow.org/tfx/api_docs/python/tfx/v1/components/Transform#example
+    #/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/
+    #   MovieLensExampleGen/output_examples/1/
+    #   Split-<train, eval, or test>/data_tfrecord-0000?-of-00004.tfrecord
+
+    #component outputs contains: https://www.tensorflow.org/tfx/api_docs/python/tfx/v1/components/Transform#example
     #transform_graph: Channel of type standard_artifacts.TransformGraph,
     #   includes an exported Tensorflow graph suitable for both training and serving.
     #transformed_examples: Channel of type standard_artifacts.Examples
     #   for materialized transformed examples, which includes transform splits as specified in splits_config
+
+    executions = store.get_executions_by_type(tfx.components.transform.component.Transform)
+    for execution in executions:
+      events = store.get_events_by_execution_ids([execution.id])
+      for event in events:
+        if event.type == metadata_store_pb2.Event.OUTPUT:
+          artifact = store.get_artifacts_by_id([event.artifact_id])[0]
+          if artifact.type_id == store.get_artifact_type('Examples').id:
+            print(artifact.uri)
+
+    #!find /kaggle/working/bin -type f -iname "transformed_examples*.gz"
+    """
     logging.debug(f"component transformed_examples uri={ratings_transform.outputs['transformed_examples'].get()[0].uri}")
     logging.debug(f"component post_transform_schema uri={ratings_transform.outputs['post_transform_schema'].get()[0].uri}")
     stats_path_train = os.path.join(transform_graph_uri, get_split_dir_name("train"), 'FeatureStats.pb')
@@ -172,9 +194,10 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     self.assertTrue(os.path.exists(stats_path_test))
 
     tfrecord_filenames = [os.path.join(stats_path_train, name) for name in os.listdir(stats_path_train)]
-    dataset = tf.data.TFRecordDataset(tfrecord_filenames)
+    dataset = tf.data.TFRecordDataset(tfrecord_filenames, compression_type="GZIP")
+    #might need to parse the data
     for tfrecord in dataset.take(5):
       example = tf.train.Example()
       example.ParseFromString(tfrecord.numpy())
       logging.debug(f"a transform example={example}")
-
+    """
