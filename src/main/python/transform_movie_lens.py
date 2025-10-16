@@ -97,22 +97,22 @@ def preprocessing_fn(inputs):
   outputs["hr"] = tf.cast(tf.round(tf.divide(\
     tf.cast(ts, dtype=tf.float64), tf.constant(3600., dtype=tf.float64))),\
     dtype=tf.int64)
-  outputs["hr"] = tf.cast(tf.math.mod(outputs['hr'], tf.constant(24, dtype=tf.int64)), dtype=tf.int32)
+  outputs["hr"] = tf.math.mod(outputs['hr'], tf.constant(24, dtype=tf.int64))
 
   days_since_1970 = tf.cast(tf.round(tf.divide(\
     tf.cast(ts, dtype=tf.float64), tf.constant(86400., dtype=tf.float64))),\
-    dtype=tf.int32)
+    dtype=tf.int64)
 
-  outputs["weekday"] = tf.math.mod(days_since_1970, tf.constant(7, dtype=tf.int32))
+  outputs["weekday"] = tf.math.mod(days_since_1970, tf.constant(7, dtype=tf.int64))
   #week starting on Monday
-  outputs["weekday"] = tf.add(outputs["weekday"], tf.constant(4, dtype=tf.int32))
+  outputs["weekday"] = tf.add(outputs["weekday"], tf.constant(4, dtype=tf.int64))
   #a cross of hour and weekday: hr * 7 + weekday
-  outputs["hr_wk"] = tf.add(tf.multiply(outputs["hr"], tf.constant(7, dtype=tf.int32)),\
+  outputs["hr_wk"] = tf.add(tf.multiply(outputs["hr"], tf.constant(7, dtype=tf.int64)),\
       outputs["weekday"])
 
   #there is probably a relationship between genres and month, so calc month too.
   outputs["month"] = tf.cast(tf.round(\
-    tf.divide(tf.cast(days_since_1970, tf.float64), tf.constant(30, dtype=tf.float64))), dtype=tf.int32)
+    tf.divide(tf.cast(days_since_1970, tf.float64), tf.constant(30, dtype=tf.float64))), dtype=tf.int64)
 
   ## year can be useful for timeseries analysis.
   ## there is a leap year every 4 years, starting at 1972.
@@ -124,8 +124,8 @@ def preprocessing_fn(inputs):
   #dy = tf.cast(tf.round(\
   #  tf.divide(\
   #    tf.cast(days_since_1970, dtype=tf.float32),\
-  #    tf.constant(365 - (365./4) + (366./4), dtype=tf.float32))), dtype=tf.int32)
-  #outputs["year"] = tf.add(tf.constant(1970, dtype=tf.int32), dy)
+  #    tf.constant(365 - (365./4) + (366./4), dtype=tf.float32))), dtype=tf.int64)
+  #outputs["year"] = tf.add(tf.constant(1970, dtype=tf.int64), dy)
 
   logging.debug(f"outputs={outputs}")
 
