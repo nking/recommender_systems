@@ -43,11 +43,12 @@ def create_static_table(var_list, var_dtype):
 
 def preprocessing_fn(inputs):
   """
-  :param inputs: map from feature keys to raw not-yet-transformed features.
-     features have the following column names and types:
+  :param inputs: map of feature keys with values = tensors of
+     raw not-yet-transformed features.
+     features have the following keys (column names) and types:
      column_names = user_id,movie_id,rating,timestamp,gender,age,occupation,genres
      column_types = int,    int ,     int ,  int,       str, int, int,          str
-  :return: tuple of (processed features without label, label)
+  :return: tuple of (preprocessed features without label, label)
   """
   logging.debug(f"inputs={inputs}")
 
