@@ -68,33 +68,22 @@ def preprocessing_fn(inputs):
 
   outputs['occupation'] = tf.one_hot(inputs['occupation'], depth=num_occupations, dtype=tf.int64)
 
-  #@tf.function
-  def transform_genres(split_str_batch, genres_table):
-    multihot = []
-    for i, split_str in enumerate(split_str_batch):
-      #tf.print('split string:', split_str)
-      logging.debug(f'split string: {split_str}')
-      idx = genres_table.lookup(split_str)
-      oh = tf.one_hot(indices=idx, depth=len(genres))
-      m_genres = tf.reduce_sum(oh, axis=-2)
-      m_genres = tf.divide(m_genres, tf.reduce_sum(m_genres, axis=-1))
-      logging.debug(f'm_genres={m_genres}\n{type(m_genres)}')
-      multihot.append(m_genres)
-    return tf.stack(multihot)
+  def transform_genres(input_genres):
+    genres_table = create_static_table(genres, var_dtype=tf.string)
+    out = tf.strings.regex_replace(
+      input=input_genres, pattern="Children's", rewrite="Children")
+    out = tf.strings.split(out, "|")
+    idx = genres_table.lookup(out)
+    oh = tf.one_hot(indices=idx, depth=len(genres))
+    m_genres = tf.reduce_sum(oh, axis=-2)
+    norm = tf.reduce_sum(m_genres, axis=-1)
+    norm = tf.expand_dims(norm, axis=-1)
+    return tf.divide(m_genres, norm)
 
   #omitting zipcode for now, but considering ZCTAs for future
 
   logging.debug(f"inputs['genres']={inputs['genres']}")
-  outputs['genres'] = tf.strings.regex_replace(
-      input = inputs['genres'], pattern="Children's", rewrite="Children")
-  #creates a RaggedTensor of strings
-  # the model needs tensors to be same size, so make it dense multithot
-  outputs['genres'] = tf.strings.split(outputs['genres'], "|")
-  genres_table = create_static_table(genres, var_dtype=tf.string)
-  outputs['genres'] = transform_genres(outputs['genres'], genres_table)
-  #the sum is across columns for each example.
-  #assuming batch_size is the first dimension, then cols and rows follow
-  # so axis=-2 should sum along columns per example whether batched or not
+  outputs['genres'] = transform_genres(inputs['genres'])
 
   local_time = datetime.fromtimestamp(inputs["timestamp"], tz=CTZ)
   outputs["hr"] = int(round(local_time.hour + (local_time.minute / 60.)))
