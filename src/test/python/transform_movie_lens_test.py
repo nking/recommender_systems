@@ -34,6 +34,7 @@ from tfx.proto import example_gen_pb2
 from tfx.components import StatisticsGen, SchemaGen
 from tfx.types import standard_component_specs
 from tfx.utils import proto_utils
+from tfx.components import transform
 
 from ingest_movie_lens_component import *
 from movie_lens_utils import *
@@ -173,7 +174,7 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     #transformed_examples: Channel of type standard_artifacts.Examples
     #   for materialized transformed examples, which includes transform splits as specified in splits_config
 
-    executions = store.get_executions_by_type(tfx.components.transform.component.Transform)
+    executions = store.get_executions_by_type(transform.component.Transform)
     for execution in executions:
       events = store.get_events_by_execution_ids([execution.id])
       for event in events:
