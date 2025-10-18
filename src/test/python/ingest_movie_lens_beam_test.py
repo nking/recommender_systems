@@ -1,77 +1,28 @@
-import apache_beam as beam
+import pprint
+import time
+
 from apache_beam.testing.util import assert_that, is_not_empty, equal_to
 
-import tensorflow as tf
-from tfx.dsl.components.base import executor_spec
-from tfx.dsl.io import fileio
-from tfx.orchestration import data_types
-from tfx.orchestration import metadata
-from tfx.orchestration.launcher import in_process_component_launcher
-from tfx.proto import example_gen_pb2
-from tfx.utils import name_utils
-
 from ingest_movie_lens_beam import *
-from movie_lens_utils import *
-
-import time
-import random
-
-from ml_metadata.proto import metadata_store_pb2
-
-import absl
-from absl import logging
-import pprint
 
 logging.set_verbosity(logging.WARNING)
 logging.set_stderrthreshold(logging.WARNING)
 
 pp = pprint.PrettyPrinter()
 
+from .helper import *
 
 class IngestMovieLensBeamTest(tf.test.TestCase):
 
   def setUp(self):
     super().setUp()
-    kaggle = True
-    if kaggle:
-      prefix = '/kaggle/working/ml-1m/'
-    else:
-      prefix = "../resources/ml-1m/"
-    ratings_uri = f"{prefix}ratings.dat"
-    movies_uri = f"{prefix}movies.dat"
-    users_uri = f"{prefix}users.dat"
-
-    ratings_col_names = ["user_id", "movie_id", "rating", "timestamp"]
-    ratings_col_types = [int, int, int, int]  # for some files, ratings are floats
-    movies_col_names = ["movie_id", "title", "genres"]
-    movies_col_types = [int, str, str]
-    users_col_names = ["user_id", "gender", "age", "occupation", "zipcode"]
-    users_col_types = [int, str, int, int, str]
-
-    ratings_dict = create_infile_dict(for_file='ratings', \
-                                      uri=ratings_uri,
-                                      col_names=ratings_col_names, \
-                                      col_types=ratings_col_types,
-                                      headers_present=False, delim="::")
-
-    movies_dict = create_infile_dict(for_file='movies', \
-                                     uri=movies_uri,
-                                     col_names=movies_col_names, \
-                                     col_types=movies_col_types,
-                                     headers_present=False, delim="::")
-
-    users_dict = create_infile_dict(for_file='users', \
-                                    uri=users_uri,
-                                    col_names=users_col_names, \
-                                    col_types=users_col_types,
-                                    headers_present=False, delim="::")
-
-    self.infiles_dict = create_infiles_dict(ratings_dict=ratings_dict, \
-                                      movies_dict=movies_dict, \
-                                      users_dict=users_dict, version=1)
-
-    self.buckets = [80, 10, 10]
-    self.bucket_names = ['train', 'eval', 'test']
+    self.infiles_dict_ser, self.output_config_ser, self.split_names = get_test_data()
+    try:
+      self.infiles_dict = deserialize(self.infiles_dict_ser)
+    except Exception as ex:
+      err = f"error with deserialize(infiles_dict_ser)"
+      logging.error(f'{err} : {ex}')
+      raise ValueError(f'{err} : {ex}')
 
     self.name = 'test run of ingest with tfx'
 
@@ -108,13 +59,15 @@ class IngestMovieLensBeamTest(tf.test.TestCase):
       ratings_pc = pc['ratings']
 
       r_count = ratings_pc  | f'ratings_count_{random.randint(0, 1000000000000)}' >> beam.combiners.Count.Globally()
-      #r_count | 'count ratings' >> beam.Map(lambda x: print(f'len={x}'))
-      assert_that(r_count, equal_to([1000209]), label=f"assert_that_{random.randint(0, 1000000000000)}")
+
+      u_count = pc['users']  | beam.combiners.Count.Globally()
 
       assert_that(pc['movies']  | f'movies_count_{random.randint(0, 1000000000000)}' >> beam.combiners.Count.Globally(), \
         equal_to([3883]), label=f"assert_that_{random.randint(0, 1000000000000)}")
-      assert_that(pc['users'] | f'users_count_{random.randint(0, 1000000000000)}' >> beam.combiners.Count.Globally(), \
-        equal_to([6040]), label=f"assert_that_{random.randint(0, 1000000000000)}")
+      assert_that(u_count, \
+        equal_to([100]), label=f"assert_that_{random.randint(0, 1000000000000)}")
+      assert_that(r_count, \
+                  equal_to([1000]), label=f"assert_that_{random.randint(0, 1000000000000)}")
 
       #beam.pvalue.PCollection, List[Tuple[str, Any]]
       ratings, column_name_type_list = \

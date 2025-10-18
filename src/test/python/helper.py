@@ -1,10 +1,12 @@
+import os
+
 from tfx.proto import example_gen_pb2
 from typing import Tuple
 
 #contains tf import:
 from movie_lens_utils import *
 
-def get_test_data(use_small=True, kaggle=True) -> Tuple[str, str, list[str]]:
+def get_test_data(use_small=True) -> Tuple[str, str, list[str]]:
   """
   :param use_small:
   :param kaggle:
@@ -12,30 +14,40 @@ def get_test_data(use_small=True, kaggle=True) -> Tuple[str, str, list[str]]:
      output_config serialized to string, and list of split names
   """
 
-  if os.getcwd().endswith("recommender_systems"):
+  cwd = os.getcwd()
+  if "recommender_systems" in cwd:
     kaggle = False
   else:
     kaggle = True
+  print(f"CWD={os.getcwd()}, kaggle={kaggle}")
 
   if kaggle:
     prefix = '/kaggle/working/ml-1m/'
     if use_small:
-      ratings_uri = f"{prefix}ratings_1000.dat"
-      users_uri = f"{prefix}users_100.dat"
+      ratings_uri = os.path.join(prefix, "ratings_1000.dat")
+      users_uri = os.path.join(prefix, "users_100.dat")
     else:
-      ratings_uri = f"{prefix}ratings.dat"
-      users_uri = f"{prefix}users.dat"
-    movies_uri = f"{prefix}movies.dat"
+      ratings_uri = os.path.join(prefix,"ratings.dat")
+      users_uri = os.path.join(prefix, "users.dat")
+    movies_uri = os.path.join(prefix, "movies.dat")
   else:
-    prefix_main = "../../main/resources/ml-1m/"
+    head = cwd
+    while head and head != os.sep:
+      head, tail = os.path.split(head)
+      if tail:  # Add only if not an empty string (e.g., from root or multiple separators)
+        if tail == "recommender_systems":
+          proj_dir = os.path.join(head, tail)
+          break
+    #/<>/recommender_systems/src/test/python/
+    prefix_main = os.path.join(proj_dir, "src/main/resources/ml-1m/")
+    prefix = os.path.join(proj_dir, "src/test/resources/ml-1m/")
     if use_small:
-      prefix = '../resources/ml/-1m/'
-      ratings_uri = f"{prefix}ratings.dat"
-      users_uri = f"{prefix}users.dat"
+      ratings_uri = os.path.join(prefix, "ratings_1000.dat")
+      users_uri = os.path.join(prefix, "users_100.dat")
     else:
-      ratings_uri = f"{prefix_main}ratings.dat"
-      users_uri = f"{prefix_main}users.dat"
-    movies_uri = f"{prefix_main}movies.dat"
+      ratings_uri = os.path.join(prefix_main,"ratings.dat")
+      users_uri = os.path.join(prefix_main, "users.dat")
+    movies_uri = os.path.join(prefix_main, "movies.dat")
 
   ratings_col_names = ["user_id", "movie_id", "rating", "timestamp"]
   ratings_col_types = [int, int, int, int]  # for some files, ratings are floats
