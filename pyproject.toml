@@ -1,0 +1,35 @@
+[project]
+name = "recommender-systems-with-tfx-pipelines"
+version = "0.1.0"
+description = "TFX pipelines for kaggle recommender systems poject"
+authors = [
+    { name = "Nichole King" },
+]
+readme = "README.md"
+requires-python = "==3.10"
+dependencies = [
+    "pyarrow==10.0.1",
+    "apache-beam==2.59.0",
+    "tensorflow==2.16.1",
+    "tensorflow-transform==1.16.0",
+    "tfx==1.16.0",
+    "tensorflow-data-validation==1.16.1",
+    "tensorflow-metadata==1.16.1",
+    "ml-metadata==1.16.0",
+    "pytest"
+]
+license = "MIT"
+license_files=["LICENSE"]
+
+classifiers = [
+  #   3 - Alpha
+  #   4 - Beta
+  #   5 - Production/Stable
+  "Development Status :: 4 - Beta",
+
+  "Programming Language :: Python :: 3.10",
+]
+
+[project.urls]
+Homepage = "https://www.kaggle.com/code/nicholeasuniquename/recommender-systems-with-tfx-pipelines"
+Repository = "https://github.com/nking/recommender_systems.git"
