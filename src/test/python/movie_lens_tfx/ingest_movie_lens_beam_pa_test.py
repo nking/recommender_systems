@@ -1,16 +1,11 @@
-import apache_beam as beam
 from apache_beam.testing.util import assert_that, is_not_empty, equal_to
 
-import tensorflow as tf
-
-from ingest_movie_lens_beam_pa import *
-from movie_lens_utils import *
+from movie_lens_tfx.ingest_movie_lens_beam_pa import *
 from helper import *
 
 import time
 import random
 
-import absl
 from absl import logging
 import pprint
 

@@ -1,10 +1,24 @@
-import os
-
-from tfx.proto import example_gen_pb2
-from typing import Tuple
-
 #contains tf import:
 from movie_lens_utils import *
+
+import os
+import sys
+
+def get_project_dir():
+  cwd = os.getcwd()
+  head = cwd
+  while head and head != os.sep:
+    head, tail = os.path.split(head)
+    if tail:  # Add only if not an empty string (e.g., from root or multiple separators)
+      if tail == "recommender_systems":
+        proj_dir = os.path.join(head, tail)
+        break
+  return proj_dir
+
+def add_to_sys(proj_dir):
+  src_module_dir = os.path.join(proj_dir, "src/main/python")
+  #sys.path.insert(0, self.module_dir)
+
 
 def get_test_data(use_small=True) -> Tuple[str, str, list[str]]:
   """
@@ -31,14 +45,7 @@ def get_test_data(use_small=True) -> Tuple[str, str, list[str]]:
       users_uri = os.path.join(prefix, "users.dat")
     movies_uri = os.path.join(prefix, "movies.dat")
   else:
-    head = cwd
-    while head and head != os.sep:
-      head, tail = os.path.split(head)
-      if tail:  # Add only if not an empty string (e.g., from root or multiple separators)
-        if tail == "recommender_systems":
-          proj_dir = os.path.join(head, tail)
-          break
-    #/<>/recommender_systems/src/test/python/
+    proj_dir = get_project_dir()
     prefix_main = os.path.join(proj_dir, "src/main/resources/ml-1m/")
     prefix = os.path.join(proj_dir, "src/test/resources/ml-1m/")
     if use_small:
@@ -48,6 +55,10 @@ def get_test_data(use_small=True) -> Tuple[str, str, list[str]]:
       ratings_uri = os.path.join(prefix_main,"ratings.dat")
       users_uri = os.path.join(prefix_main, "users.dat")
     movies_uri = os.path.join(prefix_main, "movies.dat")
+    add_to_sys(proj_dir)
+
+  print(f"SYS PATH={sys.path}")
+  print(f"SYS MODULES= {sys.modules}")
 
   ratings_col_names = ["user_id", "movie_id", "rating", "timestamp"]
   ratings_col_types = [int, int, int, int]  # for some files, ratings are floats

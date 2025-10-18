@@ -23,8 +23,8 @@ class IngestMovieLensBeamTest(tf.test.TestCase):
       err = f"error with deserialize(infiles_dict_ser)"
       logging.error(f'{err} : {ex}')
       raise ValueError(f'{err} : {ex}')
-
     self.name = 'test run of ingest with tfx'
+
 
   def testRun2(self):
 

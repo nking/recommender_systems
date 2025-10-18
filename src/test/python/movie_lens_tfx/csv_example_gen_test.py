@@ -8,10 +8,9 @@ from tfx.orchestration import metadata
 from tfx.orchestration import publisher
 from tfx.orchestration.launcher import in_process_component_launcher
 from tfx.utils import name_utils
-from tfx.proto import example_gen_pb2
 
-from ingest_movie_lens_custom_component import *
-from movie_lens_utils import *
+from movie_lens_tfx.ingest_movie_lens_custom_component import *
+from movie_lens_tfx.movie_lens_utils import *
 
 logging.set_verbosity(logging.WARNING)
 logging.set_stderrthreshold(logging.WARNING)

@@ -46,8 +46,7 @@ def _make_tfxio() -> dataset_tfxio.DatasetTFXIO:
     return dataset_tfxio.DatasetTFXIO(dataset=dataset)
 
 
-def main(args):
-    del args
+def test_tfx():
 
     input_tfxio = _make_tfxio()
     #tfx_bsl.tfxio.dataset_tfxio.DatasetTFXIO
@@ -75,4 +74,4 @@ def main(args):
 
 
 if __name__ == "__main__":
-    app.run(main)
+    app.run(test_tfx())

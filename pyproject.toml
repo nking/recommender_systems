@@ -16,8 +16,9 @@ dependencies = [
     "tensorflow-data-validation==1.16.1",
     "tensorflow-metadata==1.16.1",
     "ml-metadata==1.16.0",
-    "pytest"
+    "pytest",
 ]
+#also java >= 11... 11 for pyspark compatabiltity
 license = "MIT"
 license_files=["LICENSE"]
 
@@ -25,10 +26,16 @@ classifiers = [
   #   3 - Alpha
   #   4 - Beta
   #   5 - Production/Stable
-  "Development Status :: 4 - Beta",
-
+  "Development Status :: 2 - pre-Alpha",
   "Programming Language :: Python :: 3.10",
 ]
+
+[tool.pytest.ini_options]
+pythonpath = 
+  src/main/python 
+  src/drafts/python 
+testpaths  = 
+  src/test/python
 
 [project.urls]
 Homepage = "https://www.kaggle.com/code/nicholeasuniquename/recommender-systems-with-tfx-pipelines"
