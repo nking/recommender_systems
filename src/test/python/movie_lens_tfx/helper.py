@@ -1,12 +1,13 @@
 #contains tf import:
-from movie_lens_utils import *
 
 import os
 import sys
+from movie_lens_utils import *
 
 def get_project_dir():
   cwd = os.getcwd()
   head = cwd
+  proj_dir = None
   while head and head != os.sep:
     head, tail = os.path.split(head)
     if tail:  # Add only if not an empty string (e.g., from root or multiple separators)

@@ -1,0 +1,55 @@
+##NOTE: for this to work, need to fill in the scripts section
+[project]
+name = "movie_lens_scripts_tfx"
+version = "0.1.0"
+description = "TFX pipelines for kaggle recommender systems project"
+authors = [
+    { name = "Nichole King" },
+]
+#readme = "README.md"
+requires-python = ">=3.10.0,<3.11.0"
+dependencies = [
+    "pyarrow==10.0.1",
+    "apache-beam==2.59.0",
+    "tensorflow==2.16.1",
+    "tensorflow-transform==1.16.0",
+    "tfx==1.16.0",
+    "tensorflow-data-validation==1.16.1",
+    "tensorflow-metadata==1.16.1",
+    "ml-metadata==1.16.0",
+]
+#also java >= 11... 11 for pyspark compatabiltity
+# there may be kubernetes version constraints, or native cloud constraints
+license = "MIT"
+#license_files=["LICENSE"]
+
+classifiers = [
+  #   3 - Alpha
+  #   4 - Beta
+  #   5 - Production/Stable
+  "Development Status :: 1 - development",
+  "Programming Language :: Python :: 3.10",
+]
+
+#[tool.pytest.ini_options]
+#pythonpath = 
+#  src/main/python 
+#  src/drafts/python 
+#testpaths  = 
+#  src/test/python
+## can use this to list each method to expose:
+#[project.scripts]
+
+[tool.setuptools.packages.find]
+where = ["."] # List of directories to search for packages (default is ["."])
+include = ["CustomUTF8Coder", "movie_lens_utils", "ingest_movie_lens_beam_pa", "ingest_movie_lens_beam", "ingest_movie_lens_component", "ingest_movie_lens_custom_component", "transform_movie_lens"]
+exclude = [""] 
+namespaces = false # Set to true if you are using PEP 420 namespace packages
+
+
+[project.urls]
+Homepage = "https://www.kaggle.com/code/nicholeasuniquename/recommender-systems-with-tfx-pipelines"
+Repository = "https://github.com/nking/recommender_systems.git"
+
+[project.optional-dependencies]
+test = ["pytest"]
