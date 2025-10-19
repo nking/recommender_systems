@@ -5,7 +5,6 @@ NOT COMPLETE YET
 
 
 
-
 see library versions compatible with tfx 1.16.0
 #see dependencies https://github.com/tensorflow/transform
 those are installed to a conda virtual environment based on python 3.10
@@ -43,4 +42,12 @@ ingest:
     MovieLensExampleGen from ingest_movie_lens_component.py
   2) a fully custom component:
     IngestMovieLensComponent from ingest_movie_lens_custom_component.py
+
+=======
+
+local testing, no CI/CD yet:
+   cd to bin
+   python create_soft_links.py
+ 
+   and then run tests...
 
