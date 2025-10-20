@@ -7,6 +7,7 @@ tt
 tt.sw?
 bin/
 tt?
+src/test/resources/ml-1m/*parquet
 
 # C extensions
 *.so
