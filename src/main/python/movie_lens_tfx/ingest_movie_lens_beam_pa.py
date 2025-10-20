@@ -54,10 +54,10 @@ class ReadCSVToRecords(beam.PTransform):
       pa_schema_list = create_pa_schema(self.infiles_dict[key])
       pc[key] = pcoll | f"r{random.randint(0,10000000000)}" \
         >> beam.io.ReadFromText(\
-        self.infiles_dict[key]['uri'], skip_header_lines=skip,
+        self.infiles_dict[key]['uri'], skip_header_lines=skip,\
         coder=CustomUTF8Coder()) \
         | f'parse_{key}_{time.time_ns()}' \
-        >> beam.Map(self.line_to_record, self.infiles_dict[key],
+        >> beam.Map(self.line_to_record, self.infiles_dict[key],\
         pa_schema_list)
         #| f'write_to_parquet_{key}_{time.time_ns()}' \
         #>> parquetio.WriteToParquet(\
@@ -212,30 +212,6 @@ class MergeByKey(beam.PTransform):
       raise ex
 
     return joined_data
-
-#TODO: change the use of uris here and in the parquet writes
-class ReadFiles(beam.PTransform):
-  """
-  read ratings, movies, and users independently from parquet files
-  into pytables
-  """
-  def __init__(self, infiles_dict):
-    super().__init__()
-    self.infiles_dict = infiles_dict
-
-  def expand(self, pcoll=None):
-    pc = {}
-    for key in ['ratings', 'movies', 'users']:
-      infile_dict = self.infiles_dict[key]
-      dir_path = os.path.dirname(os.path.abspath(infile_dict['uri']))
-      file_path_prefix = f'{dir_path}/{key}'
-
-      file_path_pattern = f"{file_path_prefix}*.parquet"
-
-      pc[key] = pcoll | f"read_parquet_{random.randint(0,10000000000)}" >> \
-        parquetio.ReadFromParquetBatched(file_path_pattern)
-
-    return pc
 
 class IngestAndJoin(beam.PTransform):
   """
