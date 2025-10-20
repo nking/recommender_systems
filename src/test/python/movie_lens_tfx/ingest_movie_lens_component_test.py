@@ -22,8 +22,8 @@ from tfx.dsl.io import fileio
 from tfx.orchestration import metadata
 from tfx.components import StatisticsGen, SchemaGen
 
-from movie_lens_tfx.ingest_movie_lens_component import *
-from movie_lens_tfx.movie_lens_utils import *
+from ingest_movie_lens_component import *
+from movie_lens_utils import *
 
 from ml_metadata.metadata_store import metadata_store
 from absl import logging
@@ -62,7 +62,7 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
 
     PIPELINE_NAME = 'TestPythonFuncCustomCompPipeline'
     #output_data_dir = os.path.join(os.environ.get('TEST_UNDECLARED_OUTPUTS_DIR',self.get_temp_dir()),self._testMethodName)
-    output_data_dir = os.path.join('/kaggle/working/bin/', test_num, self._testMethodName)
+    output_data_dir = os.path.join(get_bin_dir(), test_num, self._testMethodName)
     PIPELINE_ROOT = os.path.join(output_data_dir, PIPELINE_NAME)
     #remove results from previous test runs:
     try:

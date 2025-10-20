@@ -21,7 +21,7 @@ from tfx.dsl.io import fileio
 from tfx.orchestration import metadata
 from tfx.components import StatisticsGen, SchemaGen
 
-from movie_lens_tfx.ingest_movie_lens_component import *
+from ingest_movie_lens_component import *
 
 from ml_metadata.proto import metadata_store_pb2
 from ml_metadata.metadata_store import metadata_store
@@ -46,8 +46,8 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
 
     test_num = "transform_1"
 
-    ratings_example_gen = (MovieLensExampleGen( \
-      infiles_dict_ser=self.infiles_dict_ser, \
+    ratings_example_gen = (MovieLensExampleGen(
+      infiles_dict_ser=self.infiles_dict_ser,
       output_config_ser = self.output_config_ser))
 
     statistics_gen = StatisticsGen(examples = ratings_example_gen.outputs['output_examples'])
@@ -55,16 +55,22 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     schema_gen = SchemaGen(statistics=statistics_gen.outputs['statistics'],
       infer_feature_shape=True)
 
+    if get_kaggle():
+      tr_dir = "/kaggle/working/"
+    else:
+      tr_dir = os.path.join(get_project_dir(), "src/main/python/movie_lens_tfx")
+
+
     ratings_transform = tfx.components.Transform(
       examples=ratings_example_gen.outputs['output_examples'],
       schema=schema_gen.outputs['schema'],
-      module_file=os.path.abspath('transform_movie_lens.py'))
+      module_file=os.path.join(tr_dir, 'transform_movie_lens.py'))
 
     components = [ratings_example_gen, statistics_gen, schema_gen, ratings_transform]
 
     PIPELINE_NAME = 'TestPythonTransformPipeline'
     #output_data_dir = os.path.join(os.environ.get('TEST_UNDECLARED_OUTPUTS_DIR',self.get_temp_dir()),self._testMethodName)
-    output_data_dir = os.path.join('/kaggle/working/bin/', test_num, self._testMethodName)
+    output_data_dir = os.path.join(get_bin_dir(), test_num, self._testMethodName)
     PIPELINE_ROOT = os.path.join(output_data_dir, PIPELINE_NAME)
     #remove results from previous test runs:
     try:

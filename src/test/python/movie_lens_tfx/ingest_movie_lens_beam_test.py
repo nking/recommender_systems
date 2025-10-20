@@ -10,7 +10,7 @@ logging.set_stderrthreshold(logging.WARNING)
 
 pp = pprint.PrettyPrinter()
 
-from .helper import *
+from helper import *
 
 class IngestMovieLensBeamTest(tf.test.TestCase):
 

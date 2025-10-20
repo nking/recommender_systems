@@ -9,8 +9,9 @@ from tfx.orchestration import publisher
 from tfx.orchestration.launcher import in_process_component_launcher
 from tfx.utils import name_utils
 
-from movie_lens_tfx.ingest_movie_lens_custom_component import *
-from movie_lens_tfx.movie_lens_utils import *
+from ingest_movie_lens_custom_component import *
+from movie_lens_utils import *
+from helper import *
 
 logging.set_verbosity(logging.WARNING)
 logging.set_stderrthreshold(logging.WARNING)
@@ -21,10 +22,7 @@ class CSVExampleGenTest(tf.test.TestCase):
     super().setUp()
     self.name = 'run with CSVExampleGen to examine automatic MLMD data'
     print(os.environ)
-    if os.getcwd() == "recommender_systems":
-        self.is_kaggle=False
-    else:
-        self.is_kaggle = True
+    self.is_kaggle = get_kaggle()
 
   @mock.patch.object(publisher, 'Publisher')
   def testRun(self, mock_publisher):
@@ -34,16 +32,17 @@ class CSVExampleGenTest(tf.test.TestCase):
       prefix = '/kaggle/working/ml-1m/'
       prefix2 = '/kaggle/working/ml-1m/tmp/'
     else:
-      prefix = "../resources/ml-1m/"
-      prefix2 = '/kaggle/working/ml-1m/tmp'
+      proj_dir = get_project_dir()
+      prefix = os.path.join(proj_dir, "src/main/resources/ml-1m/")
+      prefix2 = os.path.join(get_bin_dir(), "tmp")
     os.makedirs(prefix2, exist_ok=True)
-    users_uri = f"{prefix2}users2.dat"
+    users_uri = os.path.join(prefix2, "users2.dat")
 
     #a work around to use CSVExampleGen.  the workaround isn't scalable.
     #users.dat delimeter is ::
-    #the moview.dat title field has commas
+    #the movies.dat title field has commas
      #replace delimiters in users2.dat '_'
-    _fln = f"{prefix}users.dat"
+    _fln = os.path.join(prefix, "users.dat")
     command = "LC_ALL=UTF8 sed 's/::/,/g' " + _fln + " > " + users_uri
     os.system(command)
     self.assertTrue(os.path.exists(users_uri))
@@ -52,8 +51,11 @@ class CSVExampleGenTest(tf.test.TestCase):
 
     name = "test_csvgenexample"
 
-    output_data_dir = os.path.join('/kaggle/working/bin/', test_num,
-      self._testMethodName)
+    if self.is_kaggle:
+      bin_dir = "/kaggle/working/bin"
+    else:
+      bin_dir = get_bin_dir()
+    output_data_dir = os.path.join(bin_dir, test_num, self._testMethodName)
     pipeline_root = os.path.join(output_data_dir, name)
     os.makedirs(pipeline_root, exist_ok=True)
 

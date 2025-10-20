@@ -4,10 +4,18 @@ import os
 import sys
 from movie_lens_utils import *
 
-def get_project_dir():
+def get_kaggle() -> bool:
+  cwd = os.getcwd()
+  if "recommender_systems" in cwd:
+    kaggle = False
+  else:
+    kaggle = True
+  return kaggle
+
+def get_project_dir() -> str:
   cwd = os.getcwd()
   head = cwd
-  proj_dir = None
+  proj_dir = ""
   while head and head != os.sep:
     head, tail = os.path.split(head)
     if tail:  # Add only if not an empty string (e.g., from root or multiple separators)
@@ -15,6 +23,13 @@ def get_project_dir():
         proj_dir = os.path.join(head, tail)
         break
   return proj_dir
+
+def get_bin_dir() -> str:
+  if get_kaggle():
+    return "/kaggle/working/bin"
+  else:
+    return os.path.join(get_project_dir(), "bin")
+
 
 def add_to_sys(proj_dir):
   src_module_dir = os.path.join(proj_dir, "src/main/python")
@@ -29,11 +44,7 @@ def get_test_data(use_small=True) -> Tuple[str, str, list[str]]:
      output_config serialized to string, and list of split names
   """
 
-  cwd = os.getcwd()
-  if "recommender_systems" in cwd:
-    kaggle = False
-  else:
-    kaggle = True
+  kaggle = get_kaggle()
   print(f"CWD={os.getcwd()}, kaggle={kaggle}")
 
   if kaggle:
@@ -57,9 +68,6 @@ def get_test_data(use_small=True) -> Tuple[str, str, list[str]]:
       users_uri = os.path.join(prefix_main, "users.dat")
     movies_uri = os.path.join(prefix_main, "movies.dat")
     add_to_sys(proj_dir)
-
-  print(f"SYS PATH={sys.path}")
-  print(f"SYS MODULES= {sys.modules}")
 
   ratings_col_names = ["user_id", "movie_id", "rating", "timestamp"]
   ratings_col_types = [int, int, int, int]  # for some files, ratings are floats
