@@ -1,31 +1,16 @@
-import os
-import shutil
-
-import pickle
-import base64
-import random
-
 from unittest import mock
-import tensorflow as tf
-from tfx.dsl.components.base import executor_spec
+
+from ml_metadata.metadata_store import metadata_store
+from ml_metadata.proto import metadata_store_pb2
 from tfx.dsl.io import fileio
 from tfx.orchestration import data_types
 from tfx.orchestration import metadata
 from tfx.orchestration import publisher
 from tfx.orchestration.launcher import in_process_component_launcher
-from tfx.proto import example_gen_pb2
 from tfx.utils import name_utils
 
-import pprint
-import absl
-from absl import logging
-
-from ingest_movie_lens_custom_component import *
-from movie_lens_utils import *
-
-import ml_metadata as mlmd
-from ml_metadata.proto import metadata_store_pb2
-from ml_metadata.metadata_store import metadata_store
+from movie_lens_tfx.ingest_movie_lens_custom_component import *
+from movie_lens_tfx.movie_lens_utils import *
 
 logging.set_verbosity(logging.WARNING)
 logging.set_stderrthreshold(logging.WARNING)
@@ -35,13 +20,17 @@ class CSVExampleGenTest(tf.test.TestCase):
   def setUp(self):
     super().setUp()
     self.name = 'run with CSVExampleGen to examine automatic MLMD data'
+    print(os.environ)
+    if os.getcwd() == "recommender_systems":
+        self.is_kaggle=False
+    else:
+        self.is_kaggle = True
 
   @mock.patch.object(publisher, 'Publisher')
   def testRun(self, mock_publisher):
 
     test_num = "csv_comp_1"
-    kaggle = True
-    if kaggle:
+    if self.is_kaggle:
       prefix = '/kaggle/working/ml-1m/'
       prefix2 = '/kaggle/working/ml-1m/tmp/'
     else:
@@ -63,7 +52,7 @@ class CSVExampleGenTest(tf.test.TestCase):
 
     name = "test_csvgenexample"
 
-    output_data_dir = os.path.join('/kaggle/working/bin/', test_num, \
+    output_data_dir = os.path.join('/kaggle/working/bin/', test_num,
       self._testMethodName)
     pipeline_root = os.path.join(output_data_dir, name)
     os.makedirs(pipeline_root, exist_ok=True)
@@ -85,8 +74,8 @@ class CSVExampleGenTest(tf.test.TestCase):
           example_gen_pb2.SplitConfig.Split(name='test', hash_buckets=1)
         ]))
 
-    users_example_gen = tfx.components.CsvExampleGen(\
-      input_base=prefix2,\
+    users_example_gen = tfx.components.CsvExampleGen(
+      input_base=prefix2,
       output_config = output_config)
 
     #statistics_gen = StatisticsGen(examples=users_example_gen.outputs['examples'])

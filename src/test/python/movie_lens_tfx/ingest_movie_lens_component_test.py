@@ -15,35 +15,17 @@
 # limitations under the License.
 """Tests for using avro_executor with example_gen component."""
 
-import os
 import shutil
 
-import pickle
-import base64
-import pprint
-import random
-
-import numpy as np
-
-import tensorflow as tf
 import tensorflow_data_validation as tfdv
-from tfx.dsl.components.base import executor_spec
 from tfx.dsl.io import fileio
-from tfx.orchestration import data_types
 from tfx.orchestration import metadata
-from tfx.orchestration.launcher import in_process_component_launcher
-from tfx.proto import example_gen_pb2
 from tfx.components import StatisticsGen, SchemaGen
-from tfx.types import standard_component_specs
-from tfx.utils import proto_utils
 
-from ingest_movie_lens_component import *
-from movie_lens_utils import *
+from movie_lens_tfx.ingest_movie_lens_component import *
+from movie_lens_tfx.movie_lens_utils import *
 
-import ml_metadata as mlmd
-from ml_metadata.proto import metadata_store_pb2
 from ml_metadata.metadata_store import metadata_store
-import absl
 from absl import logging
 tf.get_logger().propagate = False
 logging.set_verbosity(logging.WARNING)

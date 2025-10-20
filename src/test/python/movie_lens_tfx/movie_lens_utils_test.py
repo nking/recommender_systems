@@ -1,13 +1,10 @@
 import unittest
-from typing import  Dict, Union
 #from ... main.python.infile_dict_util import *
 #from ... main.python.infile_dict_util import _assert_dict_1
-from movie_lens_utils import *
-from movie_lens_utils import _assert_dict_1
-import random
+from movie_lens_tfx.movie_lens_utils import *
+from movie_lens_tfx.movie_lens_utils import _assert_dict_1
 from tfx.proto import example_gen_pb2
 
-import absl
 from absl import logging
 logging.set_verbosity(logging.WARNING)
 logging.set_stderrthreshold(logging.WARNING)
