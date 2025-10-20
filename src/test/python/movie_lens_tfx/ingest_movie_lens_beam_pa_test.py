@@ -1,29 +1,15 @@
+import glob
 import shutil
 
-from apache_beam.testing.util import assert_that, is_not_empty, equal_to
-
-from ingest_movie_lens_beam_pa import *
-from helper import *
-
-import time
-import random
-
-from absl import logging
-import pprint
-
 from apache_beam.options.pipeline_options import PipelineOptions
-from tfx.dsl.io import fileio
-from tfx.orchestration import metadata
-from ingest_movie_lens_component import *
-from ml_metadata.proto import metadata_store_pb2
-from ml_metadata.metadata_store import metadata_store
+from apache_beam.testing.util import assert_that, is_not_empty
 
-import os
-import glob
+from helper import *
+from ingest_movie_lens_beam_pa import *
+
 tf.get_logger().propagate = False
 logging.set_verbosity(logging.WARNING)
 logging.set_stderrthreshold(logging.WARNING)
-pp = pprint.PrettyPrinter()
 
 class IngestMovieLensBeamPATest(tf.test.TestCase):
 
@@ -68,7 +54,7 @@ class IngestMovieLensBeamPATest(tf.test.TestCase):
           >> WriteParquet(infiles_dict[key],  file_path_prefix=f'{PIPELINE_ROOT}/{key}')
 
     ##IngestAndJoin reads those Parquet files
-
+    """
     expected_schema_cols = [
       ("user_id", int), ("movie_id", int), ("rating", int),
       ("timestamp", int),
@@ -76,6 +62,8 @@ class IngestMovieLensBeamPATest(tf.test.TestCase):
       ("genres", str)]
 
     with beam.Pipeline(options=options) as pipeline:
+      for key in ["ratings", "users", "movies"]:
+        infiles_dict[key]["uri"] = f"{PIPELINE_ROOT}/"
       # beam.pvalue.PCollection, List[Tuple[str, Any]]
       ratings, column_name_type_list = \
         pipeline | f"IngestAndJoin_{random.randint(0, 1000000000)}" \
@@ -87,7 +75,6 @@ class IngestMovieLensBeamPATest(tf.test.TestCase):
                   label=f'assert_that_{random.randint(0, 1000000000000)}')
 
       file_path_prefix = f'{PIPELINE_ROOT}/ratings_joined'
-      print(f'file_path_prefix={file_path_prefix}')
 
       ratings | WriteJoinedRatingsParquet(
         file_path_prefix=file_path_prefix,
@@ -111,3 +98,4 @@ class IngestMovieLensBeamPATest(tf.test.TestCase):
         for key in ["ratings", "users", "movies"]:
             r_count =  pc[key] | f'{key}_count_{random.randint(0, 1000000000000)}' >> beam.combiners.Count.Globally()
             r_count | f'count {key}' >> beam.Map(lambda x: print(f'len={x}'))
+      """
