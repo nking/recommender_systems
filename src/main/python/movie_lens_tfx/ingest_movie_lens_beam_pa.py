@@ -44,6 +44,29 @@ class ReadCSVToRecords(beam.PTransform):
         out[pa_schema[i][0]] = items[i]
     return out
 
+  def expand(self, pcoll=None):
+    pc = {}
+    for key in ['ratings', 'movies', 'users']:
+      if self.infiles_dict[key]['headers_present']:
+        skip = 1
+      else:
+        skip = 0
+      pa_schema_list = create_pa_schema(self.infiles_dict[key])
+      pc[key] = pcoll | f"r{random.randint(0,10000000000)}" \
+        >> beam.io.ReadFromText(\
+        self.infiles_dict[key]['uri'], skip_header_lines=skip,
+        coder=CustomUTF8Coder()) \
+        | f'parse_{key}_{time.time_ns()}' \
+        >> beam.Map(self.line_to_record, self.infiles_dict[key],
+        pa_schema_list)
+        #| f'write_to_parquet_{key}_{time.time_ns()}' \
+        #>> parquetio.WriteToParquet(\
+        #file_path_prefix=file_path_prefix,\
+        #schema=pa_schema, file_name_suffix='.parquet')
+      print(f'TYPE {key}={type(pc[key])}')
+      #class 'apache_beam.transforms.ptransform._ChainedPTransform'
+    return pc
+
 class WriteParquet(beam.PTransform):
   def __init__(self, infile_dict, file_path_prefix):
     """
