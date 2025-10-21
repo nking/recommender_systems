@@ -49,6 +49,11 @@ print(f"TFX version: {tfx.__version__}")
 #tf.train.SequenceExample is for variable-length sequential data,
 #    such as sentences, time series, or videos.
 
+from tfx.types import standard_artifacts
+from tfx.types.artifact import Artifact
+from tfx.types.artifact import Property
+from tfx.types.artifact import PropertyType
+
 class IngestMovieLensExecutorSpec(ComponentSpec):
   """ComponentSpec for Custom TFX MovieLensExecutor Component."""
   #PARAMETERS, INPUTS, and OUTPUTS are static instead of instance vars

@@ -1,10 +1,10 @@
 from absl import logging
 import pprint
 
-from tfx.types import standard_artifacts, artifact_utils, standard_component_specs
+from tfx.types import standard_artifacts, artifact_utils, \
+  standard_component_specs, channel_utils
 from tfx.dsl.component.experimental import annotations
 from tfx.dsl.component.experimental.decorators import component
-from tfx.components.example_gen import write_split
 #from tfx.dsl.components.component import component
 
 from movie_lens_utils import *

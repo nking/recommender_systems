@@ -1,1 +1,21 @@
 - future: consider use of ZCTAs and geohashing for 'zipcodes'
+
+- future:
+  consider modifying custom ingest components to add 3 properties 
+  to make the data and configuration self-consistent:
+    add properties max_user_id,max_movie_id, and n_genres
+    to the output_examples.
+  the standard_artifact.Examples would need to be extended to
+  include those properties:
+    class AugmentedExamples(standard_artifacts.Examples):
+      max_user_id = Property(type=PropertyType.INT)
+      max_movie_id = Property(type=PropertyType.INT)
+      n_genres = Property(type=PropertyType.INT)
+  Then in the Do method of the Executor:
+    use PTransforms to calculate those numbers from the 
+    input users.dat and movies.dat files.
+    And set them in the output:
+    iutput_examples_artifact = artifact_utils.get_single_artifact(
+        output_dict['output_examples'])
+    output_examples_artifact.max_user_id = max_user_id
+     ...
