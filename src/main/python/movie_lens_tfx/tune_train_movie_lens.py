@@ -7,10 +7,15 @@
 from typing import List, Tuple
 import enum
 import os
+import json
 import keras_tuner
 import tensorflow as tf
 import tf_keras as keras
 import tensorflow_transform as tft
+
+#tuner needs this:
+from tfx.components.trainer.fn_args_utils import FnArgs
+
 from tensorboard.plugins.hparams.api import hparams
 # from tensorflow.python.ops.gen_experimental_dataset_ops import save_dataset
 from tfx import v1 as tfx
@@ -28,7 +33,7 @@ LOSS_FN = keras.losses.MeanSquaredError()
 METRIC_FN = keras.metrics.RootMeanSquaredError()
 
 FEATURE_KEYS = [
-  'age', 'occupation', 'genres', 'hr', 'weekday', 'hr_wk', 'month'
+  'user_id', 'movie_id', 'rating', 'gender', 'age', 'occupation', 'genres', 'hr', 'weekday', 'hr_wk', 'month'
 ]
 _LABEL_KEY = 'rating'
 
@@ -87,6 +92,7 @@ class UserModel(keras.Model):
         # shape is (batch_size, 1)
       ], name="hr_wk_emb")
       
+    self.month_embedding = None
     if self.feature_acronym.find("m") > -1:
       self.month_embedding = keras.Sequential([
         keras.layers.Flatten(),
@@ -212,6 +218,7 @@ class MovieModel(keras.Model):
     # r = tf.strings.split(inputs['genres'], ",")
     # ragint = tf.strings.to_number(r, out_type=tf.int32)
     if self.incl_genres:
+      #TODO: correct this for input being a list of ints
       self.genres_embedding = keras.Sequential([
         # input is a string without a constrained length
         # output of lambda layer is a ragged string tensor
@@ -221,10 +228,6 @@ class MovieModel(keras.Model):
         keras.layers.CategoryEncoding(num_tokens=self.n_genres,
                                       output_mode="multi_hot",
                                       sparse=False),
-        # keras.layers.TextVectorization(output_mode='multi_hot',
-        #    vocabulary=[str(i) for i in range(1,len(genres)+1)],
-        #    standardize=custom_standardize)
-        ##followed by tf.cast(the_output, tf.float32) needed for textvec output
       ], name="genres_emb")
   
   def build(self, input_shape):
@@ -287,7 +290,9 @@ class QueryModel(keras.Model):
     self.embedding_model = UserModel(max_user_id=n_users,
                                      embed_out_dim=embed_out_dim,
                                      feature_acronym=feature_acronym)
-    
+    if isinstance(layer_sizes, str):
+      layer_sizes = json.loads(layer_sizes)
+      
     self.dense_layers = keras.Sequential(name="dense_query")
     # Use the ReLU activation for all but the last layer.
     for layer_size in layer_sizes[:-1]:
@@ -383,6 +388,8 @@ class CandidateModel(keras.Model):
                                       incl_genres=incl_genres)
     
     self.dense_layers = keras.Sequential(name="dense_candidate")
+    if isinstance(layer_sizes, str):
+      layer_sizes = json.loads(layer_sizes)
     # Use the ReLU activation for all but the last layer.
     for layer_size in layer_sizes[:-1]:
       self.dense_layers.add(
@@ -471,6 +478,9 @@ class TwoTowerDNN(keras.Model):
                incl_genres: bool = True, **kwargs):
     super(TwoTowerDNN, self).__init__(**kwargs)
     
+    if isinstance(layer_sizes, str):
+      layer_sizes = json.loads(layer_sizes)
+      
     self.query_model = QueryModel(n_users=n_users,
                                   layer_sizes=layer_sizes,
                                   embed_out_dim=embed_out_dim, reg=reg,
@@ -523,6 +533,7 @@ class TwoTowerDNN(keras.Model):
   
   def build(self, input_shape):
     # print(f'build {self.name} TWOTOWER input_shape={input_shape}\n')
+    #logging.debug(f'build {self.name} TWOTOWER input_shape={input_shape}\n')
     self.query_model.build(input_shape)
     self.candidate_model.build(input_shape)
     self.built = True
@@ -678,7 +689,10 @@ def _make_2tower_keras_model(
   # TODO: consider change to read from the transformed schema
   input_shapes = {}
   for element in FEATURE_KEYS:
-    input_shapes[element] = (None,)
+    if element == "genres":
+      input_shapes[element] = (None, 18)
+    else:
+      input_shapes[element] = (None,)
     # input_shapes[element] = (batch_size,)
   
   model = TwoTowerDNN(
@@ -711,16 +725,16 @@ def _make_2tower_keras_model(
   return model
 
 
-def get_default_hyperparameters(
-  custom_config: tfx.components.FnArgs.custom_config) -> keras_tuner.HyperParameters:
+def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   """Returns hyperparameters for building Keras model."""
   hp = keras_tuner.HyperParameters()
   # Defines search space.
   hp.Choice('lr', [1e-4], default=1e-4)
-  hp.Choice("regl2", values=[None, 0.001, 0.01], default=None)
+  hp.Choice("regl2", values=[0.0, 0.001, 0.01], default=None)
   hp.Float("drop_rate", min_value=0.1, max_value=0.5, default=0.5)
   hp.Choice("embed_out_dim", values=[32], default=32)
-  hp.Choice("layer_sizes", values=[[32]], default=[32])
+  #layers_sizes is a list of ints, so encode each list as a string, chices can only be int,float,bool,str
+  hp.Choice("layer_sizes", values=[json.dumps([32])], default=json.dumps([32]))
   # ahmos for "age", "hr_wk", "month", "occupation", "gender"
   hp.Fixed("feature_acronym", value="h")
   hp.Boolean("incl_genres", default=True)
@@ -871,8 +885,8 @@ def _get_serve_tf_examples_fn(model, tf_transform_output):
   
   return serve_tf_examples_fn
 
-
-def run_fn(fn_args: tfx.components.FnArgs):
+# tfx.components.FnArgs
+def run_fn(fn_args):
   """Train the model based on given args.
 
   fn_args = fn_args_utils.get_common_fn_args(input_dict, exec_properties,
@@ -933,7 +947,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
           'device' : 'TPU' or 'GPU' of 'CPU', if none, CPU will be used
           })
   """
-  
+  logging.debug(f"run_fn fn_args type={type(fn_args)}")
   # not sure if outputs query_model and candidate_model are passed to this.
   for attr_name in dir(fn_args):
     # Filter out built-in methods and private attributes
@@ -945,19 +959,16 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   if not fn_args.hyperparameters:
     raise ValueError('hyperparameters must be provided')
   
-  logging.debug(
-    f'fn_args.serving_model_dir={fn_args.serving_model_dir}')
   logging.debug(f'fn_args.train_files={fn_args.train_files}')
   logging.debug(f'fn_args.eval_files={fn_args.eval_files}')
   logging.debug(f'fn_args.train_steps={fn_args.train_steps}')
   logging.debug(f'fn_args.eval_steps={fn_args.eval_steps}')
   logging.debug(f"data_accessor: {fn_args.data_accessor}")
   logging.debug(f"Hyperparameters: {fn_args.hyperparameters}")
-  
-  query_model_serving_dir = os.path.join(fn_args.serving_model_dir,
-                                         'query_model')
-  candidate_model_serving_dir = os.path.join(fn_args.serving_model_dir,
-                                             'candidate_model')
+  logging.debug(
+    f'fn_args.serving_model_dir={fn_args.serving_model_dir}')
+  #logging.debug(f'fn_args.q_serving_model_dir={fn_args.q_serving_model_dir}')
+  #logging.debug( f'fn_args.c_serving_model_dir={fn_args.c_serving_model_dir}')
   
   tf_transform_output = tft.TFTransformOutput(fn_args.transform_output)
   
@@ -1009,13 +1020,12 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   
   # save all 3 models
   # return the two twoer model
-  model.save(fn_args.serving_model_dir, save_format='tf')
+  model.save(os.path.join(fn_args.serving_model_dir, "twotower"), save_format='tf')
   # should handle saving decorated methods too, that is,
   # those decorated with @keras.saving.register_keras_serializable(package=package)
   
-  model.query_model.save(query_model_serving_dir, save_format='tf')
-  model.candidate_model.save(candidate_model_serving_dir,
-                             save_format='tf')
+  model.query_model.save(os.path.join(fn_args.serving_model_dir, "query"), save_format='tf')
+  model.candidate_model.save(os.path.join(fn_args.serving_model_dir, "candidate"), save_format='tf')
   
   # should be able to use model.save without creating a signature profile
   #  but if have troubles with this, use one of these 2:
@@ -1033,8 +1043,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
 
 
 # TFX Tuner will call this function.
-def tuner_fn(
-  fn_args: tfx.components.FnArgs) -> tfx.components.TunerFnResult:
+def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
   """Build the tuner using the KerasTuner API.
 
   fn_args = fn_args_utils.get_common_fn_args(input_dict, exec_properties,
@@ -1075,6 +1084,8 @@ def tuner_fn(
   # RandomSearch is a subclass of keras_tuner.Tuner which inherits from
   # BaseTuner.
   
+  #FnArgs should be from tfx.components.trainer.fn_args_utils
+  logging.debug(f"run_fn fn_args type={type(fn_args)}")
   logging.debug(f"Working directory: {fn_args.working_dir}")
   logging.debug(f"Training files: {fn_args.train_files}")
   logging.debug(f"Evaluation files: {fn_args.eval_files}")

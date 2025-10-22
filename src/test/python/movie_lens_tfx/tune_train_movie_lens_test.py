@@ -6,6 +6,7 @@ from tfx.orchestration import metadata
 from tfx.components import StatisticsGen, SchemaGen
 
 from ingest_movie_lens_component import *
+#import trainer_movie_lens
 
 from ml_metadata.proto import metadata_store_pb2
 from ml_metadata.metadata_store import metadata_store
@@ -26,13 +27,10 @@ class TuneTrainTest(tf.test.TestCase):
     self.user_id_max = 6040
     self.movie_id_max = 3952
     self.n_genres = 18
-
     self.name = 'test run of ratings transform'
 
   def test_tune_and_train(self):
-
     test_num = "1"
-
     ratings_example_gen = (MovieLensExampleGen(
       infiles_dict_ser=self.infiles_dict_ser,
       output_config_ser = self.output_config_ser))
@@ -55,7 +53,9 @@ class TuneTrainTest(tf.test.TestCase):
     tuner_custom_config = {
       'user_id_max' : self.user_id_max,
       'movie_id_max' : self.movie_id_max,
-      'n_genres' : self.n_genres}
+      'n_genres' : self.n_genres,
+      'run_eagerly' : True
+    }
 
     tuner = tfx.components.Tuner(
       module_file=os.path.join(tr_dir, 'tune_train_movie_lens.py'),
@@ -65,14 +65,14 @@ class TuneTrainTest(tf.test.TestCase):
       #args: splits, num_steps.  splits defaults are assumed if none given
       train_args=tfx.proto.TrainArgs(num_steps=20),
       eval_args=tfx.proto.EvalArgs(num_steps=5),
-      tune_args=tfx.proto.TuneArgs(),
       custom_config=tuner_custom_config,
     )
     #'user_id_max' 'movie_id_max' 'n_genres' 'run_eagerly'
 
     #see https://github.com/tensorflow/tfx/blob/master/tfx/examples/penguin/penguin_pipeline_local.py
-    trainer = tfx.components.Trainer(
-      mmodule_file=os.path.join(tr_dir, 'tune_train_movie_lens.py'),
+    #trainer = trainer_movie_lens.MovieLensTrainer(
+    trainer=tfx.components.Trainer(
+      module_file=os.path.join(tr_dir, 'tune_train_movie_lens.py'),
       examples=ratings_transform.outputs['transformed_examples'],
       transform_graph=ratings_transform.outputs['transform_graph'],
       schema=schema_gen.outputs['schema'],
@@ -92,11 +92,8 @@ class TuneTrainTest(tf.test.TestCase):
       #   ...
       #   hyperparameters = hparams_importer.outputs['result'],
       hyperparameters=(tuner.outputs['best_hyperparameters']),
-      train_args=tfx.proto.TrainArgs(num_steps=100),
-      eval_args=tfx.proto.EvalArgs(num_steps=5),
-      outputs={'model' : standard_artifacts.Model,
-        'query_model' : standard_artifacts.Model,
-        'candidate_model' : standard_artifacts.Model}
+      train_args=tfx.proto.TrainArgs(num_steps=5),
+      eval_args=tfx.proto.EvalArgs(num_steps=5)
     )
 
     #Tuner Component `outputs` contains:
