@@ -10,6 +10,7 @@ from ingest_movie_lens_component import *
 
 from ml_metadata.proto import metadata_store_pb2
 from ml_metadata.metadata_store import metadata_store
+from tune_train_movie_lens import *
 
 from helper import *
 
@@ -26,7 +27,8 @@ class TuneTrainTest(tf.test.TestCase):
       get_test_data()
     self.user_id_max = 6040
     self.movie_id_max = 3952
-    self.n_genres = 18
+    self.n_genres = N_GENRES
+    self.n_occupations = 21
     self.name = 'test run of ratings transform'
 
   def test_tune_and_train(self):

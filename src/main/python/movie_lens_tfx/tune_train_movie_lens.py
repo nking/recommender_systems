@@ -36,6 +36,7 @@ FEATURE_KEYS = [
   'user_id', 'movie_id', 'rating', 'gender', 'age', 'occupation', 'genres', 'hr', 'weekday', 'hr_wk', 'month'
 ]
 _LABEL_KEY = 'rating'
+N_GENRES = 18
 
 class Device(enum.Enum):
   CPU = "CPU"
@@ -80,7 +81,7 @@ class UserModel(keras.Model):
     self.age_embedding = None
     if self.feature_acronym.find("a") > -1:
       self.age_embedding = keras.Sequential([
-        keras.layers.Flatten(),
+        keras.layers.Identity(),
         # shape is (batch_size, 1)
       ], name="age_emb")
     
@@ -88,18 +89,18 @@ class UserModel(keras.Model):
     self.hr_wk_embedding = None
     if self.feature_acronym.find("h") > -1:
       self.hr_wk_embedding = keras.Sequential([
-        keras.layers.Flatten(),
+        keras.layers.Identity(),
         # shape is (batch_size, 1)
       ], name="hr_wk_emb")
       
     self.month_embedding = None
     if self.feature_acronym.find("m") > -1:
       self.month_embedding = keras.Sequential([
-        keras.layers.Flatten(),
+        keras.layers.Identity(),
         # shape is (batch_size, 1)
       ], name="month_emb")
       
-    # categorical
+    # categorical, nominal, order doesn't matter
     self.occupation_embedding = None
     if self.feature_acronym.find("o") > -1:
       self.occupation_embedding = keras.layers.CategoryEncoding(
@@ -218,16 +219,8 @@ class MovieModel(keras.Model):
     # r = tf.strings.split(inputs['genres'], ",")
     # ragint = tf.strings.to_number(r, out_type=tf.int32)
     if self.incl_genres:
-      #TODO: correct this for input being a list of ints
       self.genres_embedding = keras.Sequential([
-        # input is a string without a constrained length
-        # output of lambda layer is a ragged string tensor
-        # output of categoricalencoding is an array of length n_genres
-        keras.layers.Lambda(lambda x: tf.strings.to_number(
-          tf.strings.split(x, ","), out_type=tf.int32)),
-        keras.layers.CategoryEncoding(num_tokens=self.n_genres,
-                                      output_mode="multi_hot",
-                                      sparse=False),
+        keras.layers.Identity()
       ], name="genres_emb")
   
   def build(self, input_shape):
@@ -431,7 +424,7 @@ class CandidateModel(keras.Model):
   
   def call(self, inputs, **kwargs):
     # inputs should contain columns "movie_id", "genres"
-    # print(f'call {self.name} type ={type(inputs)}\ntype ={inputs}\n')
+    #logging.debug(f'call {self.name} type ={type(inputs)}\ntype ={inputs}\n')
     feature_embedding = self.embedding_model(inputs, **kwargs)
     res = self.dense_layers(feature_embedding)
     # returns an np.ndarray wrapped in a tensor if inputs is tensor, else not wrapped
@@ -523,8 +516,9 @@ class TwoTowerDNN(keras.Model):
       self.final_loss_bc_layer = keras.layers.Lambda(
         lambda x: tf.reduce_mean(x, axis=0))
   
-  def call(self, inputs, **kwargs):
+  def call(self, inputs, training=False, **kwargs):
     """['user_id', 'gender', 'age_group', 'occupation','movie_id', 'rating']"""
+    #logging.debug(f'call {self.name} inputs={inputs}\n')
     user_vector = self.query_model(inputs, **kwargs)
     movie_vector = self.candidate_model(inputs, **kwargs)
     s = self.dot_layer([user_vector, movie_vector])
@@ -532,8 +526,8 @@ class TwoTowerDNN(keras.Model):
     return s
   
   def build(self, input_shape):
-    # print(f'build {self.name} TWOTOWER input_shape={input_shape}\n')
-    #logging.debug(f'build {self.name} TWOTOWER input_shape={input_shape}\n')
+    # print(f'build {self.name} input_shape={input_shape}\n')
+    #logging.debug(f'build {self.name} input_shape={input_shape}\n')
     self.query_model.build(input_shape)
     self.candidate_model.build(input_shape)
     self.built = True
@@ -684,17 +678,16 @@ def _input_fn(file_pattern: List[str],
     tf.data.AUTOTUNE)
 
 
-def _make_2tower_keras_model(
-  hp: keras_tuner.HyperParameters) -> tf.keras.Model:
+def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   # TODO: consider change to read from the transformed schema
   input_shapes = {}
+  # input_shapes[element] = (batch_size,)
   for element in FEATURE_KEYS:
     if element == "genres":
-      input_shapes[element] = (None, 18)
+      input_shapes[element] = (None, N_GENRES)
     else:
-      input_shapes[element] = (None,)
-    # input_shapes[element] = (batch_size,)
-  
+      input_shapes[element] = (None,1)
+    
   model = TwoTowerDNN(
     n_users=hp.get("user_id_max") + 1,
     n_movies=hp.get("movie_id_max") + 1,
@@ -704,7 +697,7 @@ def _make_2tower_keras_model(
     reg=None, drop_rate=0.1,
     feature_acronym=hp.get("feature_acronym"),
     use_bias_corr=hp.get('use_bias_corr'))
-  
+    
   model.build(input_shapes)
   
   optimizer = keras.optimizers.Adam(
@@ -729,7 +722,7 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   """Returns hyperparameters for building Keras model."""
   hp = keras_tuner.HyperParameters()
   # Defines search space.
-  hp.Choice('lr', [1e-4], default=1e-4)
+  hp.Choice('learning_rate', [1e-4], default=1e-4)
   hp.Choice("regl2", values=[0.0, 0.001, 0.01], default=None)
   hp.Float("drop_rate", min_value=0.1, max_value=0.5, default=0.5)
   hp.Choice("embed_out_dim", values=[32], default=32)
