@@ -46,6 +46,30 @@ def preprocessing_fn(inputs):
      column_names = user_id,movie_id,rating,timestamp,gender,age,occupation,genres
      column_types = int,    int ,     int ,  int,       str, int, int,          str
   :return: dictionary preprocessed features
+  
+  ========================================
+  inputs={
+  'genres': <tf.Tensor 'inputs_copy:0' shape=(None, 1) dtype=string>,
+  'age': <tf.Tensor 'inputs_1_copy:0' shape=(None, 1) dtype=int64>,
+  'gender': <tf.Tensor 'inputs_2_copy:0' shape=(None, 1) dtype=string>,
+  'movie_id': <tf.Tensor 'inputs_3_copy:0' shape=(None, 1) dtype=int64>,
+  'occupation': <tf.Tensor 'inputs_4_copy:0' shape=(None, 1) dtype=int64>,
+  'rating': <tf.Tensor 'inputs_5_copy:0' shape=(None, 1) dtype=int64>,
+  'timestamp': <tf.Tensor 'inputs_6_copy:0' shape=(None, 1) dtype=int64>,
+  'user_id': <tf.Tensor 'inputs_7_copy:0' shape=(None, 1) dtype=int64>}
+
+  outputs={
+  'user_id': <tf.Tensor 'inputs_7_copy:0' shape=(None, 1) dtype=int64>,
+  'movie_id': <tf.Tensor 'inputs_3_copy:0' shape=(None, 1) dtype=int64>,
+  'rating': <tf.Tensor 'truediv:0' shape=(None, 1) dtype=float32>,
+  'gender': <tf.Tensor 'None_Lookup/LookupTableFindV2:0' shape=(None, 1) dtype=int64>,
+  'age': <tf.Tensor 'None_Lookup_1/LookupTableFindV2:0' shape=(None, 1) dtype=int64>,
+  'occupation': <tf.Tensor 'inputs_4_copy:0' shape=(None, 1) dtype=int64>,
+  'genres': <tf.Tensor 'RaggedToTensor_1/RaggedTensorToTensor:0' shape=(None, 1, 18) dtype=float32>,
+  'hr': <tf.Tensor 'FloorMod:0' shape=(None, 1) dtype=int64>,
+  'weekday': <tf.Tensor 'Add:0' shape=(None, 1) dtype=int64>,
+  'hr_wk': <tf.Tensor 'Add_1:0' shape=(None, 1) dtype=int64>,
+  'month': <tf.Tensor 'Cast_8:0' shape=(None, 1) dtype=int64>}
   """
   logging.debug(f"inputs={inputs}")
 
@@ -57,13 +81,14 @@ def preprocessing_fn(inputs):
 
   gender_table = create_static_table(genders, var_dtype=tf.string)
   outputs['gender'] = gender_table.lookup(inputs['gender'])
-  outputs['gender'] = tf.one_hot( outputs['gender'], depth=len(genders), dtype=tf.int64)
+  #outputs['gender'] = tf.one_hot( outputs['gender'], depth=len(genders), dtype=tf.int64)
 
   age_groups_table = create_static_table(age_groups, var_dtype=tf.int64)
   outputs['age'] = age_groups_table.lookup(inputs['age'])
-  outputs['age'] = tf.one_hot( outputs['age'], depth=len(age_groups), dtype=tf.int64)
-
-  outputs['occupation'] = tf.one_hot(inputs['occupation'], depth=num_occupations, dtype=tf.int64)
+  #outputs['age'] = tf.one_hot( outputs['age'], depth=len(age_groups), dtype=tf.int64)
+  
+  outputs['occupation'] = inputs['occupation']
+  #outputs['occupation'] = tf.one_hot(outputs['occupation'], depth=num_occupations, dtype=tf.int64)
 
   def transform_genres(input_genres):
     genres_table = create_static_table(genres, var_dtype=tf.string)
@@ -80,7 +105,10 @@ def preprocessing_fn(inputs):
     m_genres = tf.reduce_sum(oh, axis=-2)
     norm = tf.reduce_sum(m_genres, axis=-1)
     norm = tf.expand_dims(norm, axis=-1)
-    return tf.divide(m_genres, norm)
+    res = tf.divide(m_genres, norm)
+    #change from RaggedTensor to Tensor:
+    res = res.to_tensor(shape=[None, 1, res.shape[-1]])
+    return res
 
   #omitting zipcode for now, but considering ZCTAs for future
 

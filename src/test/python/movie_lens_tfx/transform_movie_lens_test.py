@@ -1,4 +1,4 @@
-
+import os
 import shutil
 
 from tfx.dsl.io import fileio
@@ -16,6 +16,7 @@ from absl import logging
 tf.get_logger().propagate = False
 logging.set_verbosity(logging.DEBUG)
 logging.set_stderrthreshold(logging.DEBUG)
+#log_dir = os.path.join(os.getcwd(), "../../../../bin")
 
 class TransformTest(tf.test.TestCase):
 
@@ -43,7 +44,6 @@ class TransformTest(tf.test.TestCase):
       tr_dir = "/kaggle/working/"
     else:
       tr_dir = os.path.join(get_project_dir(), "src/main/python/movie_lens_tfx")
-
 
     ratings_transform = tfx.components.Transform(
       examples=ratings_example_gen.outputs['output_examples'],
