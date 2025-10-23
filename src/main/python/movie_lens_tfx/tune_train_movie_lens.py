@@ -28,7 +28,7 @@ logging.set_stderrthreshold(logging.DEBUG)
 
 TRAIN_BATCH_SIZE = 2
 EVAL_BATCH_SIZE = 2
-LOSS_FN = keras.losses.MeanSquaredError()
+LOSS_FN = keras.losses.MeanSquaredError() #name=mean_squared_error
 METRIC_FN = keras.metrics.RootMeanSquaredError()
 
 FEATURE_KEYS = [
@@ -164,8 +164,8 @@ class UserModel(keras.Model):
     # Take the input dictionary, pass it through each input layer,
     # and concatenate the result.
     # arrays are: 'user_id',  'gender', 'age_group', 'occupation','movie_id', 'rating'
-    print(f'call {self.name} type={type(inputs)}\n')
-    tf.print(inputs)
+    #print(f'call {self.name} type={type(inputs)}\n')
+    #tf.print(inputs)
     results = []
     results.append(self.user_embedding(inputs['user_id']))
     if self.age_embedding:
@@ -250,7 +250,7 @@ class MovieModel(keras.Model):
     if self.incl_genres:
       results.append(self.genres_embedding(inputs['genres']))
     res = keras.layers.Concatenate(axis=1)(results)
-    logging.debug(f'call {self.name} SHAPE ={res.shape}')
+    #logging.debug(f'call {self.name} SHAPE ={res.shape}')
     return res
   
   def get_config(self):
@@ -431,7 +431,7 @@ class CandidateModel(keras.Model):
     feature_embedding = self.embedding_model(inputs, **kwargs)
     res = self.dense_layers(feature_embedding)
     # returns an np.ndarray wrapped in a tensor if inputs is tensor, else not wrapped
-    logging.debug(f'CALL {self.name} SHAPE ={res.shape}\n')
+    #logging.debug(f'CALL {self.name} SHAPE ={res.shape}\n')
     return res
   
   def get_config(self):
@@ -1025,7 +1025,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   stop_early = tf.keras.callbacks.EarlyStopping(
     monitor=f'val_{LOSS_FN.name}', patience=3)
   
-  model.fit(
+  history = model.fit(
     train_dataset,
     steps_per_epoch=fn_args.train_steps,
     validation_data=eval_dataset,
@@ -1116,12 +1116,13 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
   
   # the objective must be must be a name that appears in the logs
   # returned by the model.fit() method during training.
+  #val_logs has keys 'val_loss' and 'val_compile_metrics'
   tuner = keras_tuner.RandomSearch(
     _make_2tower_keras_model,
     max_trials=6,
     hyperparameters=hp,
     allow_new_entries=False,
-    objective=keras_tuner.Objective(f'val_{LOSS_FN.name}', 'min'),
+    objective=keras_tuner.Objective(f'val_loss', 'min'),
     # objective=keras_tuner.Objective('val_loss', 'min'),
     directory=fn_args.working_dir,
     project_name='movie_lens_2t_tuning')
