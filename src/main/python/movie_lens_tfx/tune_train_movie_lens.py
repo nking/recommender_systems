@@ -763,8 +763,7 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
 
 
 # TFX Trainer will call this function.
-def _get_strategy(device: Device) -> Tuple[
-  tf.distribute.Strategy, Device]:
+def _get_strategy(device: Device) -> Tuple[tf.distribute.Strategy, Device]:
   strategy = None
   if device == Device.GPU:
     try:
@@ -804,7 +803,7 @@ def _get_strategy(device: Device) -> Tuple[
   
   if not strategy:
     strategy = tf.distribute.get_strategy()
-    device = Device.TPU
+    device = Device.CPU
   return strategy, device
 
 
@@ -1002,7 +1001,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   
   logging.info('HyperParameters for training: %s' % hp.get_config())
   
-  if "device" in fn_args.custom_config:
+  if fn_args.custom_config and "device" in fn_args.custom_config:
     d = fn_args.custom_config["device"]
     if d == "GPU":
       device = Device.GPU
@@ -1023,7 +1022,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   #    log_dir=fn_args.model_run_dir, update_freq='epoch')
   
   stop_early = tf.keras.callbacks.EarlyStopping(
-    monitor=f'val_{LOSS_FN.name}', patience=3)
+    monitor=f'val_loss', patience=3)
   
   history = model.fit(
     train_dataset,

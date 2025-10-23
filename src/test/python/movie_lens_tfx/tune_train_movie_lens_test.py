@@ -74,7 +74,11 @@ class TuneTrainTest(tf.test.TestCase):
       custom_config=tuner_custom_config,
     )
     #'user_id_max' 'movie_id_max' 'n_genres' 'run_eagerly'
-
+    
+    trainer_custom_config = {
+      'device': "CPU",
+    }
+    
     #see https://github.com/tensorflow/tfx/blob/master/tfx/examples/penguin/penguin_pipeline_local.py
     #trainer = trainer_movie_lens.MovieLensTrainer(
     trainer=tfx.components.Trainer(
@@ -99,7 +103,8 @@ class TuneTrainTest(tf.test.TestCase):
       #   hyperparameters = hparams_importer.outputs['result'],
       hyperparameters=(tuner.outputs['best_hyperparameters']),
       train_args=tfx.proto.TrainArgs(num_steps=5),
-      eval_args=tfx.proto.EvalArgs(num_steps=5)
+      eval_args=tfx.proto.EvalArgs(num_steps=5),
+      custom_config=trainer_custom_config,
     )
 
     #Tuner Component `outputs` contains:
