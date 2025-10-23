@@ -36,6 +36,7 @@ FEATURE_KEYS = [
 ]
 _LABEL_KEY = 'rating'
 N_GENRES = 18
+N_AGE_GROUPS = 7
 
 class Device(enum.Enum):
   CPU = "CPU"
@@ -49,7 +50,7 @@ package = "ttdnn"
 @keras.utils.register_keras_serializable(package=package)
 class UserModel(keras.Model):
   # for init from a load, arguments are present for the compositional instance members too
-  def __init__(self, max_user_id: int, embed_out_dim: int = 32,
+  def __init__(self, max_user_id: int, n_age_groups:int, embed_out_dim: int = 32,
                feature_acronym: str = "",
                **kwargs):
     """
@@ -72,6 +73,7 @@ class UserModel(keras.Model):
     self.embed_out_dim = embed_out_dim
     self.max_user_id = max_user_id
     self.feature_acronym = feature_acronym
+    self.n_age_groups = n_age_groups
     
     self.user_embedding = keras.Sequential([
       keras.layers.Embedding(self.max_user_id + 1, embed_out_dim),
@@ -82,23 +84,23 @@ class UserModel(keras.Model):
     self.age_embedding = None
     if self.feature_acronym.find("a") > -1:
       self.age_embedding = keras.Sequential([
-        keras.layers.Identity(),
-        # shape is (batch_size, 1)
+        keras.layers.Embedding(self.n_age_groups + 1, embed_out_dim),
+        keras.layers.Flatten(data_format='channels_last'),
       ], name="age_emb")
     
     # numerical
     self.hr_wk_embedding = None
     if self.feature_acronym.find("h") > -1:
       self.hr_wk_embedding = keras.Sequential([
-        keras.layers.Identity(),
-        # shape is (batch_size, 1)
+        keras.layers.Embedding(24*7, embed_out_dim),
+        keras.layers.Flatten(data_format='channels_last'),
       ], name="hr_wk_emb")
       
     self.month_embedding = None
     if self.feature_acronym.find("m") > -1:
       self.month_embedding = keras.Sequential([
-        keras.layers.Identity(),
-        # shape is (batch_size, 1)
+        keras.layers.Embedding(12, embed_out_dim),
+        keras.layers.Flatten(data_format='channels_last'),
       ], name="month_emb")
       
     # categorical, nominal, order doesn't matter
@@ -118,7 +120,7 @@ class UserModel(keras.Model):
         output_mode="one_hot", name="gender_emb")
   
   def build(self, input_shape):
-    # print(f'build {self.name} input_shape={input_shape}\n')
+    #print(f'build {self.name} input_shape={input_shape}\n')
     self.user_embedding.build(input_shape['user_id'])
     if self.age_embedding:
       self.age_embedding.build(input_shape['age'])
@@ -137,27 +139,23 @@ class UserModel(keras.Model):
     # print(f'compute_output_shape {self.name} input_shape={input_shape}\n')
     # This is invoked after build by QueryModel.
     # return (None, self.embed_out_dim)
-    total_length = self.embed_out_dim  # for user_id embedding
+    _shape = self.user_embedding.compute_output_shape(input_shape['user_id'])
+    total_length = _shape[-1]
     if self.age_embedding:
-      _shape = self.age_embedding.compute_output_shape(
-        input_shape['age'])
-      total_length += _shape[1]
+      _shape = self.age_embedding.compute_output_shape(input_shape['age'])
+      total_length += _shape[-1]
     if self.hr_wk_embedding:
-      _shape = self.hr_wk_embedding.compute_output_shape(
-        input_shape['hr_wk'])
-      total_length += _shape[1]
+      _shape = self.hr_wk_embedding.compute_output_shape(input_shape['hr_wk'])
+      total_length += _shape[-1]
     if self.month_embedding:
-      _shape = self.month_embedding.compute_output_shape(
-        input_shape['month'])
-      total_length += _shape[1]
+      _shape = self.month_embedding.compute_output_shape(input_shape['month'])
+      total_length += _shape[-1]
     if self.occupation_embedding:
-      _shape = self.occupation_embedding.compute_output_shape(
-        input_shape['occupation'])
-      total_length += _shape[1]
+      _shape = self.occupation_embedding.compute_output_shape(input_shape['occupation'])
+      total_length += _shape[-1]
     if self.gender_embedding:
-      _shape = self.gender_embedding.compute_output_shape(
-        input_shape['gender'])
-      total_length += _shape[1]
+      _shape = self.gender_embedding.compute_output_shape(input_shape['gender'])
+      total_length += _shape[-1]
     return None, total_length
     # return (input_shape['movie_id'][0], total_length)
     # return self.user_embedding.compute_output_shape(input_shape['movie_id'])
@@ -166,7 +164,8 @@ class UserModel(keras.Model):
     # Take the input dictionary, pass it through each input layer,
     # and concatenate the result.
     # arrays are: 'user_id',  'gender', 'age_group', 'occupation','movie_id', 'rating'
-    # print(f'call {self.name} type={type(inputs)}\n')
+    #print(f'call {self.name} type={type(inputs)}\n')
+    #tf.print(inputs)
     results = []
     results.append(self.user_embedding(inputs['user_id']))
     if self.age_embedding:
@@ -179,11 +178,14 @@ class UserModel(keras.Model):
       results.append(self.occupation_embedding(inputs['occupation']))
     if self.gender_embedding:
       results.append(self.gender_embedding(inputs['gender']))
-    return keras.layers.Concatenate()(results)
+    res = keras.layers.Concatenate()(results)
+    logging.debug(f'call {self.name} SHAPE ={res.shape}')
+    return res
   
   def get_config(self):
     config = super(UserModel, self).get_config()
     config.update({"max_user_id": self.max_user_id,
+                   'n_age_groups': self.n_age_groups,
                    "embed_out_dim": self.embed_out_dim,
                    "feature_acronym": self.feature_acronym,
                    })
@@ -214,14 +216,11 @@ class MovieModel(keras.Model):
       keras.layers.Flatten(data_format='channels_last'),
       ], name="movie_emb")
     
-    # def custom_standardize(self, data):
-    #    return tf.strings.regex_replace(data, r",", " ")
-    
-    # r = tf.strings.split(inputs['genres'], ",")
-    # ragint = tf.strings.to_number(r, out_type=tf.int32)
     if self.incl_genres:
+      #expand toembed_out_dim for concatenation
       self.genres_embedding = keras.Sequential([
-        keras.layers.Identity()
+        keras.layers.Dense( self.embed_out_dim),
+        keras.layers.Flatten(data_format='channels_last'),
       ], name="genres_emb")
   
   def build(self, input_shape):
@@ -234,9 +233,11 @@ class MovieModel(keras.Model):
   def compute_output_shape(self, input_shape):
     # print(f'compute_output_shape {self.name} input_shape={input_shape}\n')
     # This is invoked after build by CandidateModel
-    total_length = self.embed_out_dim
+    _shape = self.movie_embedding.compute_output_shape(input_shape['movie_id'])
+    total_length = _shape[-1]
     if self.incl_genres:
-      total_length += self.n_genres
+      _shape = self.genres_embedding.compute_output_shape(input_shape['genres'])
+      total_length += _shape[-1]
     return None, total_length
     
   def call(self, inputs, **kwargs):
@@ -244,11 +245,13 @@ class MovieModel(keras.Model):
     # and concatenate the result.
     # print(f'call {self.name} type={type(inputs)}, kwargs={kwargs}\n')
     # print(f'    spec={inputs.element_spec}\n')
-    results = [self.movie_embedding(
-      inputs['movie_id'])]  # shape is (batch_size, x, out_dim)
+    results = [self.movie_embedding(inputs['movie_id'])]
+    # shape is (batch_size, x, out_dim)
     if self.incl_genres:
       results.append(self.genres_embedding(inputs['genres']))
-    return keras.layers.Concatenate()(results)
+    res = keras.layers.Concatenate(axis=1)(results)
+    logging.debug(f'call {self.name} SHAPE ={res.shape}')
+    return res
   
   def get_config(self):
     # updating super config stomps over existing key names, so if need separate values one would need
@@ -267,7 +270,7 @@ class QueryModel(keras.Model):
   """Model for encoding user queries."""
   
   # for init from a load, arguments are present for the compositional instance members too
-  def __init__(self, n_users: int, layer_sizes: list,
+  def __init__(self, n_users: int, n_age_groups:int, layer_sizes: list,
                embed_out_dim: int = 32,
                reg: keras.regularizers.Regularizer = None,
                drop_rate: float = 0., feature_acronym: str = "",
@@ -281,7 +284,7 @@ class QueryModel(keras.Model):
     """
     super(QueryModel, self).__init__(**kwargs)
     
-    self.embedding_model = UserModel(max_user_id=n_users,
+    self.embedding_model = UserModel(max_user_id=n_users, n_age_groups=n_age_groups,
                                      embed_out_dim=embed_out_dim,
                                      feature_acronym=feature_acronym)
     if isinstance(layer_sizes, str):
@@ -307,6 +310,7 @@ class QueryModel(keras.Model):
     self.reg = reg
     
     self.n_users = n_users
+    self.n_age_groups = n_age_groups
     self.feature_acronym = feature_acronym
     self.embed_out_dim = embed_out_dim
     self.layer_sizes = layer_sizes
@@ -315,24 +319,21 @@ class QueryModel(keras.Model):
   def build(self, input_shape):
     # print(f'build {self.name} input_shape={input_shape}\n')
     self.embedding_model.build(input_shape)
-    input_shape_2 = self.embedding_model.compute_output_shape(
-      input_shape)
-    # print(f'{self.name} input_shape_2 = {input_shape_2}\n')
+    input_shape_2 = self.embedding_model.compute_output_shape(input_shape)
     self.dense_layers.build(input_shape_2)
-    # print(f'{self.name} output shape={self.dense_layers.compute_output_shape(input_shape_2)}\n')
-    # print(f'build {self.name} Query {self.embed_out_dim}, {self.layer_sizes}, => {self.dense_layers.compute_output_shape(input_shape_2)}\n')
     self.built = True
   
   def compute_output_shape(self, input_shape):
     # print(f'compute_output_shape {self.name} input_shape={input_shape}, {input_shape['user_id'][0]}, {self.layer_sizes[-1:]}\n')
     # This is invoked after build by TwoTower
     # return self.output_shapes[0]
-    return None, self.layer_sizes[-1]
+    input_shape_3 = self.dense_layers.build(self.embedding_model.compute_output_shape(input_shape))
+    return input_shape_3
+    #return None, self.layer_sizes[-1]
     # return (input_shape['user_id'][0], self.layer_sizes[-1])
   
   def call(self, inputs, **kwargs):
     # inputs should contain columns: 
-    #  '''['user_id', 'gender', 'age_group', 'occupation','movie_id', 'rating_all']'''
     # print(f'call {self.name} type={type(inputs)}\n')
     feature_embedding = self.embedding_model(inputs, **kwargs)
     res = self.dense_layers(feature_embedding)
@@ -341,6 +342,7 @@ class QueryModel(keras.Model):
   def get_config(self):
     config = super(QueryModel, self).get_config()
     config.update({"n_users": self.n_users,
+                   'n_age_groups' : self.n_age_groups,
                    "embed_out_dim": self.embed_out_dim,
                    "drop_rate": self.drop_rate,
                    "layer_sizes": self.layer_sizes,
@@ -412,16 +414,16 @@ class CandidateModel(keras.Model):
   def build(self, input_shape):
     # print(f'build {self.name} input_shape={input_shape}\n')
     self.embedding_model.build(input_shape)
-    input_shape_2 = self.embedding_model.compute_output_shape(
-      input_shape)
+    input_shape_2 = self.embedding_model.compute_output_shape(input_shape)
     self.dense_layers.build(input_shape_2)
     self.built = True
   
   def compute_output_shape(self, input_shape):
     # print(f'compute_output_shape {self.name} input_shape={input_shape}\n')
     # This is invoked after build by TwoTower
-    # return (input_shape['movie_id'][0], self.layer_sizes[-1])
-    return None, self.layer_sizes[-1]
+    input_shape_3 = self.dense_layers.build(self.embedding_model.compute_output_shape(input_shape))
+    return input_shape_3
+    #return None, self.layer_sizes[-1]
   
   def call(self, inputs, **kwargs):
     # inputs should contain columns "movie_id", "genres"
@@ -429,6 +431,7 @@ class CandidateModel(keras.Model):
     feature_embedding = self.embedding_model(inputs, **kwargs)
     res = self.dense_layers(feature_embedding)
     # returns an np.ndarray wrapped in a tensor if inputs is tensor, else not wrapped
+    logging.debug(f'CALL {self.name} SHAPE ={res.shape}\n')
     return res
   
   def get_config(self):
@@ -464,7 +467,7 @@ class TwoTowerDNN(keras.Model):
   """
   
   # for init from a load, arguments are present for the compositional instance members too
-  def __init__(self, n_users: int, n_movies: int, n_genres: int,
+  def __init__(self, n_users: int, n_movies: int, n_age_groups:int, n_genres: int,
                layer_sizes: list, embed_out_dim: int,
                reg: keras.regularizers.Regularizer = None,
                drop_rate: float = 0, feature_acronym: str = "",
@@ -475,7 +478,7 @@ class TwoTowerDNN(keras.Model):
     if isinstance(layer_sizes, str):
       layer_sizes = json.loads(layer_sizes)
       
-    self.query_model = QueryModel(n_users=n_users,
+    self.query_model = QueryModel(n_users=n_users, n_age_groups = n_age_groups,
                                   layer_sizes=layer_sizes,
                                   embed_out_dim=embed_out_dim, reg=reg,
                                   drop_rate=drop_rate,
@@ -492,12 +495,12 @@ class TwoTowerDNN(keras.Model):
     
     # elementwise multiplication:
     self.dot_layer = keras.layers.Dot(axes=1)
-    self.sigmoid_layer = keras.layers.Activation(
-      keras.activations.sigmoid)
+    self.sigmoid_layer = keras.layers.Activation(keras.activations.sigmoid)
     
     self.reg = reg
     
     self.n_users = n_users
+    self.n_age_groups = n_age_groups
     self.n_movies = n_movies
     self.n_genres = n_genres
     self.incl_genres = incl_genres
@@ -519,7 +522,7 @@ class TwoTowerDNN(keras.Model):
   
   def call(self, inputs, training=False, **kwargs):
     """['user_id', 'gender', 'age_group', 'occupation','movie_id', 'rating']"""
-    #logging.debug(f'call {self.name} inputs={inputs}\n')
+    logging.debug(f'call {self.name} inputs={inputs}\n')
     user_vector = self.query_model(inputs, **kwargs)
     movie_vector = self.candidate_model(inputs, **kwargs)
     s = self.dot_layer([user_vector, movie_vector])
@@ -536,7 +539,12 @@ class TwoTowerDNN(keras.Model):
   def compute_output_shape(self, input_shape):
     # (batch_size,)  a scalar for each row in batch
     # return input_shape['user_id']
-    return (None,)
+    s0 = self.query_model.compute_output_shape(input_shape)
+    s1 = self.candidate_model.compute_output_shape(input_shape)
+    s2 = self.dot_layer.compute_output_shape([s0, s1])
+    s3 = self.sigmoid_layer.compute_output_shape(s2)
+    return s3
+    #return (None,)
   
   @keras.utils.register_keras_serializable(package=package,
                                             name="calc_item_probability_inverse")
@@ -637,6 +645,7 @@ class TwoTowerDNN(keras.Model):
   def get_config(self):
     config = super(TwoTowerDNN, self).get_config()
     config.update({"n_users": self.n_users, "n_movies": self.n_movies,
+                   "n_age_groups" : self.n_age_groups,
                    "n_genres": self.n_genres,
                    "embed_out_dim": self.embed_out_dim,
                    "drop_rate": self.drop_rate,
@@ -694,6 +703,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   model = TwoTowerDNN(
     n_users=hp.get("user_id_max") + 1,
     n_movies=hp.get("movie_id_max") + 1,
+    n_age_groups=hp.get("n_age_groups") + 1,
     n_genres=hp.get("n_genres"),
     layer_sizes=hp.get('layer_sizes'),
     embed_out_dim=hp.get('embed_out_dim'),
@@ -746,6 +756,7 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   hp.Boolean("use_bias_corr", default=False)
   hp.Fixed('user_id_max', value=custom_config["user_id_max"])
   hp.Fixed('movie_id_max', custom_config["movie_id_max"])
+  hp.Fixed('n_age_groups', custom_config["n_age_groups"])
   hp.Fixed('n_genres', custom_config["n_genres"])
   hp.Fixed('run_eagerly', custom_config["run_eagerly"])
   return hp
