@@ -10,9 +10,8 @@ import os
 import json
 import keras_tuner
 import tensorflow as tf
-import tf_keras as keras
 import tensorflow_transform as tft
-
+import tensorflow.keras as keras
 #tuner needs this:
 from tfx.components.trainer.fn_args_utils import FnArgs
 
@@ -45,7 +44,9 @@ class Device(enum.Enum):
 
 package = "ttdnn"
 
-@keras.saving.register_keras_serializable(package=package)
+#NOTE: tfx expected the models to subclass tf.keras.Model, not keras.Model
+
+@keras.utils.register_keras_serializable(package=package)
 class UserModel(keras.Model):
   # for init from a load, arguments are present for the compositional instance members too
   def __init__(self, max_user_id: int, embed_out_dim: int = 32,
@@ -188,7 +189,7 @@ class UserModel(keras.Model):
                    })
     return config
 
-@keras.saving.register_keras_serializable(package=package)
+@keras.utils.register_keras_serializable(package=package)
 class MovieModel(keras.Model):
   """
   NOTE: the movie_ids are expected to be already unique and represented by range [1, n_movies] and dtype np.int32.
@@ -261,7 +262,7 @@ class MovieModel(keras.Model):
 
 
 # TODO: add hyper-parameter "temperature" after L2Norm
-@keras.saving.register_keras_serializable(package=package)
+@keras.utils.register_keras_serializable(package=package)
 class QueryModel(keras.Model):
   """Model for encoding user queries."""
   
@@ -351,12 +352,12 @@ class QueryModel(keras.Model):
   @classmethod
   def from_config(cls, config):
     for key in ["reg"]:
-      config[key] = keras.saving.deserialize_keras_object(config[key])
+      config[key] = keras.utils.deserialize_keras_object(config[key])
     return cls(**config)
 
 
 # TODO: add hyper-parameter "temperature" after L2Norm
-@keras.saving.register_keras_serializable(package=package)
+@keras.utils.register_keras_serializable(package=package)
 class CandidateModel(keras.Model):
   """Model for encoding candidate features."""
   
@@ -436,7 +437,7 @@ class CandidateModel(keras.Model):
                    "embed_out_dim": self.embed_out_dim,
                    "drop_rate": self.drop_rate,
                    "layer_sizes": self.layer_sizes,
-                   "reg": keras.saving.serialize_keras_object(self.reg),
+                   "reg": keras.utils.serialize_keras_object(self.reg),
                    "incl_genres": self.incl_genres
                    })
     return config
@@ -444,11 +445,11 @@ class CandidateModel(keras.Model):
   @classmethod
   def from_config(cls, config):
     for key in ["reg"]:
-      config[key] = keras.saving.deserialize_keras_object(config[key])
+      config[key] = keras.utils.deserialize_keras_object(config[key])
     return cls(**config)
 
 
-@keras.saving.register_keras_serializable(package=package)
+@keras.utils.register_keras_serializable(package=package)
 class TwoTowerDNN(keras.Model):
   """
   a Two-Tower DNN model that accepts input containing: user, context, and item information along with 
@@ -537,7 +538,7 @@ class TwoTowerDNN(keras.Model):
     # return input_shape['user_id']
     return (None,)
   
-  @keras.saving.register_keras_serializable(package=package,
+  @keras.utils.register_keras_serializable(package=package,
                                             name="calc_item_probability_inverse")
   # in non-eager mode, keras attempts to draw a graph if annotated w/ tf.function
   @tf.function(autograph=True, reduce_retracing=True)
@@ -556,7 +557,7 @@ class TwoTowerDNN(keras.Model):
     #     return tensor
     # result = evaluate_tensor(tensor)
     alpha = tf.keras.backend.eval(self.optimizer.learning_rate)
-    if len(tf.shape(x).numpy()) == 0:
+    if tf.equal(tf.shape(x)[-1], 0):
       _batch_size = 1
     else:
       _batch_size = tf.shape(x)[0]
@@ -640,7 +641,7 @@ class TwoTowerDNN(keras.Model):
                    "layer_sizes": self.layer_sizes,
                    "use_bias_corr": self.use_bias_corr,
                    "feature_acronym": self.feature_acronym,
-                   "reg": keras.saving.serialize_keras_object(self.reg),
+                   "reg": keras.utils.serialize_keras_object(self.reg),
                    "incl_genres": self.incl_genres
                    })
     return config
@@ -648,7 +649,7 @@ class TwoTowerDNN(keras.Model):
   @classmethod
   def from_config(cls, config):
     for key in ["reg"]:
-      config[key] = keras.saving.deserialize_keras_object(config[key])
+      config[key] = keras.utils.deserialize_keras_object(config[key])
     return cls(**config)
 
 
@@ -684,7 +685,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   # input_shapes[element] = (batch_size,)
   for element in FEATURE_KEYS:
     if element == "genres":
-      input_shapes[element] = (None, N_GENRES)
+      input_shapes[element] = (None, 1, N_GENRES)
     else:
       input_shapes[element] = (None,1)
     
@@ -714,6 +715,13 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     metrics=[METRIC_FN, keras.metrics.MeanAbsoluteError()],
     run_eagerly=hp.get("run_eagerly")
   )
+  is_tf_keras_model = isinstance(model, tf.keras.Model)
+  is_keras_model = isinstance(model, keras.Model)
+  is_keras_models_Model = isinstance(model, keras.models.Model)
+  logging.debug(f"is_tf_keras_model: {is_tf_keras_model}, "
+    f"is_keras_model: {is_keras_model}, is_keras_models_Model={is_keras_models_Model}")
+  if not isinstance(model, keras.models.Model):
+    logging.debug(f'this is the fail at tuner.py line 167')
   # TO debug, user run_eagerly=False
   return model
 
@@ -737,7 +745,7 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   hp.Fixed('user_id_max', value=custom_config["user_id_max"])
   hp.Fixed('movie_id_max', custom_config["movie_id_max"])
   hp.Fixed('n_genres', custom_config["n_genres"])
-  hp.Fixed('run_eagerly', False)
+  hp.Fixed('run_eagerly', custom_config["run_eagerly"])
   return hp
 
 
@@ -1015,7 +1023,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   # return the two twoer model
   model.save(os.path.join(fn_args.serving_model_dir, "twotower"), save_format='tf')
   # should handle saving decorated methods too, that is,
-  # those decorated with @keras.saving.register_keras_serializable(package=package)
+  # those decorated with @keras.utils.register_keras_serializable(package=package)
   
   model.query_model.save(os.path.join(fn_args.serving_model_dir, "query"), save_format='tf')
   model.candidate_model.save(os.path.join(fn_args.serving_model_dir, "candidate"), save_format='tf')
