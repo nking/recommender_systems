@@ -164,8 +164,8 @@ class UserModel(keras.Model):
     # Take the input dictionary, pass it through each input layer,
     # and concatenate the result.
     # arrays are: 'user_id',  'gender', 'age_group', 'occupation','movie_id', 'rating'
-    #print(f'call {self.name} type={type(inputs)}\n')
-    #tf.print(inputs)
+    print(f'call {self.name} type={type(inputs)}\n')
+    tf.print(inputs)
     results = []
     results.append(self.user_embedding(inputs['user_id']))
     if self.age_embedding:
@@ -549,7 +549,7 @@ class TwoTowerDNN(keras.Model):
   @keras.utils.register_keras_serializable(package=package,
                                             name="calc_item_probability_inverse")
   # in non-eager mode, keras attempts to draw a graph if annotated w/ tf.function
-  @tf.function()
+  #@tf.function()
   def calc_item_probability_inverse(self, x):
     """
     given the batch x['movie_id'] tensor, this method returns an item probability vector.
@@ -564,22 +564,22 @@ class TwoTowerDNN(keras.Model):
     # def evaluate_tensor(tensor):
     #     return tensor
     # result = evaluate_tensor(tensor)
-    alpha = tf.keras.backend.eval(self.optimizer.learning_rate)
+    alpha = self.optimizer.learning_rate
     if tf.equal(tf.shape(x)[-1], 0):
       _batch_size = 1
     else:
       _batch_size = tf.shape(x)[0]
-    A = tf.lookup.experimental.MutableHashTable(key_dtype=tf.int32,
+    A = tf.lookup.experimental.MutableHashTable(key_dtype=tf.int64,
                                                 value_dtype=tf.float32,
                                                 default_value=0.)
-    B = tf.lookup.experimental.MutableHashTable(key_dtype=tf.int32,
+    B = tf.lookup.experimental.MutableHashTable(key_dtype=tf.int64,
                                                 value_dtype=tf.float32,
                                                 default_value=0.)
     for i, movie_id in enumerate(x):
       t = tf.constant(i + 1, dtype=tf.float32, shape=(1,))
       b = B.lookup(movie_id, dynamic_default_values=0.)
       a = A.lookup(movie_id, dynamic_default_values=0.)
-      _ = tf.multiply(tf.constant(1.-alpha), b)
+      _ = tf.multiply(tf.subtract(tf.constant(1.), alpha), b)
       __ = tf.multiply(a, tf.subtract(t, a))
       c = tf.add(_, __)
       B.insert(keys=movie_id, values=c)
