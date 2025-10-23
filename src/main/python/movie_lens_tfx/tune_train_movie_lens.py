@@ -5,13 +5,13 @@
 # they have co Copyright 2020 Google LLC. All Rights Reserved.
 # Licensed under the Apache License, Version 2.0 (the "License");
 from typing import List, Tuple
+import tensorflow as tf
+import tensorflow.keras as keras
 import enum
 import os
 import json
 import keras_tuner
-import tensorflow as tf
 import tensorflow_transform as tft
-import tensorflow.keras as keras
 #tuner needs this:
 from tfx.components.trainer.fn_args_utils import FnArgs
 
@@ -768,9 +768,11 @@ def _get_strategy(device: Device) -> Tuple[tf.distribute.Strategy, Device]:
   if device == Device.GPU:
     try:
       device_physical = tf.config.list_physical_devices('GPU')[0]
+      #batch_size is the global batch size
       strategy = tf.distribute.MirroredStrategy(
         devices=[device_physical])  # or [device_physical.name]
       tf.config.optimizer.set_jit(False)
+      #or choose MultiWorkerMirroredStrategy
     except Exception as ex:
       logging.error(ex)
       strategy = None
@@ -803,100 +805,9 @@ def _get_strategy(device: Device) -> Tuple[tf.distribute.Strategy, Device]:
   
   if not strategy:
     strategy = tf.distribute.get_strategy()
+    #or use MirroredStrategy
     device = Device.CPU
   return strategy, device
-
-
-# https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/examples/penguin/penguin_utils_base.py#L43
-def _make_serving_signatures(model,
-                             tf_transform_output: tft.TFTransformOutput):
-  """Returns the serving signatures.
-
-  Args:
-    model: the model function to apply to the transformed features.
-    tf_transform_output: The transformation to apply to the serialized
-      tf.Example.
-
-  Returns:
-    The signatures to use for saving the mode. The 'serving_default' signature
-    will be a concrete function that takes a batch of unspecified length of
-    serialized tf.Example, parses them, transformes the features and
-    then applies the model. The 'transform_features' signature will parses the
-    example and transforms the features.
-  """
-  
-  # We need to track the layers in the model in order to save it.
-  # TODO(b/162357359): Revise once the bug is resolved.
-  model.tft_layer = tf_transform_output.transform_features_layer()
-  
-  @tf.function(input_signature=[
-    tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')
-  ])
-  def serve_tf_examples_fn(serialized_tf_example):
-    """Returns the output to be used in the serving signature."""
-    raw_feature_spec = tf_transform_output.raw_feature_spec()
-    # Remove label feature since these will not be present at serving time.
-    raw_feature_spec.pop(_LABEL_KEY)
-    raw_features = tf.io.parse_example(serialized_tf_example,
-                                       raw_feature_spec)
-    transformed_features = model.tft_layer(raw_features)
-    logging.info('serve_transformed_features = %s',
-                 transformed_features)
-    
-    outputs = model(transformed_features)
-    # TODO(b/154085620): Convert the predicted labels from the model using a
-    # reverse-lookup (opposite of transform.py).
-    return {'outputs': outputs}
-
-
-# https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/examples/chicago_taxi_pipeline/taxi_utils.py#L128
-def _get_transform_features_signature(model, tf_transform_output):
-  """Returns a serving signature that accepts `tensorflow.Example`."""
-  model.tft_layer_eval = tf_transform_output.transform_features_layer()
-  
-  @tf.function(
-    input_signature=[
-      tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')
-    ]
-  )
-  def transform_features_fn(serialized_tf_example):
-    raw_feature_spec = tf_transform_output.raw_feature_spec()
-    raw_features = tf.io.parse_example(serialized_tf_example,
-                                       raw_feature_spec)
-    transformed_features = model.tft_layer_eval(raw_features)
-    logging.info('eval_transformed_features = %s', transformed_features)
-    return transformed_features
-  
-  return transform_features_fn
-
-
-# https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/docs/tutorials/tfx/recommenders.ipynb#L851
-# https://github.com/tensorflow/tfx/blob/master/docs/tutorials/tfx/recommenders.ipynb
-def _get_serve_tf_examples_fn(model, tf_transform_output):
-  """Returns a function that parses a serialized tf.Example and applies TFT."""
-  try:
-    model.tft_layer = tf_transform_output.transform_features_layer()
-    
-    @tf.function
-    def serve_tf_examples_fn(serialized_tf_examples):
-      """Returns the output to be used in the serving signature."""
-      try:
-        feature_spec = tf_transform_output.raw_feature_spec()
-        parsed_features = tf.io.parse_example(serialized_tf_examples,
-                                              feature_spec)
-        transformed_features = model.tft_layer(parsed_features)
-        result = model(transformed_features)
-      except BaseException as err:
-        raise BaseException(
-          '######## ERROR IN serve_tf_examples_fn:\n{}\n###############'.format(
-            err))
-      return result
-  except BaseException as err2:
-    raise BaseException(
-      '######## ERROR IN _get_serve_tf_examples_fn:\n{}\n###############'.format(
-        err2))
-  
-  return serve_tf_examples_fn
 
 # tfx.components.FnArgs
 def run_fn(fn_args):
@@ -1013,6 +924,9 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
     device = Device.CPU
   strategy, device = _get_strategy(device)
   
+  n_replicas = strategy.num_replicas_in_sync
+  #global batch_size is the global batch size
+  
   with strategy.scope():
     model = _make_2tower_keras_model(hp)
     # model = _make_2tower_keras_model(hp, tf_transform_output)
@@ -1031,26 +945,14 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
     validation_steps=fn_args.eval_steps,
     callbacks=[stop_early])
   
-  # save all 3 models
-  # return the two twoer model
-  model.save(os.path.join(fn_args.serving_model_dir, "twotower"), save_format='tf')
-  # should handle saving decorated methods too, that is,
-  # those decorated with @keras.utils.register_keras_serializable(package=package)
+  from tfx.dsl.io import fileio
+  #print(f'fn_args.serving_model_dir={fn_args.serving_model_dir}')
+  #in TFX 1.16.0, we're using keras 2, and so this is the save that creates a SavedModel which passes
+  # the TFX asserts:
+  tf.saved_model.save(model, fn_args.serving_model_dir)
   
-  model.query_model.save(os.path.join(fn_args.serving_model_dir, "query"), save_format='tf')
-  model.candidate_model.save(os.path.join(fn_args.serving_model_dir, "candidate"), save_format='tf')
-  
-  # should be able to use model.save without creating a signature profile
-  #  but if have troubles with this, use one of these 2:
-  # signatures = _make_serving_signatures(model, tf_transform_output)
-  # signatures = {
-  #  'serving_default':
-  #    _get_serve_tf_examples_fn(model, tf_transform_output).get_concrete_function(
-  #      tf.TensorSpec( shape=[None], dtype=tf.string, name='examples')),
-  #  'transform_features':
-  #    _get_transform_features_signature(model, tf_transform_output),
-  # }
-  # tf.saved_model.save(model, fn_args.serving_model_dir, signatures=signatures)
+  # to retrieve the other 2 models, that is, the trained query_model and candidate_model, will need to
+  # use tf.saved_model.load(fn_args.serving_model_dir)
   
   return model
 

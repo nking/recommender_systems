@@ -161,17 +161,12 @@ class TuneTrainTest(tf.test.TestCase):
     logging.debug(f"MLMD store artifact_types={artifact_types}")
     artifacts = store.get_artifacts()
     logging.debug(f"MLMD store artifacts={artifacts}")
-    #id: 8
-    #type_id: 15
-    #uri:
-    # "/kaggle/working/bin/transform_1/test_MovieLensExampleGen/
-    #   TestPythonTransformPipeline/Transform/transformed_examples/4"
-
+   
     executions = store.get_executions()
     logging.debug(f"MLMD store executions={executions}")
-    self.assertLessEqual(4, len(artifact_types))
-    self.assertLessEqual(4, len(artifacts))
-    self.assertLessEqual(4, len(executions))
+    self.assertLessEqual(6, len(artifact_types))
+    self.assertLessEqual(6, len(artifacts))
+    self.assertLessEqual(6, len(executions))
     # executions has custom_properties.key: "infiles_dict_ser"
     #    and custom_properties.key: "output_config_ser"
     artifact_count = len(artifacts)
@@ -221,22 +216,7 @@ class TuneTrainTest(tf.test.TestCase):
           if artifact.type_id == store.get_artifact_type('Examples').id:
             logging.debug(f"artifact={artifact}\nuri={artifact.uri}")
 
-    #!find /kaggle/working/bin -type f -iname "transformed_examples*.gz"
-    """
-    logging.debug(f"component transformed_examples uri={ratings_transform.outputs['transformed_examples'].get()[0].uri}")
-    logging.debug(f"component post_transform_schema uri={ratings_transform.outputs['post_transform_schema'].get()[0].uri}")
-    stats_path_train = os.path.join(transform_graph_uri, get_split_dir_name("train"), 'FeatureStats.pb')
-    stats_path_eval = os.path.join(transform_graph_uri, get_split_dir_name("eval"), 'FeatureStats.pb')
-    stats_path_test = os.path.join(transform_graph_uri, get_split_dir_name("test"),'FeatureStats.pb')
-    self.assertTrue(os.path.exists(stats_path_train))
-    self.assertTrue(os.path.exists(stats_path_eval))
-    self.assertTrue(os.path.exists(stats_path_test))
+    #TODO: for examining the SavedModel, see
+    # https://github.com/tensorflow/docs/blob/master/site/en/r1/guide/saved_model.md#cli-to-inspect-and-execute-savedmodel
+    
 
-    tfrecord_filenames = [os.path.join(stats_path_train, name) for name in os.listdir(stats_path_train)]
-    dataset = tf.data.TFRecordDataset(tfrecord_filenames, compression_type="GZIP")
-    #might need to parse the data
-    for tfrecord in dataset.take(5):
-      example = tf.train.Example()
-      example.ParseFromString(tfrecord.numpy())
-      logging.debug(f"a transform example={example}")
-    """
