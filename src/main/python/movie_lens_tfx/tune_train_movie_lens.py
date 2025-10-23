@@ -92,14 +92,14 @@ class UserModel(keras.Model):
     self.hr_wk_embedding = None
     if self.feature_acronym.find("h") > -1:
       self.hr_wk_embedding = keras.Sequential([
-        keras.layers.Embedding(24*7, embed_out_dim),
+        keras.layers.Embedding(24*7 + 1, embed_out_dim),
         keras.layers.Flatten(data_format='channels_last'),
       ], name="hr_wk_emb")
       
     self.month_embedding = None
     if self.feature_acronym.find("m") > -1:
       self.month_embedding = keras.Sequential([
-        keras.layers.Embedding(12, embed_out_dim),
+        keras.layers.Embedding(12 + 1, embed_out_dim),
         keras.layers.Flatten(data_format='channels_last'),
       ], name="month_emb")
       
@@ -750,10 +750,10 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   hp.Choice("layer_sizes", values=[json.dumps([32])], default=json.dumps([32]))
   # ahmos for "age", "hr_wk", "month", "occupation", "gender"
   hp.Fixed("feature_acronym", value="h")
-  hp.Boolean("incl_genres", default=True)
+  hp.Fixed("incl_genres", custom_config["incl_genres"])
   hp.Fixed('num_epochs', value=10)
   hp.Fixed('batch_size', TRAIN_BATCH_SIZE)
-  hp.Boolean("use_bias_corr", default=False)
+  hp.Fixed("use_bias_corr", value=custom_config["use_bias_corr"])
   hp.Fixed('user_id_max', value=custom_config["user_id_max"])
   hp.Fixed('movie_id_max', custom_config["movie_id_max"])
   hp.Fixed('n_age_groups', custom_config["n_age_groups"])

@@ -58,9 +58,11 @@ class TuneTrainTest(tf.test.TestCase):
       'movie_id_max' : self.movie_id_max,
       'n_genres' : self.n_genres,
       'n_age_groups' : self.n_age_groups,
-      'run_eagerly' : True
+      'run_eagerly' : True,
+      "use_bias_corr" : False,
+      'incl_genres':True,
     }
-
+    
     tuner = tfx.components.Tuner(
       module_file=os.path.join(tr_dir, 'tune_train_movie_lens.py'),
       examples=ratings_transform.outputs['transformed_examples'],
