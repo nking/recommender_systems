@@ -541,7 +541,7 @@ class TwoTowerDNN(keras.Model):
   @keras.utils.register_keras_serializable(package=package,
                                             name="calc_item_probability_inverse")
   # in non-eager mode, keras attempts to draw a graph if annotated w/ tf.function
-  @tf.function(autograph=True, reduce_retracing=True)
+  @tf.function()
   def calc_item_probability_inverse(self, x):
     """
     given the batch x['movie_id'] tensor, this method returns an item probability vector.
@@ -568,10 +568,12 @@ class TwoTowerDNN(keras.Model):
                                                 value_dtype=tf.float32,
                                                 default_value=0.)
     for i, movie_id in enumerate(x):
-      t = i + 1
+      t = tf.constant(i + 1, dtype=tf.float32, shape=(1,))
       b = B.lookup(movie_id, dynamic_default_values=0.)
       a = A.lookup(movie_id, dynamic_default_values=0.)
-      c = (1. - alpha) * b + (alpha * (t - a))
+      _ = tf.multiply(tf.constant(1.-alpha), b)
+      __ = tf.multiply(a, tf.subtract(t, a))
+      c = tf.add(_, __)
       B.insert(keys=movie_id, values=c)
       A.insert(keys=movie_id, values=t)
       if i == _batch_size - 1: break
