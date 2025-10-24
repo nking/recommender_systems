@@ -1,3 +1,7 @@
+- current:
+  add adjustment of global batch_size for distribution
+  strategy
+
 - future: consider use of ZCTAs and geohashing for 'zipcodes'
 
 - future:

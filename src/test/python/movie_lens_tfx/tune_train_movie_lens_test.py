@@ -5,8 +5,14 @@ from tfx.dsl.io import fileio
 from tfx.orchestration import metadata
 from tfx.components import StatisticsGen, SchemaGen
 
+from tensorflow_metadata.proto.v0 import schema_pb2
+from tensorflow_transform.tf_metadata import schema_utils
+from google.protobuf import text_format
+
 from ingest_movie_lens_component import *
 #import trainer_movie_lens
+
+import tensorflow_transform as tft
 
 from ml_metadata.proto import metadata_store_pb2
 from ml_metadata.metadata_store import metadata_store
@@ -14,8 +20,8 @@ from tune_train_movie_lens import *
 
 from helper import *
 
-from absl import logging
 tf.get_logger().propagate = False
+from absl import logging
 logging.set_verbosity(logging.DEBUG)
 logging.set_stderrthreshold(logging.DEBUG)
 
@@ -33,7 +39,7 @@ class TuneTrainTest(tf.test.TestCase):
     self.name = 'test run of ratings transform'
 
   def test_tune_and_train(self):
-    test_num = "1"
+    test_num = "tune_train_1"
     ratings_example_gen = (MovieLensExampleGen(
       infiles_dict_ser=self.infiles_dict_ser,
       output_config_ser = self.output_config_ser))
@@ -69,7 +75,7 @@ class TuneTrainTest(tf.test.TestCase):
       #schema is already in the transform graph
       transform_graph=ratings_transform.outputs['transform_graph'],
       #args: splits, num_steps.  splits defaults are assumed if none given
-      train_args=tfx.proto.TrainArgs(num_steps=20),
+      train_args=tfx.proto.TrainArgs(num_steps=5),
       eval_args=tfx.proto.EvalArgs(num_steps=5),
       custom_config=tuner_custom_config,
     )
@@ -131,7 +137,7 @@ class TuneTrainTest(tf.test.TestCase):
     METADATA_PATH = os.path.join(PIPELINE_ROOT, 'tfx_metadata', 'metadata.db')
     os.makedirs(os.path.join(PIPELINE_ROOT, 'tfx_metadata'), exist_ok=True)
 
-    ENABLE_CACHE = False
+    ENABLE_CACHE = True
 
     #metadata_connection_config = metadata_store_pb2.ConnectionConfig()
     #metadata_connection_config.sqlite.SetInParent()
@@ -174,48 +180,109 @@ class TuneTrainTest(tf.test.TestCase):
     self.assertGreaterEqual(artifact_count, execution_count)
     self.assertGreaterEqual(artifact_count, execution_count)
 
-    artifact_uri = artifacts[0].uri
-    for split_name in self.split_names:
-      dir_path = f'{artifact_uri}/{get_split_dir_name(split_name)}'
-      file_paths = [os.path.join(dir_path, name) for name in
-                    os.listdir(dir_path)]
-      #  file_paths = get_output_files(ratings_example_gen, 'output_examples', split_name)
-      self.assertGreaterEqual(len(file_paths), 1)
-
-    logging.debug(f"ratings_transform.id={ratings_transform.id}") #StatisticsGen
-    logging.debug(f"ratings_transform={ratings_transform}")
-    self.assertTrue(fileio.exists(os.path.join(PIPELINE_ROOT, ratings_transform.id)))
+    logging.debug(f"tuner.id={tuner.id}")
+    logging.debug(f"trainer.id={trainer.id}")
+    self.assertTrue(fileio.exists(os.path.join(PIPELINE_ROOT, tuner.id)))
+    self.assertTrue(
+      fileio.exists(os.path.join(PIPELINE_ROOT, trainer.id)))
 
     #https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/types/standard_artifacts.py#L487
     #TransformCache
     #TransformGraph
-    transform_graph_list = store.get_artifacts_by_type("TransformGraph")
-    logging.debug(f"transform_graph_list={transform_graph_list}")
-    latest_transform_graph_artifact = sorted(transform_graph_list, \
-      key=lambda x: x.create_time_since_epoch, reverse=True)[0]
+    tuner_list = store.get_artifacts_by_type("TunerResults")
+    logging.debug(f"tuner_list={tuner_list}")
+    self.assertEqual(len(tuner_list), 1)
+    latest_tuner_artifact = tuner_list[0]
     #or use last_update_time_since_epoch
-    transform_graph_uri = latest_transform_graph_artifact.uri
-    logging.debug(f"transform_graph_uri={transform_graph_uri}")
+    tuner_uri = latest_tuner_artifact.uri
+    logging.debug(f"tuner_uri={tuner_uri}")
+    file_paths = [os.path.join(tuner_uri, name) for name in os.listdir(tuner_uri)]
+    self.assertEqual(len(file_paths), 1)
+    for file_path in file_paths:
+      tuner_results = json.loads(open(file_path, 'r').read())
+      logging.debug(f"tuner_results={tuner_results}")
+    
+    hyperparameter_list = store.get_artifacts_by_type("HyperParameters")
+    logging.debug(f"hyperparameter_list={hyperparameter_list}")
+    latest_hyperparameter_artifact = sorted(hyperparameter_list, \
+                                            key=lambda
+                                              x: x.create_time_since_epoch,
+                                            reverse=True)[0]
+    # or use last_update_time_since_epoch
+    hyperparameter_uri = latest_hyperparameter_artifact.uri
+    logging.debug(f"hyperparameter_uri={hyperparameter_uri}")
+    self.assertTrue(fileio.exists(hyperparameter_uri))
+    file_paths = [os.path.join(hyperparameter_uri, name) for name in os.listdir(hyperparameter_uri)]
+    self.assertEqual(len(file_paths), 1)
+    for file_path in file_paths:
+      hparams = json.loads(open(file_path, 'r').read())
+      logging.debug(f"best_hyperparameters.txt keys()={hparams.keys()}")
+    
+    model_run_list = store.get_artifacts_by_type("ModelRun")
+    model_run_artifact = model_run_list[0]
+    model_run_uri = model_run_artifact.uri
+    logging.debug(f"model_run_uri={model_run_uri}")
+    
+    model_list = store.get_artifacts_by_type("Model")
+    model_artifact = model_list[0]
+    model_uri = os.path.join(model_artifact.uri, "Format-Serving")
+    print(f"test: model_uri={model_uri}")
+    loaded_saved_model = tf.saved_model.load(model_uri)
+    print(
+      f'test: loaded SavedModel signatures: {loaded_saved_model.signatures}')
+    infer = loaded_saved_model.signatures["serving_default"]
+    print(f'test: infer.structured_outputs={infer.structured_outputs}')
+    
+    # --- get the transformed test dataset to check that can run the model with expected input structure
+    examples_list = store.get_artifacts_by_type("Examples")
+    #print(f"examples_list={examples_list}")
+    latest_examples_artifact = sorted(examples_list,
+      key=lambda x: x.create_time_since_epoch, reverse=True)[0]
+    # or use last_update_time_since_epoch
+    transfomed_examples_uri = latest_examples_artifact.uri
+    print(f"transfomed_examples_uri={transfomed_examples_uri}")
+    
+    latest_schema_artifact = sorted(store.get_artifacts_by_type("Schema"),
+      key=lambda x: x.create_time_since_epoch, reverse=True)[0]
+    # or use last_update_time_since_epoch
+    schema_uri = latest_schema_artifact.uri
+    print(f"schema_uri={schema_uri}")
+    schema_file_path = [os.path.join(schema_uri, name) for name in os.listdir(schema_uri)][0]
+    
+    schema = tfx.utils.parse_pbtxt_file(schema_file_path, schema_pb2.Schema())
+    feature_spec = schema_utils.schema_as_feature_spec(schema).feature_spec
+    
+    dataset_uri = os.path.join(transfomed_examples_uri, "Split-test")
+    file_paths = [os.path.join(dataset_uri, name) for name in os.listdir(dataset_uri)]
+    test_ds = tf.data.TFRecordDataset(file_paths, compression_type="GZIP")
+    
+    def parse_tf_example(example_proto, feature_spec):
+      return tf.io.parse_single_example(example_proto, feature_spec)
+    
+    test_ds = test_ds.map(lambda x: parse_tf_example(x, feature_spec))
+    
+    #might need to remove 'rating' column
+    x = test_ds.map(test_ds)
+    
+    #predicted = infer(x)
+    #print(f'predicted = {predicted}')
+    
+    """
+      loaded_saved_model = tf.saved_model.load(fn_args.serving_model_dir)
+      infer = loaded_saved_model.signatures["serving_default"]
+      
+      fingerprint = tf.saved_model.experimental.read_fingerprint(saved_model_path)
 
-    #/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/
-    #   MovieLensExampleGen/output_examples/1/
-    #   Split-<train, eval, or test>/data_tfrecord-0000?-of-00004.tfrecord
 
-    #component outputs contains: https://www.tensorflow.org/tfx/api_docs/python/tfx/v1/components/Transform#example
-    #transform_graph: Channel of type standard_artifacts.TransformGraph,
-    #   includes an exported Tensorflow graph suitable for both training and serving.
-    #transformed_examples: Channel of type standard_artifacts.Examples
-    #   for materialized transformed examples, which includes transform splits as specified in splits_config
-
-    executions = store.get_executions_by_type(type_name="Transform")
-    for execution in executions:
-      events = store.get_events_by_execution_ids([execution.id])
-      for event in events:
-        if event.type == metadata_store_pb2.Event.OUTPUT:
-          artifact = store.get_artifacts_by_id([event.artifact_id])[0]
-          if artifact.type_id == store.get_artifact_type('Examples').id:
-            logging.debug(f"artifact={artifact}\nuri={artifact.uri}")
-
+      
+      
+      query_model = model.query_model
+      candidate_model = model.candidate_model
+      loaded_saved_model = tf.saved_model.load(fn_args.serving_model_dir)
+    """
+    #for ways to load data for checking the model:
+    # https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/docs/tutorials/transform/census.ipynb#L1496
+    
     #TODO: for examining the SavedModel, see
     # https://github.com/tensorflow/docs/blob/master/site/en/r1/guide/saved_model.md#cli-to-inspect-and-execute-savedmodel
     

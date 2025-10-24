@@ -1,5 +1,6 @@
 # from
-
+import base64
+import pickle
 # some code is adapted from https://github.com/tensorflow/tfx/blob/master/tfx/examples/penguin/penguin_utils_base.py
 # and related files
 # they have co Copyright 2020 Google LLC. All Rights Reserved.
@@ -31,10 +32,12 @@ EVAL_BATCH_SIZE = 2
 LOSS_FN = keras.losses.MeanSquaredError() #name=mean_squared_error
 METRIC_FN = keras.metrics.RootMeanSquaredError()
 
+MAX_TUNE_TRIALS = 2
+
 FEATURE_KEYS = [
   'user_id', 'movie_id', 'rating', 'gender', 'age', 'occupation', 'genres', 'hr', 'weekday', 'hr_wk', 'month'
 ]
-_LABEL_KEY = 'rating'
+LABEL_KEY = 'rating'
 N_GENRES = 18
 N_AGE_GROUPS = 7
 
@@ -45,627 +48,8 @@ class Device(enum.Enum):
 
 package = "ttdnn"
 
-#NOTE: tfx expected the models to subclass tf.keras.Model, not keras.Model
-
-@keras.utils.register_keras_serializable(package=package)
-class UserModel(keras.Model):
-  # for init from a load, arguments are present for the compositional instance members too
-  def __init__(self, max_user_id: int, n_age_groups:int, embed_out_dim: int = 32,
-               feature_acronym: str = "",
-               **kwargs):
-    """
-    a user feature model to create an initial vector of features for the QueryModel.
-    NOTE: the user_ids are expected to be already unique and represented by range [1, n_users] and dtype np.int32.
-    No integerlookup to rewrite to smaller number of ids is used here because the ratings and user data
-    are densely populated for user.
-    
-    Args:
-        n_users: the total number of users
-        
-        feature_acronym: a string of alphabetized single letters for each of the following to be in the embedding:
-            a for age
-            h for hr_wk cross
-            m for month
-            o for occupation
-            s for gender
-    """
-    super(UserModel, self).__init__(**kwargs)
-    self.embed_out_dim = embed_out_dim
-    self.max_user_id = max_user_id
-    self.feature_acronym = feature_acronym
-    self.n_age_groups = n_age_groups
-    
-    self.user_embedding = keras.Sequential([
-      keras.layers.Embedding(self.max_user_id + 1, embed_out_dim),
-      keras.layers.Flatten(data_format='channels_last'),
-      ], name="user_emb")
-    
-    # numerical, dist between items matters
-    self.age_embedding = None
-    if self.feature_acronym.find("a") > -1:
-      self.age_embedding = keras.Sequential([
-        keras.layers.Embedding(self.n_age_groups + 1, embed_out_dim),
-        keras.layers.Flatten(data_format='channels_last'),
-      ], name="age_emb")
-    
-    # numerical
-    self.hr_wk_embedding = None
-    if self.feature_acronym.find("h") > -1:
-      self.hr_wk_embedding = keras.Sequential([
-        keras.layers.Embedding(24*7 + 1, embed_out_dim),
-        keras.layers.Flatten(data_format='channels_last'),
-      ], name="hr_wk_emb")
-      
-    self.month_embedding = None
-    if self.feature_acronym.find("m") > -1:
-      self.month_embedding = keras.Sequential([
-        keras.layers.Embedding(12 + 1, embed_out_dim),
-        keras.layers.Flatten(data_format='channels_last'),
-      ], name="month_emb")
-      
-    # categorical, nominal, order doesn't matter
-    self.occupation_embedding = None
-    if self.feature_acronym.find("o") > -1:
-      self.occupation_embedding = keras.layers.CategoryEncoding(
-        # num_tokens=21, \
-        num_tokens=embed_out_dim,
-        output_mode="one_hot", name="occupation_emb")
-    
-    # categorical
-    self.gender_embedding = None
-    if self.feature_acronym.find("s") > -1:
-      self.gender_embedding = keras.layers.CategoryEncoding(
-        # num_tokens=2,
-        num_tokens=embed_out_dim,
-        output_mode="one_hot", name="gender_emb")
-  
-  def build(self, input_shape):
-    #print(f'build {self.name} input_shape={input_shape}\n')
-    self.user_embedding.build(input_shape['user_id'])
-    if self.age_embedding:
-      self.age_embedding.build(input_shape['age'])
-    if self.hr_wk_embedding:
-      self.hr_wk_embedding.build(input_shape['hr_wk'])
-    if self.month_embedding:
-      self.month_embedding.build(input_shape['month'])
-    if self.occupation_embedding:
-      self.occupation_embedding.build(input_shape['occupation'])
-    if self.gender_embedding:
-      self.gender_embedding.build(input_shape['gender'])
-    # print(f'build {self.name} User {self.embed_out_dim} =>{self.user_embedding.compute_output_shape(input_shape['user_id'])}\n')
-    self.built = True
-  
-  def compute_output_shape(self, input_shape):
-    # print(f'compute_output_shape {self.name} input_shape={input_shape}\n')
-    # This is invoked after build by QueryModel.
-    # return (None, self.embed_out_dim)
-    _shape = self.user_embedding.compute_output_shape(input_shape['user_id'])
-    total_length = _shape[-1]
-    if self.age_embedding:
-      _shape = self.age_embedding.compute_output_shape(input_shape['age'])
-      total_length += _shape[-1]
-    if self.hr_wk_embedding:
-      _shape = self.hr_wk_embedding.compute_output_shape(input_shape['hr_wk'])
-      total_length += _shape[-1]
-    if self.month_embedding:
-      _shape = self.month_embedding.compute_output_shape(input_shape['month'])
-      total_length += _shape[-1]
-    if self.occupation_embedding:
-      _shape = self.occupation_embedding.compute_output_shape(input_shape['occupation'])
-      total_length += _shape[-1]
-    if self.gender_embedding:
-      _shape = self.gender_embedding.compute_output_shape(input_shape['gender'])
-      total_length += _shape[-1]
-    return None, total_length
-    # return (input_shape['movie_id'][0], total_length)
-    # return self.user_embedding.compute_output_shape(input_shape['movie_id'])
-  
-  def call(self, inputs, **kwargs):
-    # Take the input dictionary, pass it through each input layer,
-    # and concatenate the result.
-    # arrays are: 'user_id',  'gender', 'age_group', 'occupation','movie_id', 'rating'
-    #print(f'call {self.name} type={type(inputs)}\n')
-    #tf.print(inputs)
-    results = []
-    results.append(self.user_embedding(inputs['user_id']))
-    if self.age_embedding:
-      results.append(self.age_embedding(inputs['age']))
-    if self.hr_wk_embedding:
-      results.append(self.hr_wk_embedding(inputs['hr_wk']))
-    if self.month_embedding:
-      results.append(self.month_embedding(inputs['month']))
-    if self.occupation_embedding:
-      results.append(self.occupation_embedding(inputs['occupation']))
-    if self.gender_embedding:
-      results.append(self.gender_embedding(inputs['gender']))
-    res = keras.layers.Concatenate()(results)
-    logging.debug(f'call {self.name} SHAPE ={res.shape}')
-    return res
-  
-  def get_config(self):
-    config = super(UserModel, self).get_config()
-    config.update({"max_user_id": self.max_user_id,
-                   'n_age_groups': self.n_age_groups,
-                   "embed_out_dim": self.embed_out_dim,
-                   "feature_acronym": self.feature_acronym,
-                   })
-    return config
-
-@keras.utils.register_keras_serializable(package=package)
-class MovieModel(keras.Model):
-  """
-  NOTE: the movie_ids are expected to be already unique and represented by range [1, n_movies] and dtype np.int32.
-    No integerlookup to rewrite to smaller number of ids is used here because ratings.dat uses 96% of the
-    movies.dat ids.
-  """
-  
-  # for init from a load, arguments are present for the compositional instance members too
-  def __init__(self, n_movies: int, n_genres: int,
-               embed_out_dim: int = 32, incl_genres: bool = True,
-               **kwargs):
-    super(MovieModel, self).__init__(**kwargs)
-    
-    self.embed_out_dim = embed_out_dim
-    self.n_movies = n_movies
-    self.n_genres = n_genres
-    self.incl_genres = incl_genres
-    # out_dim = int(np.sqrt(in_dim)) ~ 64
-    
-    self.movie_embedding = keras.Sequential([
-      keras.layers.Embedding(self.n_movies + 1, self.embed_out_dim),
-      keras.layers.Flatten(data_format='channels_last'),
-      ], name="movie_emb")
-    
-    if self.incl_genres:
-      #expand toembed_out_dim for concatenation
-      self.genres_embedding = keras.Sequential([
-        keras.layers.Dense( self.embed_out_dim),
-        keras.layers.Flatten(data_format='channels_last'),
-      ], name="genres_emb")
-  
-  def build(self, input_shape):
-    # print(f'build {self.name} Movie input_shape={input_shape}\n')
-    self.movie_embedding.build(input_shape['movie_id'])
-    if self.incl_genres:
-      self.genres_embedding.build(input_shape['genres'])
-    self.built = True
-  
-  def compute_output_shape(self, input_shape):
-    # print(f'compute_output_shape {self.name} input_shape={input_shape}\n')
-    # This is invoked after build by CandidateModel
-    _shape = self.movie_embedding.compute_output_shape(input_shape['movie_id'])
-    total_length = _shape[-1]
-    if self.incl_genres:
-      _shape = self.genres_embedding.compute_output_shape(input_shape['genres'])
-      total_length += _shape[-1]
-    return None, total_length
-    
-  def call(self, inputs, **kwargs):
-    # Take the input dictionary, pass it through each input layer,
-    # and concatenate the result.
-    # print(f'call {self.name} type={type(inputs)}, kwargs={kwargs}\n')
-    # print(f'    spec={inputs.element_spec}\n')
-    results = [self.movie_embedding(inputs['movie_id'])]
-    # shape is (batch_size, x, out_dim)
-    if self.incl_genres:
-      results.append(self.genres_embedding(inputs['genres']))
-    res = keras.layers.Concatenate(axis=1)(results)
-    #logging.debug(f'call {self.name} SHAPE ={res.shape}')
-    return res
-  
-  def get_config(self):
-    # updating super config stomps over existing key names, so if need separate values one would need
-    # to use some form of package and class name in keys or uniquely name the keys to avoid collision
-    config = super(MovieModel, self).get_config()
-    config.update({"n_movies": self.n_movies, "n_genres": self.n_genres,
-                   "embed_out_dim": self.embed_out_dim,
-                   'incl_genres': self.incl_genres
-                   })
-    return config
-
-
-# TODO: add hyper-parameter "temperature" after L2Norm
-@keras.utils.register_keras_serializable(package=package)
-class QueryModel(keras.Model):
-  """Model for encoding user queries."""
-  
-  # for init from a load, arguments are present for the compositional instance members too
-  def __init__(self, n_users: int, n_age_groups:int, layer_sizes: list,
-               embed_out_dim: int = 32,
-               reg: keras.regularizers.Regularizer = None,
-               drop_rate: float = 0., feature_acronym: str = "",
-               **kwargs):
-    """Model for encoding user queries.
-
-            Args:
-      layer_sizes:
-        A list of integers where the i-th entry represents the number of units
-        the i-th layer contains.
-    """
-    super(QueryModel, self).__init__(**kwargs)
-    
-    self.embedding_model = UserModel(max_user_id=n_users, n_age_groups=n_age_groups,
-                                     embed_out_dim=embed_out_dim,
-                                     feature_acronym=feature_acronym)
-    if isinstance(layer_sizes, str):
-      layer_sizes = json.loads(layer_sizes)
-      
-    self.dense_layers = keras.Sequential(name="dense_query")
-    # Use the ReLU activation for all but the last layer.
-    for layer_size in layer_sizes[:-1]:
-      self.dense_layers.add(
-        keras.layers.Dense(layer_size, activation="elu",
-                           kernel_regularizer=reg,
-                           kernel_initializer="glorot_normal"))
-      # self.dense_layers.add(keras.layers.BatchNormalization())
-      self.dense_layers.add(keras.layers.LayerNormalization())
-      self.dense_layers.add(keras.layers.Dropout(drop_rate))
-    
-    for layer_size in layer_sizes[-1:]:
-      self.dense_layers.add(keras.layers.Dense(layer_size,
-                                               kernel_initializer="glorot_normal"))
-    
-    self.dense_layers.add(keras.layers.UnitNormalization(axis=-1))
-    
-    self.reg = reg
-    
-    self.n_users = n_users
-    self.n_age_groups = n_age_groups
-    self.feature_acronym = feature_acronym
-    self.embed_out_dim = embed_out_dim
-    self.layer_sizes = layer_sizes
-    self.drop_rate = drop_rate
-  
-  def build(self, input_shape):
-    # print(f'build {self.name} input_shape={input_shape}\n')
-    self.embedding_model.build(input_shape)
-    input_shape_2 = self.embedding_model.compute_output_shape(input_shape)
-    self.dense_layers.build(input_shape_2)
-    self.built = True
-  
-  def compute_output_shape(self, input_shape):
-    # print(f'compute_output_shape {self.name} input_shape={input_shape}, {input_shape['user_id'][0]}, {self.layer_sizes[-1:]}\n')
-    # This is invoked after build by TwoTower
-    # return self.output_shapes[0]
-    input_shape_3 = self.dense_layers.build(self.embedding_model.compute_output_shape(input_shape))
-    return input_shape_3
-    #return None, self.layer_sizes[-1]
-    # return (input_shape['user_id'][0], self.layer_sizes[-1])
-  
-  def call(self, inputs, **kwargs):
-    # inputs should contain columns: 
-    # print(f'call {self.name} type={type(inputs)}\n')
-    feature_embedding = self.embedding_model(inputs, **kwargs)
-    res = self.dense_layers(feature_embedding)
-    return res
-  
-  def get_config(self):
-    config = super(QueryModel, self).get_config()
-    config.update({"n_users": self.n_users,
-                   'n_age_groups' : self.n_age_groups,
-                   "embed_out_dim": self.embed_out_dim,
-                   "drop_rate": self.drop_rate,
-                   "layer_sizes": self.layer_sizes,
-                   "feature_acronym": self.feature_acronym,
-                   "reg": keras.saving.serialize_keras_object(self.reg),
-                   })
-    return config
-  
-  @classmethod
-  def from_config(cls, config):
-    for key in ["reg"]:
-      config[key] = keras.utils.deserialize_keras_object(config[key])
-    return cls(**config)
-
-
-# TODO: add hyper-parameter "temperature" after L2Norm
-@keras.utils.register_keras_serializable(package=package)
-class CandidateModel(keras.Model):
-  """Model for encoding candidate features."""
-  
-  # for init from a load, arguments are present for the compositional instance members too
-  def __init__(self, n_movies: int, n_genres: int, layer_sizes,
-               embed_out_dim: int = 32,
-               reg: keras.regularizers.Regularizer = None,
-               drop_rate: float = 0., incl_genres: bool = True,
-               **kwargs):
-    """Model for encoding candidate features.
-
-    Args:
-      layer_sizes:
-        A list of integers where the i-th entry represents the number of units
-        the i-th layer contains.
-    """
-    super(CandidateModel, self).__init__(**kwargs)
-    
-    self.embedding_model = MovieModel(n_movies=n_movies,
-                                      n_genres=n_genres,
-                                      embed_out_dim=embed_out_dim,
-                                      incl_genres=incl_genres)
-    
-    self.dense_layers = keras.Sequential(name="dense_candidate")
-    if isinstance(layer_sizes, str):
-      layer_sizes = json.loads(layer_sizes)
-    # Use the ReLU activation for all but the last layer.
-    for layer_size in layer_sizes[:-1]:
-      self.dense_layers.add(
-        keras.layers.Dense(layer_size, activation="elu",
-                           kernel_regularizer=reg,
-                           kernel_initializer="glorot_normal"))
-      # self.dense_layers.add(keras.layers.BatchNormalization())
-      self.dense_layers.add(keras.layers.LayerNormalization())
-      self.dense_layers.add(keras.layers.Dropout(drop_rate))
-    
-    for layer_size in layer_sizes[-1:]:
-      self.dense_layers.add(keras.layers.Dense(layer_size,
-                                               kernel_initializer="glorot_normal"))
-    
-    self.dense_layers.add(keras.layers.UnitNormalization(axis=-1))
-    
-    self.reg = reg
-    
-    self.n_movies = n_movies
-    self.n_genres = n_genres
-    self.incl_genres = incl_genres
-    self.embed_out_dim = embed_out_dim
-    self.drop_rate = drop_rate
-    self.layer_sizes = layer_sizes
-  
-  def build(self, input_shape):
-    # print(f'build {self.name} input_shape={input_shape}\n')
-    self.embedding_model.build(input_shape)
-    input_shape_2 = self.embedding_model.compute_output_shape(input_shape)
-    self.dense_layers.build(input_shape_2)
-    self.built = True
-  
-  def compute_output_shape(self, input_shape):
-    # print(f'compute_output_shape {self.name} input_shape={input_shape}\n')
-    # This is invoked after build by TwoTower
-    input_shape_3 = self.dense_layers.build(self.embedding_model.compute_output_shape(input_shape))
-    return input_shape_3
-    #return None, self.layer_sizes[-1]
-  
-  def call(self, inputs, **kwargs):
-    # inputs should contain columns "movie_id", "genres"
-    #logging.debug(f'call {self.name} type ={type(inputs)}\ntype ={inputs}\n')
-    feature_embedding = self.embedding_model(inputs, **kwargs)
-    res = self.dense_layers(feature_embedding)
-    # returns an np.ndarray wrapped in a tensor if inputs is tensor, else not wrapped
-    #logging.debug(f'CALL {self.name} SHAPE ={res.shape}\n')
-    return res
-  
-  def get_config(self):
-    config = super(CandidateModel, self).get_config()
-    config.update({"n_movies": self.n_movies, "n_genres": self.n_genres,
-                   "embed_out_dim": self.embed_out_dim,
-                   "drop_rate": self.drop_rate,
-                   "layer_sizes": self.layer_sizes,
-                   "reg": keras.utils.serialize_keras_object(self.reg),
-                   "incl_genres": self.incl_genres
-                   })
-    return config
-  
-  @classmethod
-  def from_config(cls, config):
-    for key in ["reg"]:
-      config[key] = keras.utils.deserialize_keras_object(config[key])
-    return cls(**config)
-
-
-@keras.utils.register_keras_serializable(package=package)
-class TwoTowerDNN(keras.Model):
-  """
-  a Two-Tower DNN model that accepts input containing: user, context, and item information along with 
-  a label for training.
-  
-  a sigmoid is used to provide logistic regression predictions of the rating.
-
-  when use_bias_corr is true, the Yi et al. paper is followed to calculate the item sampling probability
-  within a mini-batch which is then used to correct probabities and the batch loss sum.
-
-  the number of layers is controlled by a list of their sizes in layer_sizes.
-  """
-  
-  # for init from a load, arguments are present for the compositional instance members too
-  def __init__(self, n_users: int, n_movies: int, n_age_groups:int, n_genres: int,
-               layer_sizes: list, embed_out_dim: int,
-               reg: keras.regularizers.Regularizer = None,
-               drop_rate: float = 0, feature_acronym: str = "",
-               use_bias_corr: bool = False,
-               incl_genres: bool = True, **kwargs):
-    super(TwoTowerDNN, self).__init__(**kwargs)
-    
-    if isinstance(layer_sizes, str):
-      layer_sizes = json.loads(layer_sizes)
-      
-    self.query_model = QueryModel(n_users=n_users, n_age_groups = n_age_groups,
-                                  layer_sizes=layer_sizes,
-                                  embed_out_dim=embed_out_dim, reg=reg,
-                                  drop_rate=drop_rate,
-                                  feature_acronym=feature_acronym,
-                                  **kwargs)
-    
-    self.candidate_model = CandidateModel(n_movies=n_movies,
-                                          n_genres=n_genres,
-                                          layer_sizes=layer_sizes,
-                                          embed_out_dim=embed_out_dim,
-                                          reg=reg, drop_rate=drop_rate,
-                                          incl_genres=incl_genres,
-                                          **kwargs)
-    
-    # elementwise multiplication:
-    self.dot_layer = keras.layers.Dot(axes=1)
-    self.sigmoid_layer = keras.layers.Activation(keras.activations.sigmoid)
-    
-    self.reg = reg
-    
-    self.n_users = n_users
-    self.n_age_groups = n_age_groups
-    self.n_movies = n_movies
-    self.n_genres = n_genres
-    self.incl_genres = incl_genres
-    self.layer_sizes = layer_sizes
-    self.use_bias_corr = use_bias_corr
-    self.feature_acronym = feature_acronym
-    self.embed_out_dim = embed_out_dim
-    self.drop_rate = drop_rate
-    
-    if self.use_bias_corr:
-      self.item_prob_layer = keras.layers.Lambda(
-        lambda x: tf.keras.ops.log(tf.keras.ops.clip(1. / x, 1e-6, 1.0)))
-      self.softmax_layer = keras.layers.Softmax()
-      self.log_layer = keras.layers.Lambda(lambda x: tf.keras.ops.log(x))
-      self.mult_layer = keras.layers.Multiply()
-      # self.final_loss_bc_layer = keras.losses.Loss(name=None, reduction="mean", dtype=None)
-      self.final_loss_bc_layer = keras.layers.Lambda(
-        lambda x: tf.reduce_mean(x, axis=0))
-  
-  def call(self, inputs, training=False, **kwargs):
-    """['user_id', 'gender', 'age_group', 'occupation','movie_id', 'rating']"""
-    logging.debug(f'call {self.name} inputs={inputs}\n')
-    user_vector = self.query_model(inputs, **kwargs)
-    movie_vector = self.candidate_model(inputs, **kwargs)
-    s = self.dot_layer([user_vector, movie_vector])
-    s = self.sigmoid_layer(s)
-    return s
-  
-  def build(self, input_shape):
-    # print(f'build {self.name} input_shape={input_shape}\n')
-    #logging.debug(f'build {self.name} input_shape={input_shape}\n')
-    self.query_model.build(input_shape)
-    self.candidate_model.build(input_shape)
-    self.built = True
-  
-  def compute_output_shape(self, input_shape):
-    # (batch_size,)  a scalar for each row in batch
-    # return input_shape['user_id']
-    s0 = self.query_model.compute_output_shape(input_shape)
-    s1 = self.candidate_model.compute_output_shape(input_shape)
-    s2 = self.dot_layer.compute_output_shape([s0, s1])
-    s3 = self.sigmoid_layer.compute_output_shape(s2)
-    return s3
-    #return (None,)
-  
-  @keras.utils.register_keras_serializable(package=package,
-                                            name="calc_item_probability_inverse")
-  # in non-eager mode, keras attempts to draw a graph if annotated w/ tf.function
-  #@tf.function()
-  def calc_item_probability_inverse(self, x):
-    """
-    given the batch x['movie_id'] tensor, this method returns an item probability vector.
-
-    Args:
-        x: the batch tensor of array for 'movie_id'
-    Returns:
-        tensor array of 'B' for the given batch movie_ids following Yi et al. paper.
-    """
-    # tf.keras.backend.eval is deprecated, but can be replaced with
-    # @tf.function
-    # def evaluate_tensor(tensor):
-    #     return tensor
-    # result = evaluate_tensor(tensor)
-    alpha = self.optimizer.learning_rate
-    if tf.equal(tf.shape(x)[-1], 0):
-      _batch_size = 1
-    else:
-      _batch_size = tf.shape(x)[0]
-    A = tf.lookup.experimental.MutableHashTable(key_dtype=tf.int64,
-                                                value_dtype=tf.float32,
-                                                default_value=0.)
-    B = tf.lookup.experimental.MutableHashTable(key_dtype=tf.int64,
-                                                value_dtype=tf.float32,
-                                                default_value=0.)
-    for i, movie_id in enumerate(x):
-      t = tf.constant(i + 1, dtype=tf.float32, shape=(1,))
-      b = B.lookup(movie_id, dynamic_default_values=0.)
-      a = A.lookup(movie_id, dynamic_default_values=0.)
-      _ = tf.multiply(tf.subtract(tf.constant(1.), alpha), b)
-      __ = tf.multiply(a, tf.subtract(t, a))
-      c = tf.add(_, __)
-      B.insert(keys=movie_id, values=c)
-      A.insert(keys=movie_id, values=t)
-      if i == _batch_size - 1: break
-    BB = B.export()[1]
-    return BB
-  
-  def train_step(self, batch, **kwargs):
-    x, y = batch
-    with tf.GradientTape() as tape:
-      if not self.use_bias_corr:
-        y_pred = self.call(x, training=True)  # Forward pass
-        loss = self.compute_loss(y=y, y_pred=y_pred)
-      else:
-        # following Yi et al, and a small portion of what's handled in tfrecommenders Retrieval layer
-        # https://www.tensorflow.org/recommenders/examples/basic_retrieval
-        
-        # TODO: assert self.optimizer is SGD so that the loss is compat w/ gradient
-        
-        BB = self.calc_item_probability_inverse(x['movie_id'])
-        log_p = self.item_prob_layer(BB)
-        
-        user_vector = self.query_model(x, **kwargs)
-        movie_vector = self.candidate_model(x, **kwargs)
-        score = self.dot_layer([user_vector, movie_vector])
-        score_c = score - log_p
-        p_batch = self.softmax_layer(score_c)
-        y_pred = p_batch
-        
-        log_p_batch = self.log_layer(p_batch)
-        loss_batch = self.mult_layer([y, -log_p_batch])
-        loss = self.final_loss_bc_layer(loss_batch)
-    
-    trainable_vars = self.trainable_variables
-    gradients = tape.gradient(loss, trainable_vars)
-    # Update weights
-    self.optimizer.apply_gradients(zip(gradients, trainable_vars))
-    
-    # Update metrics
-    for metric in self.metrics:
-      if metric.name == "loss":
-        metric.update_state(loss)
-      else:
-        metric.update_state(y, y_pred)
-    
-    # Return a dict mapping metric names to current value.
-    return {m.name: m.result() for m in self.metrics}
-  
-  def test_step(self, data):
-    x, y = data
-    y_pred = self(x, training=False)
-    loss = self.compute_loss(y=y, y_pred=y_pred)
-    for metric in self.metrics:
-      if metric.name == "loss":
-        metric.update_state(loss)
-      else:
-        metric.update_state(y, y_pred)
-    # Return a dict mapping metric names to current value.
-    # Note that it will include the loss (tracked in self.metrics).
-    return {m.name: m.result() for m in self.metrics}
-  
-  def get_config(self):
-    config = super(TwoTowerDNN, self).get_config()
-    config.update({"n_users": self.n_users, "n_movies": self.n_movies,
-                   "n_age_groups" : self.n_age_groups,
-                   "n_genres": self.n_genres,
-                   "embed_out_dim": self.embed_out_dim,
-                   "drop_rate": self.drop_rate,
-                   "layer_sizes": self.layer_sizes,
-                   "use_bias_corr": self.use_bias_corr,
-                   "feature_acronym": self.feature_acronym,
-                   "reg": keras.utils.serialize_keras_object(self.reg),
-                   "incl_genres": self.incl_genres
-                   })
-    return config
-  
-  @classmethod
-  def from_config(cls, config):
-    for key in ["reg"]:
-      config[key] = keras.utils.deserialize_keras_object(config[key])
-    return cls(**config)
-
-
 # https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/examples/penguin/penguin_utils_base.py#L98
-def _input_fn(file_pattern: List[str],
+def input_fn(file_pattern: List[str],
               data_accessor: tfx.components.DataAccessor,
               tf_transform_output: tft.TFTransformOutput,
               batch_size: int) -> tf.data.Dataset:
@@ -684,22 +68,675 @@ def _input_fn(file_pattern: List[str],
   """
   return data_accessor.tf_dataset_factory(
     file_pattern,
-    tfxio.TensorFlowDatasetOptions(
-      batch_size=batch_size, label_key=_LABEL_KEY),
+    tfxio.TensorFlowDatasetOptions(batch_size=batch_size, label_key=LABEL_KEY),
     tf_transform_output.transformed_metadata.schema).repeat().prefetch(
     tf.data.AUTOTUNE)
 
-
 def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   # TODO: consider change to read from the transformed schema
-  input_shapes = {}
-  # input_shapes[element] = (batch_size,)
-  for element in FEATURE_KEYS:
-    if element == "genres":
-      input_shapes[element] = (None, 1, N_GENRES)
-    else:
-      input_shapes[element] = (None,1)
+  
+  input_dataset_element_spec_ser = hp.get("input_dataset_element_spec_ser")
+  input_dataset_element_spec = pickle.loads(base64.b64decode(input_dataset_element_spec_ser.encode('utf-8')))
+  #print(f'input_dataset_element_spec={input_dataset_element_spec}')
+  # NOTE: tfx expected the models to subclass tf.keras.Model, not keras.Model
+  
+  @keras.utils.register_keras_serializable(package=package)
+  class UserModel(keras.Model):
+    # for init from a load, arguments are present for the compositional instance members too
+    def __init__(self, max_user_id: int, n_age_groups: int,
+                 embed_out_dim: int = 32,
+                 feature_acronym: str = "",
+                 **kwargs):
+      """
+      a user feature model to create an initial vector of features for the QueryModel.
+      NOTE: the user_ids are expected to be already unique and represented by range [1, n_users] and dtype np.int32.
+      No integerlookup to rewrite to smaller number of ids is used here because the ratings and user data
+      are densely populated for user.
+
+      Args:
+          n_users: the total number of users
+
+          feature_acronym: a string of alphabetized single letters for each of the following to be in the embedding:
+              a for age
+              h for hr_wk cross
+              m for month
+              o for occupation
+              s for gender
+      """
+      super(UserModel, self).__init__(**kwargs)
+      self.embed_out_dim = embed_out_dim
+      self.max_user_id = max_user_id
+      self.feature_acronym = feature_acronym
+      self.n_age_groups = n_age_groups
+      
+      self.user_embedding = keras.Sequential([
+        keras.layers.Embedding(self.max_user_id + 1, embed_out_dim),
+        keras.layers.Flatten(data_format='channels_last'),
+      ], name="user_emb")
+      
+      # numerical, dist between items matters
+      self.age_embedding = None
+      if self.feature_acronym.find("a") > -1:
+        self.age_embedding = keras.Sequential([
+          keras.layers.Embedding(self.n_age_groups + 1, embed_out_dim),
+          keras.layers.Flatten(data_format='channels_last'),
+        ], name="age_emb")
+      
+      # numerical
+      self.hr_wk_embedding = None
+      if self.feature_acronym.find("h") > -1:
+        self.hr_wk_embedding = keras.Sequential([
+          keras.layers.Embedding(24 * 7 + 1, embed_out_dim),
+          keras.layers.Flatten(data_format='channels_last'),
+        ], name="hr_wk_emb")
+      
+      self.month_embedding = None
+      if self.feature_acronym.find("m") > -1:
+        self.month_embedding = keras.Sequential([
+          keras.layers.Embedding(12 + 1, embed_out_dim),
+          keras.layers.Flatten(data_format='channels_last'),
+        ], name="month_emb")
+      
+      # categorical, nominal, order doesn't matter
+      self.occupation_embedding = None
+      if self.feature_acronym.find("o") > -1:
+        self.occupation_embedding = keras.layers.CategoryEncoding(
+          # num_tokens=21, \
+          num_tokens=embed_out_dim,
+          output_mode="one_hot", name="occupation_emb")
+      
+      # categorical
+      self.gender_embedding = None
+      if self.feature_acronym.find("s") > -1:
+        self.gender_embedding = keras.layers.CategoryEncoding(
+          # num_tokens=2,
+          num_tokens=embed_out_dim,
+          output_mode="one_hot", name="gender_emb")
     
+    def build(self, input_shape):
+      # print(f'build {self.name} input_shape={input_shape}\n')
+      self.user_embedding.build(input_shape['user_id'])
+      if self.age_embedding:
+        self.age_embedding.build(input_shape['age'])
+      if self.hr_wk_embedding:
+        self.hr_wk_embedding.build(input_shape['hr_wk'])
+      if self.month_embedding:
+        self.month_embedding.build(input_shape['month'])
+      if self.occupation_embedding:
+        self.occupation_embedding.build(input_shape['occupation'])
+      if self.gender_embedding:
+        self.gender_embedding.build(input_shape['gender'])
+      # print(f'build {self.name} User {self.embed_out_dim} =>{self.user_embedding.compute_output_shape(input_shape['user_id'])}\n')
+      self.built = True
+    
+    def compute_output_shape(self, input_shape):
+      # print(f'compute_output_shape {self.name} input_shape={input_shape}\n')
+      # This is invoked after build by QueryModel.
+      # return (None, self.embed_out_dim)
+      _shape = self.user_embedding.compute_output_shape(
+        input_shape['user_id'])
+      total_length = _shape[-1]
+      if self.age_embedding:
+        _shape = self.age_embedding.compute_output_shape(
+          input_shape['age'])
+        total_length += _shape[-1]
+      if self.hr_wk_embedding:
+        _shape = self.hr_wk_embedding.compute_output_shape(
+          input_shape['hr_wk'])
+        total_length += _shape[-1]
+      if self.month_embedding:
+        _shape = self.month_embedding.compute_output_shape(
+          input_shape['month'])
+        total_length += _shape[-1]
+      if self.occupation_embedding:
+        _shape = self.occupation_embedding.compute_output_shape(
+          input_shape['occupation'])
+        total_length += _shape[-1]
+      if self.gender_embedding:
+        _shape = self.gender_embedding.compute_output_shape(
+          input_shape['gender'])
+        total_length += _shape[-1]
+      return None, total_length
+      # return (input_shape['movie_id'][0], total_length)
+      # return self.user_embedding.compute_output_shape(input_shape['movie_id'])
+    
+    def call(self, inputs, **kwargs):
+      # Take the input dictionary, pass it through each input layer,
+      # and concatenate the result.
+      # arrays are: 'user_id',  'gender', 'age_group', 'occupation','movie_id', 'rating'
+      # print(f'call {self.name} type={type(inputs)}\n')
+      # tf.print(inputs)
+      results = []
+      results.append(self.user_embedding(inputs['user_id']))
+      if self.age_embedding:
+        results.append(self.age_embedding(inputs['age']))
+      if self.hr_wk_embedding:
+        results.append(self.hr_wk_embedding(inputs['hr_wk']))
+      if self.month_embedding:
+        results.append(self.month_embedding(inputs['month']))
+      if self.occupation_embedding:
+        results.append(self.occupation_embedding(inputs['occupation']))
+      if self.gender_embedding:
+        results.append(self.gender_embedding(inputs['gender']))
+      res = keras.layers.Concatenate()(results)
+      logging.debug(f'call {self.name} SHAPE ={res.shape}')
+      return res
+    
+    def get_config(self):
+      config = super(UserModel, self).get_config()
+      config.update({"max_user_id": self.max_user_id,
+                     'n_age_groups': self.n_age_groups,
+                     "embed_out_dim": self.embed_out_dim,
+                     "feature_acronym": self.feature_acronym,
+                     })
+      return config
+  
+  @keras.utils.register_keras_serializable(package=package)
+  class MovieModel(keras.Model):
+    """
+    NOTE: the movie_ids are expected to be already unique and represented by range [1, n_movies] and dtype np.int32.
+      No integerlookup to rewrite to smaller number of ids is used here because ratings.dat uses 96% of the
+      movies.dat ids.
+    """
+    
+    # for init from a load, arguments are present for the compositional instance members too
+    def __init__(self, n_movies: int, n_genres: int,
+                 embed_out_dim: int = 32, incl_genres: bool = True,
+                 **kwargs):
+      super(MovieModel, self).__init__(**kwargs)
+      
+      self.embed_out_dim = embed_out_dim
+      self.n_movies = n_movies
+      self.n_genres = n_genres
+      self.incl_genres = incl_genres
+      # out_dim = int(np.sqrt(in_dim)) ~ 64
+      
+      self.movie_embedding = keras.Sequential([
+        keras.layers.Embedding(self.n_movies + 1, self.embed_out_dim),
+        keras.layers.Flatten(data_format='channels_last'),
+      ], name="movie_emb")
+      
+      if self.incl_genres:
+        # expand toembed_out_dim for concatenation
+        self.genres_embedding = keras.Sequential([
+          keras.layers.Dense(self.embed_out_dim),
+          keras.layers.Flatten(data_format='channels_last'),
+        ], name="genres_emb")
+    
+    def build(self, input_shape):
+      # print(f'build {self.name} Movie input_shape={input_shape}\n')
+      self.movie_embedding.build(input_shape['movie_id'])
+      if self.incl_genres:
+        self.genres_embedding.build(input_shape['genres'])
+      self.built = True
+    
+    def compute_output_shape(self, input_shape):
+      # print(f'compute_output_shape {self.name} input_shape={input_shape}\n')
+      # This is invoked after build by CandidateModel
+      _shape = self.movie_embedding.compute_output_shape(
+        input_shape['movie_id'])
+      total_length = _shape[-1]
+      if self.incl_genres:
+        _shape = self.genres_embedding.compute_output_shape(
+          input_shape['genres'])
+        total_length += _shape[-1]
+      return None, total_length
+    
+    def call(self, inputs, **kwargs):
+      # Take the input dictionary, pass it through each input layer,
+      # and concatenate the result.
+      # print(f'call {self.name} type={type(inputs)}, kwargs={kwargs}\n')
+      # print(f'    spec={inputs.element_spec}\n')
+      results = [self.movie_embedding(inputs['movie_id'])]
+      # shape is (batch_size, x, out_dim)
+      if self.incl_genres:
+        results.append(self.genres_embedding(inputs['genres']))
+      res = keras.layers.Concatenate(axis=1)(results)
+      # logging.debug(f'call {self.name} SHAPE ={res.shape}')
+      return res
+    
+    def get_config(self):
+      # updating super config stomps over existing key names, so if need separate values one would need
+      # to use some form of package and class name in keys or uniquely name the keys to avoid collision
+      config = super(MovieModel, self).get_config()
+      config.update(
+        {"n_movies": self.n_movies, "n_genres": self.n_genres,
+         "embed_out_dim": self.embed_out_dim,
+         'incl_genres': self.incl_genres
+         })
+      return config
+  
+  # TODO: add hyper-parameter "temperature" after L2Norm
+  @keras.utils.register_keras_serializable(package=package)
+  class QueryModel(keras.Model):
+    """Model for encoding user queries."""
+    
+    # for init from a load, arguments are present for the compositional instance members too
+    def __init__(self, n_users: int, n_age_groups: int,
+                 layer_sizes: list,
+                 embed_out_dim: int = 32,
+                 reg: keras.regularizers.Regularizer = None,
+                 drop_rate: float = 0., feature_acronym: str = "",
+                 **kwargs):
+      """Model for encoding user queries.
+
+              Args:
+        layer_sizes:
+          A list of integers where the i-th entry represents the number of units
+          the i-th layer contains.
+      """
+      super(QueryModel, self).__init__(**kwargs)
+      
+      self.embedding_model = UserModel(max_user_id=n_users,
+                                       n_age_groups=n_age_groups,
+                                       embed_out_dim=embed_out_dim,
+                                       feature_acronym=feature_acronym)
+      if isinstance(layer_sizes, str):
+        layer_sizes = json.loads(layer_sizes)
+      
+      self.dense_layers = keras.Sequential(name="dense_query")
+      # Use the ReLU activation for all but the last layer.
+      for layer_size in layer_sizes[:-1]:
+        self.dense_layers.add(
+          keras.layers.Dense(layer_size, activation="elu",
+                             kernel_regularizer=reg,
+                             kernel_initializer="glorot_normal"))
+        # self.dense_layers.add(keras.layers.BatchNormalization())
+        self.dense_layers.add(keras.layers.LayerNormalization())
+        self.dense_layers.add(keras.layers.Dropout(drop_rate))
+      
+      for layer_size in layer_sizes[-1:]:
+        self.dense_layers.add(keras.layers.Dense(layer_size,
+                                                 kernel_initializer="glorot_normal"))
+      
+      self.dense_layers.add(keras.layers.UnitNormalization(axis=-1))
+      
+      self.reg = reg
+      
+      self.n_users = n_users
+      self.n_age_groups = n_age_groups
+      self.feature_acronym = feature_acronym
+      self.embed_out_dim = embed_out_dim
+      self.layer_sizes = layer_sizes
+      self.drop_rate = drop_rate
+    
+    #@tf.function(input_signature=[input_dataset_element_spec])
+    #def serving_default(self, inputs):
+    #  embedding = self.predict(inputs)
+    #  # return {'output_predictions': predictions}
+    #  return embedding
+    
+    def build(self, input_shape):
+      # print(f'build {self.name} input_shape={input_shape}\n')
+      self.embedding_model.build(input_shape)
+      input_shape_2 = self.embedding_model.compute_output_shape(
+        input_shape)
+      self.dense_layers.build(input_shape_2)
+      self.built = True
+    
+    def compute_output_shape(self, input_shape):
+      # print(f'compute_output_shape {self.name} input_shape={input_shape}, {input_shape['user_id'][0]}, {self.layer_sizes[-1:]}\n')
+      # This is invoked after build by TwoTower
+      # return self.output_shapes[0]
+      input_shape_3 = self.dense_layers.build(
+        self.embedding_model.compute_output_shape(input_shape))
+      return input_shape_3
+      # return None, self.layer_sizes[-1]
+      # return (input_shape['user_id'][0], self.layer_sizes[-1])
+    
+    def call(self, inputs, **kwargs):
+      # inputs should contain columns:
+      # print(f'call {self.name} type={type(inputs)}\n')
+      feature_embedding = self.embedding_model(inputs, **kwargs)
+      res = self.dense_layers(feature_embedding)
+      return res
+    
+    def get_config(self):
+      config = super(QueryModel, self).get_config()
+      config.update({"n_users": self.n_users,
+                     'n_age_groups': self.n_age_groups,
+                     "embed_out_dim": self.embed_out_dim,
+                     "drop_rate": self.drop_rate,
+                     "layer_sizes": self.layer_sizes,
+                     "feature_acronym": self.feature_acronym,
+                     "reg": keras.utils.serialize_keras_object(
+                       self.reg),
+                     })
+      return config
+    
+    @classmethod
+    def from_config(cls, config):
+      for key in ["reg"]:
+        config[key] = keras.utils.deserialize_keras_object(config[key])
+      return cls(**config)
+  
+  # TODO: add hyper-parameter "temperature" after L2Norm
+  @keras.utils.register_keras_serializable(package=package)
+  class CandidateModel(keras.Model):
+    """Model for encoding candidate features."""
+    
+    # for init from a load, arguments are present for the compositional instance members too
+    def __init__(self, n_movies: int, n_genres: int, layer_sizes,
+                 embed_out_dim: int = 32,
+                 reg: keras.regularizers.Regularizer = None,
+                 drop_rate: float = 0., incl_genres: bool = True,
+                 **kwargs):
+      """Model for encoding candidate features.
+
+      Args:
+        layer_sizes:
+          A list of integers where the i-th entry represents the number of units
+          the i-th layer contains.
+      """
+      super(CandidateModel, self).__init__(**kwargs)
+      
+      self.embedding_model = MovieModel(n_movies=n_movies,
+                                        n_genres=n_genres,
+                                        embed_out_dim=embed_out_dim,
+                                        incl_genres=incl_genres)
+      
+      self.dense_layers = keras.Sequential(name="dense_candidate")
+      if isinstance(layer_sizes, str):
+        layer_sizes = json.loads(layer_sizes)
+      # Use the ReLU activation for all but the last layer.
+      for layer_size in layer_sizes[:-1]:
+        self.dense_layers.add(
+          keras.layers.Dense(layer_size, activation="elu",
+                             kernel_regularizer=reg,
+                             kernel_initializer="glorot_normal"))
+        # self.dense_layers.add(keras.layers.BatchNormalization())
+        self.dense_layers.add(keras.layers.LayerNormalization())
+        self.dense_layers.add(keras.layers.Dropout(drop_rate))
+      
+      for layer_size in layer_sizes[-1:]:
+        self.dense_layers.add(keras.layers.Dense(layer_size,
+                                                 kernel_initializer="glorot_normal"))
+      
+      self.dense_layers.add(keras.layers.UnitNormalization(axis=-1))
+      
+      self.reg = reg
+      
+      self.n_movies = n_movies
+      self.n_genres = n_genres
+      self.incl_genres = incl_genres
+      self.embed_out_dim = embed_out_dim
+      self.drop_rate = drop_rate
+      self.layer_sizes = layer_sizes
+      
+    #@tf.function(input_signature=[input_dataset_element_spec])
+    #def serving_default(self, inputs):
+    #  embedding = self.predict(inputs)
+    #  # return {'output_predictions': predictions}
+    #  return embedding
+    
+    def build(self, input_shape):
+      # print(f'build {self.name} input_shape={input_shape}\n')
+      self.embedding_model.build(input_shape)
+      input_shape_2 = self.embedding_model.compute_output_shape(
+        input_shape)
+      self.dense_layers.build(input_shape_2)
+      self.built = True
+    
+    def compute_output_shape(self, input_shape):
+      # print(f'compute_output_shape {self.name} input_shape={input_shape}\n')
+      # This is invoked after build by TwoTower
+      input_shape_3 = self.dense_layers.build(
+        self.embedding_model.compute_output_shape(input_shape))
+      return input_shape_3
+      # return None, self.layer_sizes[-1]
+    
+    def call(self, inputs, **kwargs):
+      # inputs should contain columns "movie_id", "genres"
+      # logging.debug(f'call {self.name} type ={type(inputs)}\ntype ={inputs}\n')
+      feature_embedding = self.embedding_model(inputs, **kwargs)
+      res = self.dense_layers(feature_embedding)
+      # returns an np.ndarray wrapped in a tensor if inputs is tensor, else not wrapped
+      # logging.debug(f'CALL {self.name} SHAPE ={res.shape}\n')
+      return res
+    
+    def get_config(self):
+      config = super(CandidateModel, self).get_config()
+      config.update(
+        {"n_movies": self.n_movies, "n_genres": self.n_genres,
+         "embed_out_dim": self.embed_out_dim,
+         "drop_rate": self.drop_rate,
+         "layer_sizes": self.layer_sizes,
+         "reg": keras.utils.serialize_keras_object(self.reg),
+         "incl_genres": self.incl_genres
+         })
+      return config
+    
+    @classmethod
+    def from_config(cls, config):
+      for key in ["reg"]:
+        config[key] = keras.utils.deserialize_keras_object(config[key])
+      return cls(**config)
+  
+  @keras.utils.register_keras_serializable(package=package)
+  class TwoTowerDNN(keras.Model):
+    """
+    a Two-Tower DNN model that accepts input containing: user, context, and item information along with
+    a label for training.
+
+    a sigmoid is used to provide logistic regression predictions of the rating.
+
+    when use_bias_corr is true, the Yi et al. paper is followed to calculate the item sampling probability
+    within a mini-batch which is then used to correct probabities and the batch loss sum.
+
+    the number of layers is controlled by a list of their sizes in layer_sizes.
+    """
+    
+    # for init from a load, arguments are present for the compositional instance members too
+    def __init__(self, n_users: int, n_movies: int, n_age_groups: int,
+                 n_genres: int,
+                 layer_sizes: list, embed_out_dim: int,
+                 reg: keras.regularizers.Regularizer = None,
+                 drop_rate: float = 0, feature_acronym: str = "",
+                 use_bias_corr: bool = False,
+                 incl_genres: bool = True, **kwargs):
+      super(TwoTowerDNN, self).__init__(**kwargs)
+      
+      if isinstance(layer_sizes, str):
+        layer_sizes = json.loads(layer_sizes)
+      
+      self.query_model = QueryModel(n_users=n_users,
+                                    n_age_groups=n_age_groups,
+                                    layer_sizes=layer_sizes,
+                                    embed_out_dim=embed_out_dim,
+                                    reg=reg,
+                                    drop_rate=drop_rate,
+                                    feature_acronym=feature_acronym,
+                                    **kwargs)
+      
+      self.candidate_model = CandidateModel(n_movies=n_movies,
+                                            n_genres=n_genres,
+                                            layer_sizes=layer_sizes,
+                                            reg=reg,
+                                            drop_rate=drop_rate,
+                                            incl_genres=incl_genres,
+                                            **kwargs)
+      
+      # elementwise multiplication:
+      self.dot_layer = keras.layers.Dot(axes=1)
+      self.sigmoid_layer = keras.layers.Activation(keras.activations.sigmoid)
+      
+      self.reg = reg
+      
+      self.n_users = n_users
+      self.n_age_groups = n_age_groups
+      self.n_movies = n_movies
+      self.n_genres = n_genres
+      self.incl_genres = incl_genres
+      self.layer_sizes = layer_sizes
+      self.use_bias_corr = use_bias_corr
+      self.feature_acronym = feature_acronym
+      self.embed_out_dim = embed_out_dim
+      self.drop_rate = drop_rate
+      
+      if self.use_bias_corr:
+        self.item_prob_layer = keras.layers.Lambda(
+          lambda x: tf.keras.ops.log(
+            tf.keras.ops.clip(1. / x, 1e-6, 1.0)))
+        self.softmax_layer = keras.layers.Softmax()
+        self.log_layer = keras.layers.Lambda(
+          lambda x: tf.keras.ops.log(x))
+        self.mult_layer = keras.layers.Multiply()
+        # self.final_loss_bc_layer = keras.losses.Loss(name=None, reduction="mean", dtype=None)
+        self.final_loss_bc_layer = keras.layers.Lambda(
+          lambda x: tf.reduce_mean(x, axis=0))
+      
+    #@tf.function(input_signature=[input_dataset_element_spec])
+    #def serving_default(self, inputs):
+    #  print(f"inputs={inputs}")
+    #  predictions = self.predict(inputs)
+    #  # return {'output_predictions': predictions}
+    #  return predictions
+    
+    def call(self, inputs, training=False, **kwargs):
+      """['user_id', 'gender', 'age_group', 'occupation','movie_id', 'rating']"""
+      logging.debug(f'call {self.name} inputs={inputs}\n')
+      user_vector = self.query_model(inputs, **kwargs)
+      movie_vector = self.candidate_model(inputs, **kwargs)
+      print(f'TYPE UV={type(user_vector)}, MV={type(movie_vector)}')
+      s = self.dot_layer([user_vector, movie_vector])
+      s = self.sigmoid_layer(s)
+      return s
+    
+    def build(self, input_shape):
+      # print(f'build {self.name} input_shape={input_shape}\n')
+      # logging.debug(f'build {self.name} input_shape={input_shape}\n')
+      self.query_model.build(input_shape)
+      self.candidate_model.build(input_shape)
+      self.built = True
+    
+    def compute_output_shape(self, input_shape):
+      # (batch_size,)  a scalar for each row in batch
+      # return input_shape['user_id']
+      s0 = self.query_model.compute_output_shape(input_shape)
+      s1 = self.candidate_model.compute_output_shape(input_shape)
+      s2 = self.dot_layer.compute_output_shape([s0, s1])
+      s3 = self.sigmoid_layer.compute_output_shape(s2)
+      return s3
+      # return (None,)
+    
+    @keras.utils.register_keras_serializable(package=package,
+                                             name="calc_item_probability_inverse")
+    # in non-eager mode, keras attempts to draw a graph if annotated w/ tf.function
+    # @tf.function()
+    def calc_item_probability_inverse(self, x):
+      """
+      given the batch x['movie_id'] tensor, this method returns an item probability vector.
+
+      Args:
+          x: the batch tensor of array for 'movie_id'
+      Returns:
+          tensor array of 'B' for the given batch movie_ids following Yi et al. paper.
+      """
+      # tf.keras.backend.eval is deprecated, but can be replaced with
+      # @tf.function
+      # def evaluate_tensor(tensor):
+      #     return tensor
+      # result = evaluate_tensor(tensor)
+      alpha = self.optimizer.learning_rate
+      if tf.equal(tf.shape(x)[-1], 0):
+        _batch_size = 1
+      else:
+        _batch_size = tf.shape(x)[0]
+      A = tf.lookup.experimental.MutableHashTable(key_dtype=tf.int64,
+                                                  value_dtype=tf.float32,
+                                                  default_value=0.)
+      B = tf.lookup.experimental.MutableHashTable(key_dtype=tf.int64,
+                                                  value_dtype=tf.float32,
+                                                  default_value=0.)
+      for i, movie_id in enumerate(x):
+        t = tf.constant(i + 1, dtype=tf.float32, shape=(1,))
+        b = B.lookup(movie_id, dynamic_default_values=0.)
+        a = A.lookup(movie_id, dynamic_default_values=0.)
+        _ = tf.multiply(tf.subtract(tf.constant(1.), alpha), b)
+        __ = tf.multiply(a, tf.subtract(t, a))
+        c = tf.add(_, __)
+        B.insert(keys=movie_id, values=c)
+        A.insert(keys=movie_id, values=t)
+        if i == _batch_size - 1: break
+      BB = B.export()[1]
+      return BB
+    
+    def train_step(self, batch, **kwargs):
+      x, y = batch
+      with tf.GradientTape() as tape:
+        if not self.use_bias_corr:
+          y_pred = self.call(x, training=True)  # Forward pass
+          loss = self.compute_loss(y=y, y_pred=y_pred)
+        else:
+          # following Yi et al, and a small portion of what's handled in tfrecommenders Retrieval layer
+          # https://www.tensorflow.org/recommenders/examples/basic_retrieval
+          
+          # TODO: assert self.optimizer is SGD so that the loss is compat w/ gradient
+          
+          BB = self.calc_item_probability_inverse(x['movie_id'])
+          log_p = self.item_prob_layer(BB)
+          
+          user_vector = self.query_model(x, **kwargs)
+          movie_vector = self.candidate_model(x, **kwargs)
+          score = self.dot_layer([user_vector, movie_vector])
+          score_c = score - log_p
+          p_batch = self.softmax_layer(score_c)
+          y_pred = p_batch
+          
+          log_p_batch = self.log_layer(p_batch)
+          loss_batch = self.mult_layer([y, -log_p_batch])
+          loss = self.final_loss_bc_layer(loss_batch)
+      
+      trainable_vars = self.trainable_variables
+      gradients = tape.gradient(loss, trainable_vars)
+      # Update weights
+      self.optimizer.apply_gradients(zip(gradients, trainable_vars))
+      
+      # Update metrics
+      for metric in self.metrics:
+        if metric.name == "loss":
+          metric.update_state(loss)
+        else:
+          metric.update_state(y, y_pred)
+      
+      # Return a dict mapping metric names to current value.
+      return {m.name: m.result() for m in self.metrics}
+    
+    def test_step(self, data):
+      x, y = data
+      y_pred = self(x, training=False)
+      loss = self.compute_loss(y=y, y_pred=y_pred)
+      for metric in self.metrics:
+        if metric.name == "loss":
+          metric.update_state(loss)
+        else:
+          metric.update_state(y, y_pred)
+      # Return a dict mapping metric names to current value.
+      # Note that it will include the loss (tracked in self.metrics).
+      return {m.name: m.result() for m in self.metrics}
+    
+    def get_config(self):
+      config = super(TwoTowerDNN, self).get_config()
+      config.update({"n_users": self.n_users, "n_movies": self.n_movies,
+                     "n_age_groups": self.n_age_groups,
+                     "n_genres": self.n_genres,
+                     "embed_out_dim": self.embed_out_dim,
+                     "drop_rate": self.drop_rate,
+                     "layer_sizes": self.layer_sizes,
+                     "use_bias_corr": self.use_bias_corr,
+                     "feature_acronym": self.feature_acronym,
+                     "reg": keras.utils.serialize_keras_object(
+                       self.reg),
+                     "incl_genres": self.incl_genres
+                     })
+      return config
+    
+    @classmethod
+    def from_config(cls, config):
+      for key in ["reg"]:
+        config[key] = keras.utils.deserialize_keras_object(config[key])
+      return cls(**config)
+  
   model = TwoTowerDNN(
     n_users=hp.get("user_id_max") + 1,
     n_movies=hp.get("movie_id_max") + 1,
@@ -709,8 +746,18 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     embed_out_dim=hp.get('embed_out_dim'),
     reg=None, drop_rate=0.1,
     feature_acronym=hp.get("feature_acronym"),
-    use_bias_corr=hp.get('use_bias_corr'))
-    
+    use_bias_corr=hp.get('use_bias_corr'),
+    incl_genres=hp.get('incl_genres'),
+  )
+  
+  input_shapes = {}
+  # input_shapes[element] = (batch_size,)
+  for element in FEATURE_KEYS:
+    if element == "genres":
+      input_shapes[element] = (None, 1, N_GENRES)
+    else:
+      input_shapes[element] = (None, 1)
+  
   model.build(input_shapes)
   
   optimizer = keras.optimizers.Adam(
@@ -738,7 +785,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   return model
 
 
-def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
+def get_default_hyperparameters(custom_config, input_element_spec) -> keras_tuner.HyperParameters:
   """Returns hyperparameters for building Keras model."""
   hp = keras_tuner.HyperParameters()
   # Defines search space.
@@ -759,6 +806,7 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   hp.Fixed('n_age_groups', custom_config["n_age_groups"])
   hp.Fixed('n_genres', custom_config["n_genres"])
   hp.Fixed('run_eagerly', custom_config["run_eagerly"])
+  hp.Fixed('input_dataset_element_spec_ser', (base64.b64encode(pickle.dumps(input_element_spec))).decode('utf-8'))
   return hp
 
 
@@ -838,6 +886,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
           'movie_id_max'
           'n_genres'
           'run_eagerly'
+          'device'
 
     fn_args.hyperparameters (required) : keras_tuner.HyperParameters with keys
       'lr'
@@ -854,6 +903,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       'movie_id_max'
       'n_genres'
       'run_eagerly'
+      'device'
 
     other Example:
       module_file=os.path.abspath(_trainer_module_file),
@@ -879,30 +929,38 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       getattr(fn_args, attr_name)):
       attr_value = getattr(fn_args, attr_name)
       logging.debug(f"{attr_name}: {attr_value}")
+  """
+  content of fn_args:
+    base_model: None
+    custom_config: {'device': 'CPU'}
+    data_accessor: DataAccessor(tf_dataset_factory=<function get_tf_dataset_factory_from_artifact.<locals>.dataset_factory at 0x7b3c529c4b80>, record_batch_factory=<function get_record_batch_factory_from_artifact.<locals>.record_batch_factory at 0x7b3c529c4550>, data_view_decode_fn=None)
+    eval_files: ['/<pipeline_path>/Transform/transformed_examples/4/Split-eval/*']
+    eval_model_dir: /<pipeline_path>/Trainer/model/6/Format-TFMA
+    eval_steps: 5
+    hyperparameters: {'space': [{'class_name': 'Choice', 'config': {'name': 'learning_rate', 'default': 0.0001, 'conditions': [], 'values': [0.0001], 'ordered': True}}, {'class_name': 'Choice', 'config': {'name': 'regl2', 'default': 0.0, 'conditions': [], 'values': [0.0, 0.001, 0.01], 'ordered': True}}, {'class_name': 'Float', 'config': {'name': 'drop_rate', 'default': 0.5, 'conditions': [], 'min_value': 0.1, 'max_value': 0.5, 'step': None, 'sampling': 'linear'}}, {'class_name': 'Choice', 'config': {'name': 'embed_out_dim', 'default': 32, 'conditions': [], 'values': [32], 'ordered': True}}, {'class_name': 'Choice', 'config': {'name': 'layer_sizes', 'default': '[32]', 'conditions': [], 'values': ['[32]'], 'ordered': False}}, {'class_name': 'Fixed', 'config': {'name': 'feature_acronym', 'conditions': [], 'value': 'h'}}, {'class_name': 'Fixed', 'config': {'name': 'incl_genres', 'conditions': [], 'value': True}}, {'class_name': 'Fixed', 'config': {'name': 'num_epochs', 'conditions': [], 'value': 10}}, {'class_name': 'Fixed', 'config': {'name': 'batch_size', 'conditions': [], 'value': 2}}, {'class_name': 'Fixed', 'config': {'name': 'use_bias_corr', 'conditions': [], 'value': False}}, {'class_name': 'Fixed', 'config': {'name': 'user_id_max', 'conditions': [], 'value': 6040}}, {'class_name': 'Fixed', 'config': {'name': 'movie_id_max', 'conditions': [], 'value': 3952}}, {'class_name': 'Fixed', 'config': {'name': 'n_age_groups', 'conditions': [], 'value': 7}}, {'class_name': 'Fixed', 'config': {'name': 'n_genres', 'conditions': [], 'value': 18}}, {'class_name': 'Fixed', 'config': {'name': 'run_eagerly', 'conditions': [], 'value': True}}], 'values': {'learning_rate': 0.0001, 'regl2': 0.0, 'drop_rate': 0.11706263861763477, 'embed_out_dim': 32, 'layer_sizes': '[32]', 'feature_acronym': 'h', 'incl_genres': True, 'num_epochs': 10, 'batch_size': 2, 'use_bias_corr': False, 'user_id_max': 6040, 'movie_id_max': 3952, 'n_age_groups': 7, 'n_genres': 18, 'run_eagerly': True}}
+    model_run_dir: /<pipeline_path>/Trainer/model_run/6
+    schema_file: /<pipeline_path>/SchemaGen/schema/3/schema.pbtxt
+    schema_path: /<pipeline_path>/SchemaGen/schema/3/schema.pbtxt
+    serving_model_dir: /<pipeline_path>/Trainer/model/6/Format-Serving
+    train_files: ['/<pipeline_path>/Transform/transformed_examples/4/Split-train/*']
+    train_steps: 5
+    transform_graph_path:/<pipeline_path>/Transform/transform_graph/4
+    transform_output: /<pipeline_path>/Transform/transform_graph/4
+    working_dir: None
+  """
   
   if not fn_args.hyperparameters:
     raise ValueError('hyperparameters must be provided')
-  
-  logging.debug(f'fn_args.train_files={fn_args.train_files}')
-  logging.debug(f'fn_args.eval_files={fn_args.eval_files}')
-  logging.debug(f'fn_args.train_steps={fn_args.train_steps}')
-  logging.debug(f'fn_args.eval_steps={fn_args.eval_steps}')
-  logging.debug(f"data_accessor: {fn_args.data_accessor}")
-  logging.debug(f"Hyperparameters: {fn_args.hyperparameters}")
-  logging.debug(
-    f'fn_args.serving_model_dir={fn_args.serving_model_dir}')
-  #logging.debug(f'fn_args.q_serving_model_dir={fn_args.q_serving_model_dir}')
-  #logging.debug( f'fn_args.c_serving_model_dir={fn_args.c_serving_model_dir}')
-  
+ 
   tf_transform_output = tft.TFTransformOutput(fn_args.transform_output)
   
-  train_dataset = _input_fn(
+  train_dataset = input_fn(
     fn_args.train_files,
     fn_args.data_accessor,
     tf_transform_output,
     TRAIN_BATCH_SIZE)
   
-  eval_dataset = _input_fn(
+  eval_dataset = input_fn(
     fn_args.eval_files,
     fn_args.data_accessor,
     tf_transform_output,
@@ -924,6 +982,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
     device = Device.CPU
   strategy, device = _get_strategy(device)
   
+  #TODO: calc batch sizes
   n_replicas = strategy.num_replicas_in_sync
   #global batch_size is the global batch size
   
@@ -932,8 +991,8 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
     # model = _make_2tower_keras_model(hp, tf_transform_output)
   
   # Write logs to path
-  # tensorboard_callback = tf.keras.callbacks.TensorBoard(
-  #    log_dir=fn_args.model_run_dir, update_freq='epoch')
+  tensorboard_callback = tf.keras.callbacks.TensorBoard(
+    log_dir=fn_args.model_run_dir, update_freq='epoch')
   
   stop_early = tf.keras.callbacks.EarlyStopping(
     monitor=f'val_loss', patience=3)
@@ -943,16 +1002,21 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
     steps_per_epoch=fn_args.train_steps,
     validation_data=eval_dataset,
     validation_steps=fn_args.eval_steps,
-    callbacks=[stop_early])
+    callbacks=[tensorboard_callback, stop_early])
+  
+  #TODO: consider adding the vocabularies as assets:
+  #    see https://www.tensorflow.org/api_docs/python/tf/saved_model/Asset
   
   from tfx.dsl.io import fileio
   #print(f'fn_args.serving_model_dir={fn_args.serving_model_dir}')
   #in TFX 1.16.0, we're using keras 2, and so this is the save that creates a SavedModel which passes
   # the TFX asserts:
-  tf.saved_model.save(model, fn_args.serving_model_dir)
+  tf.saved_model.save(model, fn_args.serving_model_dir)#, signatures={'serving_default': model.serving_default})
   
-  # to retrieve the other 2 models, that is, the trained query_model and candidate_model, will need to
-  # use tf.saved_model.load(fn_args.serving_model_dir)
+  #loaded_saved_model = tf.saved_model.load(fn_args.serving_model_dir)
+  #print(f'loaded SavedModel signatures: {loaded_saved_model.signatures}')
+  #infer = loaded_saved_model.signatures["serving_default"]
+  #print(f'infer.structured_outputs={infer.structured_outputs}')
   
   return model
 
@@ -1009,38 +1073,42 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
   logging.debug(f"Hyperparameters: {fn_args.hyperparameters}")
   logging.debug(f"Custom config: {fn_args.custom_config}")
   
-  if fn_args.hyperparameters:
-    hp = keras_tuner.HyperParameters.from_config(
-      fn_args.hyperparameters)
-  else:
-    hp = get_default_hyperparameters(fn_args.custom_config)
+  transform_graph = tft.TFTransformOutput(fn_args.transform_graph_path)
   
+  train_dataset = input_fn(
+    fn_args.train_files,
+    fn_args.data_accessor,
+    transform_graph,
+    TRAIN_BATCH_SIZE)
+  
+  eval_dataset = input_fn(
+    fn_args.eval_files,
+    fn_args.data_accessor,
+    transform_graph,
+    EVAL_BATCH_SIZE)
+  
+  #extract the TensorSpecs for input_signature for serving_default for features without label:
+  def extract_features(features, label):
+    return features
+  x = train_dataset.map(extract_features)
+  
+  if fn_args.hyperparameters:
+    hp = keras_tuner.HyperParameters.from_config(fn_args.hyperparameters)
+  else:
+    hp = get_default_hyperparameters(fn_args.custom_config, x.element_spec)
+    
   # the objective must be must be a name that appears in the logs
   # returned by the model.fit() method during training.
   #val_logs has keys 'val_loss' and 'val_compile_metrics'
   tuner = keras_tuner.RandomSearch(
     _make_2tower_keras_model,
-    max_trials=6,
+    max_trials=MAX_TUNE_TRIALS,
     hyperparameters=hp,
     allow_new_entries=False,
     objective=keras_tuner.Objective(f'val_loss', 'min'),
     # objective=keras_tuner.Objective('val_loss', 'min'),
     directory=fn_args.working_dir,
     project_name='movie_lens_2t_tuning')
-  
-  transform_graph = tft.TFTransformOutput(fn_args.transform_graph_path)
-  
-  train_dataset = _input_fn(
-    fn_args.train_files,
-    fn_args.data_accessor,
-    transform_graph,
-    TRAIN_BATCH_SIZE)
-  
-  eval_dataset = _input_fn(
-    fn_args.eval_files,
-    fn_args.data_accessor,
-    transform_graph,
-    EVAL_BATCH_SIZE)
   
   return tfx.components.TunerFnResult(
     tuner=tuner,
