@@ -1054,6 +1054,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       _get_transform_features_signature(model, tf_transform_output),
   }
   
+  """
   @tf.function(input_signature=[train_dataset.element_spec])
   def serving_fn(inputs_dict_tuple):
     if isinstance(inputs_dict_tuple, tuple):
@@ -1061,6 +1062,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       inputs_label = inputs_dict_tuple[1]
     else:
       batch = inputs_dict_tuple
+    tf.print("MODEL__annotations__=", model.__annotations__)
     return model(inputs=batch['age'], inputs_1=batch['gender'],
                   inputs_2=batch['genres'],
                   inputs_3=batch['hr'], inputs_4=batch['hr_wk'],
@@ -1073,6 +1075,9 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
     signatures={'serving_default': serving_fn.get_concrete_function()})
     #signatures=signatures)
     #signatures={'serving_default': model.serving_default})
+  """
+  tf.saved_model.save(model, fn_args.serving_model_dir)
+  
   
   #loaded_saved_model = tf.saved_model.load(fn_args.serving_model_dir)
   #print(f'loaded SavedModel signatures: {loaded_saved_model.signatures}')

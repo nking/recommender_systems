@@ -275,9 +275,27 @@ class TuneTrainTest(tf.test.TestCase):
     ds = x #expected to work when saved has no signatures configured.  default config
     
     predictions = []
-    #for batch in ds:
-    #  predictions.append(infer(batch))
-    #print(f'predictions = {predictions}')
+    for batch in ds:
+      inp = {'inputs': batch['age']}
+      for i, key in enumerate(ds.element_spec):
+        if i == 0:
+          continue
+        inp[f'inputs_{i}'] = batch[key]
+      # predictions.append(infer_default(batch))
+      # predictions.append(infer_default(inp))
+      predictions.append(
+        infer(inputs=batch['age'], inputs_1=batch['gender'],
+                      inputs_2=batch['genres'],
+                      inputs_3=batch['hr'], inputs_4=batch['hr_wk'],
+                      inputs_5=batch['month'],
+                      inputs_6=batch['movie_id'],
+                      inputs_7=batch['occupation'],
+                      inputs_8=batch['user_id'],
+                      inputs_9=batch['weekday']))
+    print(f'predictions = {predictions}')
+    num_rows = ds.reduce(0, lambda x, _: x + 1).numpy()
+    #print(f'num_rows={num_rows},  num_pred={len(predictions)}, card={ds.cardinality().numpy()}')
+    self.assertEqual(len(predictions), num_rows)
     
     """
       loaded_saved_model = tf.saved_model.load(fn_args.serving_model_dir)
