@@ -73,21 +73,21 @@ def preprocessing_fn(inputs):
   """
   logging.debug(f"inputs={inputs}")
 
-  outputs = {'user_id': inputs['user_id'],
-             'movie_id': inputs['movie_id']}
+  outputs = {'user_id': tf.cast(inputs['user_id'], dtype=tf.float32),
+             'movie_id': tf.cast(inputs['movie_id'], dtype=tf.float32)}
 
   outputs['rating'] = tf.divide(tf.cast(inputs['rating'], tf.float32), \
     tf.constant(5.0, dtype=tf.float32))
 
   gender_table = create_static_table(genders, var_dtype=tf.string)
-  outputs['gender'] = gender_table.lookup(inputs['gender'])
+  outputs['gender'] = tf.cast(gender_table.lookup(inputs['gender']), dtype=tf.float32)
   #outputs['gender'] = tf.one_hot( outputs['gender'], depth=len(genders), dtype=tf.int64)
 
   age_groups_table = create_static_table(age_groups, var_dtype=tf.int64)
-  outputs['age'] = age_groups_table.lookup(inputs['age'])
+  outputs['age'] = tf.cast(age_groups_table.lookup(inputs['age']), dtype=tf.float32)
   #outputs['age'] = tf.one_hot( outputs['age'], depth=len(age_groups), dtype=tf.int64)
   
-  outputs['occupation'] = inputs['occupation']
+  outputs['occupation'] = tf.cast(inputs['occupation'], dtype=tf.float32)
   #outputs['occupation'] = tf.one_hot(outputs['occupation'], depth=num_occupations, dtype=tf.int64)
 
   def transform_genres(input_genres):
@@ -137,10 +137,13 @@ def preprocessing_fn(inputs):
   #a cross of hour and weekday: hr * 7 + weekday
   outputs["hr_wk"] = tf.add(tf.multiply(outputs["hr"], tf.constant(7, dtype=tf.int64)),\
       outputs["weekday"])
+  
+  for key in ["hr", "weekday", "hr_wk"]:
+    outputs[key] = tf.cast(outputs[key], dtype=tf.float32)
 
   #there is probably a relationship between genres and month, so calc month too.
   outputs["month"] = tf.cast(tf.round(\
-    tf.divide(tf.cast(days_since_1970, tf.float64), tf.constant(30, dtype=tf.float64))), dtype=tf.int64)
+    tf.divide(tf.cast(days_since_1970, tf.float64), tf.constant(30, dtype=tf.float64))), dtype=tf.float32)
 
   ## year can be useful for timeseries analysis.
   ## there is a leap year every 4 years, starting at 1972.
@@ -154,7 +157,7 @@ def preprocessing_fn(inputs):
   #    tf.cast(days_since_1970, dtype=tf.float32),\
   #    tf.constant(365 - (365./4) + (366./4), dtype=tf.float32))), dtype=tf.int64)
   #outputs["year"] = tf.add(tf.constant(1970, dtype=tf.int64), dy)
-
+  
   logging.debug(f"outputs={outputs}")
 
   return outputs

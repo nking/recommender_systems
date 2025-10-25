@@ -131,13 +131,14 @@ class TuneTrainTest(tf.test.TestCase):
     PIPELINE_ROOT = os.path.join(output_data_dir, PIPELINE_NAME)
     #remove results from previous test runs:
     try:
+      print(f"removing: {PIPELINE_ROOT}")
       shutil.rmtree(PIPELINE_ROOT)
     except OSError as e:
       pass
     METADATA_PATH = os.path.join(PIPELINE_ROOT, 'tfx_metadata', 'metadata.db')
     os.makedirs(os.path.join(PIPELINE_ROOT, 'tfx_metadata'), exist_ok=True)
 
-    ENABLE_CACHE = True
+    ENABLE_CACHE = False
 
     #metadata_connection_config = metadata_store_pb2.ConnectionConfig()
     #metadata_connection_config.sqlite.SetInParent()
@@ -243,9 +244,10 @@ class TuneTrainTest(tf.test.TestCase):
     print(f"transfomed_examples_uri={transfomed_examples_uri}")
     
     latest_schema_artifact = sorted(store.get_artifacts_by_type("Schema"),
-      key=lambda x: x.create_time_since_epoch, reverse=True)[0]
+      key=lambda x: x.last_update_time_since_epoch, reverse=True)[0]
     # or use last_update_time_since_epoch
     schema_uri = latest_schema_artifact.uri
+    schema_uri = schema_uri.replace("pre_transform_schema", "post_transform_schema")
     print(f"schema_uri={schema_uri}")
     schema_file_path = [os.path.join(schema_uri, name) for name in os.listdir(schema_uri)][0]
     
@@ -254,18 +256,28 @@ class TuneTrainTest(tf.test.TestCase):
     
     dataset_uri = os.path.join(transfomed_examples_uri, "Split-test")
     file_paths = [os.path.join(dataset_uri, name) for name in os.listdir(dataset_uri)]
-    test_ds = tf.data.TFRecordDataset(file_paths, compression_type="GZIP")
+    test_ds_ser = tf.data.TFRecordDataset(file_paths, compression_type="GZIP")
     
     def parse_tf_example(example_proto, feature_spec):
       return tf.io.parse_single_example(example_proto, feature_spec)
     
-    test_ds = test_ds.map(lambda x: parse_tf_example(x, feature_spec))
+    test_ds = test_ds_ser.map(lambda x: parse_tf_example(x, feature_spec))
     
     #might need to remove 'rating' column
-    x = test_ds.map(test_ds)
+    def remove_rating(element):
+      out = {k:v for k,v in element.items() if k != 'rating'}
+      return out
     
-    #predicted = infer(x)
-    #print(f'predicted = {predicted}')
+    x = test_ds.map(remove_rating)
+    
+    #ds = test_ds_ser #expected to work when saved with signatures=signatures
+    #ds = test_ds
+    ds = x #expected to work when saved has no signatures configured.  default config
+    
+    predictions = []
+    #for batch in ds:
+    #  predictions.append(infer(batch))
+    #print(f'predictions = {predictions}')
     
     """
       loaded_saved_model = tf.saved_model.load(fn_args.serving_model_dir)

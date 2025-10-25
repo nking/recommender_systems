@@ -35,7 +35,7 @@ METRIC_FN = keras.metrics.RootMeanSquaredError()
 MAX_TUNE_TRIALS = 2
 
 FEATURE_KEYS = [
-  'user_id', 'movie_id', 'rating', 'gender', 'age', 'occupation', 'genres', 'hr', 'weekday', 'hr_wk', 'month'
+  'user_id', 'movie_id', 'gender', 'age', 'occupation', 'genres', 'hr', 'weekday', 'hr_wk', 'month'
 ]
 LABEL_KEY = 'rating'
 N_GENRES = 18
@@ -77,7 +77,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   
   input_dataset_element_spec_ser = hp.get("input_dataset_element_spec_ser")
   input_dataset_element_spec = pickle.loads(base64.b64decode(input_dataset_element_spec_ser.encode('utf-8')))
-  #print(f'input_dataset_element_spec={input_dataset_element_spec}')
+  print(f'input_dataset_element_spec={input_dataset_element_spec}')
   # NOTE: tfx expected the models to subclass tf.keras.Model, not keras.Model
   
   @keras.utils.register_keras_serializable(package=package)
@@ -585,14 +585,14 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         self.final_loss_bc_layer = keras.layers.Lambda(
           lambda x: tf.reduce_mean(x, axis=0))
       
-    #@tf.function(input_signature=[input_dataset_element_spec])
     #def serving_default(self, inputs):
     #  print(f"inputs={inputs}")
     #  predictions = self.predict(inputs)
     #  # return {'output_predictions': predictions}
     #  return predictions
     
-    def call(self, inputs, training=False, **kwargs):
+    #@tf.function(input_signature=[input_dataset_element_spec])
+    def call(self, inputs, **kwargs):
       """['user_id', 'gender', 'age_group', 'occupation','movie_id', 'rating']"""
       logging.debug(f'call {self.name} inputs={inputs}\n')
       user_vector = self.query_model(inputs, **kwargs)
@@ -665,7 +665,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       x, y = batch
       with tf.GradientTape() as tape:
         if not self.use_bias_corr:
-          y_pred = self.call(x, training=True)  # Forward pass
+          y_pred = self.call(x)  # Forward pass
           loss = self.compute_loss(y=y, y_pred=y_pred)
         else:
           # following Yi et al, and a small portion of what's handled in tfrecommenders Retrieval layer
@@ -704,7 +704,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     
     def test_step(self, data):
       x, y = data
-      y_pred = self(x, training=False)
+      y_pred = self(x) #self.predict or self.evaluate?
       loss = self.compute_loss(y=y, y_pred=y_pred)
       for metric in self.metrics:
         if metric.name == "loss":
@@ -856,6 +856,40 @@ def _get_strategy(device: Device) -> Tuple[tf.distribute.Strategy, Device]:
     #or use MirroredStrategy
     device = Device.CPU
   return strategy, device
+
+def _get_serve_tf_examples_fn(model, tf_transform_output):
+  """Returns a function that parses a serialized tf.Example."""
+
+  # the layer is added as an attribute to the model in order to make sure that
+  # the model assets are handled correctly when exporting.
+  model.tft_layer = tf_transform_output.transform_features_layer()
+
+  @tf.function
+  def serve_tf_examples_fn(serialized_tf_examples):
+    """Returns the output to be used in the serving signature."""
+    feature_spec = tf_transform_output.raw_feature_spec()
+    feature_spec.pop(LABEL_KEY)
+    parsed_features = tf.io.parse_example(serialized_tf_examples, feature_spec)
+    transformed_features = model.tft_layer(parsed_features)
+    return model(transformed_features)
+  return serve_tf_examples_fn
+
+def _get_transform_features_signature(model, tf_transform_output):
+  """Returns a serving signature that applies tf.Transform to features."""
+  # We need to track the layers in the model in order to save it.
+  # TODO(b/162357359): Revise once the bug is resolved.
+  model.tft_layer_eval = tf_transform_output.transform_features_layer()
+  @tf.function(input_signature=[
+      tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')
+  ])
+  def transform_features_fn(serialized_tf_example):
+    """Returns the transformed_features to be fed as input to evaluator."""
+    raw_feature_spec = tf_transform_output.raw_feature_spec()
+    raw_features = tf.io.parse_example(serialized_tf_example, raw_feature_spec)
+    transformed_features = model.tft_layer_eval(raw_features)
+    logging.info('eval_transformed_features = %s', transformed_features)
+    return transformed_features
+  return transform_features_fn
 
 # tfx.components.FnArgs
 def run_fn(fn_args):
@@ -1010,8 +1044,35 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   from tfx.dsl.io import fileio
   #print(f'fn_args.serving_model_dir={fn_args.serving_model_dir}')
   #in TFX 1.16.0, we're using keras 2, and so this is the save that creates a SavedModel which passes
-  # the TFX asserts:
-  tf.saved_model.save(model, fn_args.serving_model_dir)#, signatures={'serving_default': model.serving_default})
+  
+  #https://github.com/tensorflow/tfx/blob/v1.16.0/docs/guide/keras.md?plain=1
+  signatures = {
+    'serving_default':
+      _get_serve_tf_examples_fn(model, tf_transform_output).get_concrete_function(
+        tf.TensorSpec(shape=[None], dtype=tf.string,name='examples')),
+    'transform_features':
+      _get_transform_features_signature(model, tf_transform_output),
+  }
+  
+  @tf.function(input_signature=[train_dataset.element_spec])
+  def serving_fn(inputs_dict_tuple):
+    if isinstance(inputs_dict_tuple, tuple):
+      batch = inputs_dict_tuple[0]
+      inputs_label = inputs_dict_tuple[1]
+    else:
+      batch = inputs_dict_tuple
+    return model(inputs=batch['age'], inputs_1=batch['gender'],
+                  inputs_2=batch['genres'],
+                  inputs_3=batch['hr'], inputs_4=batch['hr_wk'],
+                  inputs_5=batch['month'],
+                  inputs_6=batch['movie_id'],
+                  inputs_7=batch['occupation'],
+                  inputs_8=batch['user_id'], inputs_9=batch['weekday'])
+  
+  tf.saved_model.save(model, fn_args.serving_model_dir,
+    signatures={'serving_default': serving_fn.get_concrete_function()})
+    #signatures=signatures)
+    #signatures={'serving_default': model.serving_default})
   
   #loaded_saved_model = tf.saved_model.load(fn_args.serving_model_dir)
   #print(f'loaded SavedModel signatures: {loaded_saved_model.signatures}')
