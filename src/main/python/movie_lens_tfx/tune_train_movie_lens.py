@@ -80,6 +80,13 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   print(f'input_dataset_element_spec={input_dataset_element_spec}')
   # NOTE: tfx expected the models to subclass tf.keras.Model, not keras.Model
   
+  _input_dataset_element_spec = {}
+  for key, value in input_dataset_element_spec.items():
+    _shape = [i for i in value.shape]
+    _shape[0] = None
+    _input_dataset_element_spec[key] = tf.TensorSpec(shape=_shape, dtype=value.dtype, name=key)
+  input_dataset_element_spec = _input_dataset_element_spec
+  
   @keras.utils.register_keras_serializable(package=package)
   class UserModel(keras.Model):
     # for init from a load, arguments are present for the compositional instance members too
@@ -220,6 +227,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         results.append(self.gender_embedding(inputs['gender']))
       res = keras.layers.Concatenate()(results)
       logging.debug(f'call {self.name} SHAPE ={res.shape}')
+      tf.print('CALL', self.name, ' shape=', res.shape)
       return res
     
     def get_config(self):
@@ -264,21 +272,21 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         ], name="genres_emb")
     
     def build(self, input_shape):
-      # print(f'build {self.name} Movie input_shape={input_shape}\n')
+      tf.print("build", self.name, "input_shape=:", input_shape)
+      tf.print(f"OUTPUT shapes:", self.movie_embedding.compute_output_shape( input_shape['movie_id']))
       self.movie_embedding.build(input_shape['movie_id'])
       if self.incl_genres:
         self.genres_embedding.build(input_shape['genres'])
+        tf.print(self.genres_embedding.compute_output_shape(input_shape['genres']))
       self.built = True
     
     def compute_output_shape(self, input_shape):
       # print(f'compute_output_shape {self.name} input_shape={input_shape}\n')
       # This is invoked after build by CandidateModel
-      _shape = self.movie_embedding.compute_output_shape(
-        input_shape['movie_id'])
+      _shape = self.movie_embedding.compute_output_shape(input_shape['movie_id'])
       total_length = _shape[-1]
       if self.incl_genres:
-        _shape = self.genres_embedding.compute_output_shape(
-          input_shape['genres'])
+        _shape = self.genres_embedding.compute_output_shape(input_shape['genres'])
         total_length += _shape[-1]
       return None, total_length
     
@@ -291,8 +299,11 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       # shape is (batch_size, x, out_dim)
       if self.incl_genres:
         results.append(self.genres_embedding(inputs['genres']))
-      res = keras.layers.Concatenate(axis=1)(results)
+      tf.print('concatenate shapes:', [r.shape for r in results])
+      res = keras.layers.Concatenate(axis=-1)(results)
+      tf.print('call result,shape=', res.shape)
       # logging.debug(f'call {self.name} SHAPE ={res.shape}')
+      tf.print('CALL', self.name, ' shape=', res.shape)
       return res
     
     def get_config(self):
@@ -360,12 +371,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       self.layer_sizes = layer_sizes
       self.drop_rate = drop_rate
     
-    #@tf.function(input_signature=[input_dataset_element_spec])
-    #def serving_default(self, inputs):
-    #  embedding = self.predict(inputs)
-    #  # return {'output_predictions': predictions}
-    #  return embedding
-    
     def build(self, input_shape):
       # print(f'build {self.name} input_shape={input_shape}\n')
       self.embedding_model.build(input_shape)
@@ -380,7 +385,9 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       # return self.output_shapes[0]
       input_shape_3 = self.dense_layers.build(
         self.embedding_model.compute_output_shape(input_shape))
-      return input_shape_3
+      _shape_3 = [i for i in input_shape_3]
+      _shape_3[0] = None
+      return _shape_3
       # return None, self.layer_sizes[-1]
       # return (input_shape['user_id'][0], self.layer_sizes[-1])
     
@@ -389,6 +396,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       # print(f'call {self.name} type={type(inputs)}\n')
       feature_embedding = self.embedding_model(inputs, **kwargs)
       res = self.dense_layers(feature_embedding)
+      tf.print('CALL', self.name, ' shape=', res.shape)
       return res
     
     def get_config(self):
@@ -431,9 +439,9 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       super(CandidateModel, self).__init__(**kwargs)
       
       self.embedding_model = MovieModel(n_movies=n_movies,
-                                        n_genres=n_genres,
-                                        embed_out_dim=embed_out_dim,
-                                        incl_genres=incl_genres)
+        n_genres=n_genres,
+        embed_out_dim=embed_out_dim,
+        incl_genres=incl_genres, name = "movie_emb")
       
       self.dense_layers = keras.Sequential(name="dense_candidate")
       if isinstance(layer_sizes, str):
@@ -450,7 +458,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       
       for layer_size in layer_sizes[-1:]:
         self.dense_layers.add(keras.layers.Dense(layer_size,
-                                                 kernel_initializer="glorot_normal"))
+          kernel_initializer="glorot_normal"))
       
       self.dense_layers.add(keras.layers.UnitNormalization(axis=-1))
       
@@ -463,12 +471,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       self.drop_rate = drop_rate
       self.layer_sizes = layer_sizes
       
-    #@tf.function(input_signature=[input_dataset_element_spec])
-    #def serving_default(self, inputs):
-    #  embedding = self.predict(inputs)
-    #  # return {'output_predictions': predictions}
-    #  return embedding
-    
     def build(self, input_shape):
       # print(f'build {self.name} input_shape={input_shape}\n')
       self.embedding_model.build(input_shape)
@@ -482,16 +484,20 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       # This is invoked after build by TwoTower
       input_shape_3 = self.dense_layers.build(
         self.embedding_model.compute_output_shape(input_shape))
-      return input_shape_3
+      _shape_3 = [i for i in input_shape_3]
+      _shape_3[0] = None
+      return _shape_3
       # return None, self.layer_sizes[-1]
     
     def call(self, inputs, **kwargs):
       # inputs should contain columns "movie_id", "genres"
       # logging.debug(f'call {self.name} type ={type(inputs)}\ntype ={inputs}\n')
       feature_embedding = self.embedding_model(inputs, **kwargs)
+      tf.print('invoked movie_emb.  shape=', feature_embedding.shape)
       res = self.dense_layers(feature_embedding)
       # returns an np.ndarray wrapped in a tensor if inputs is tensor, else not wrapped
       # logging.debug(f'CALL {self.name} SHAPE ={res.shape}\n')
+      tf.print('CALL', self.name, ' shape=', res.shape)
       return res
     
     def get_config(self):
@@ -584,23 +590,28 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         # self.final_loss_bc_layer = keras.losses.Loss(name=None, reduction="mean", dtype=None)
         self.final_loss_bc_layer = keras.layers.Lambda(
           lambda x: tf.reduce_mean(x, axis=0))
-      
-    #def serving_default(self, inputs):
-    #  print(f"inputs={inputs}")
-    #  predictions = self.predict(inputs)
-    #  # return {'output_predictions': predictions}
-    #  return predictions
     
-    #@tf.function(input_signature=[input_dataset_element_spec])
-    def call(self, inputs, **kwargs):
+    @tf.function(input_signature=[input_dataset_element_spec])
+    def call(self, inputs):
       """['user_id', 'gender', 'age_group', 'occupation','movie_id', 'rating']"""
       logging.debug(f'call {self.name} inputs={inputs}\n')
-      user_vector = self.query_model(inputs, **kwargs)
-      movie_vector = self.candidate_model(inputs, **kwargs)
-      print(f'TYPE UV={type(user_vector)}, MV={type(movie_vector)}')
+      user_vector = self.query_model(inputs)
+      movie_vector = self.candidate_model(inputs)
+      tf.print('U,V SHAPES: ', user_vector.shape, movie_vector.shape)
       s = self.dot_layer([user_vector, movie_vector])
       s = self.sigmoid_layer(s)
+      tf.print('CALL', self.name, ' shape=', s.shape)
       return s
+    
+    @tf.function(input_signature=[input_dataset_element_spec])
+    def serve_query_model(self, inputs):
+      """A dedicated function to trace and serve the trained Query Model."""
+      return self.query_model(inputs)  #
+    
+    @tf.function(input_signature=[input_dataset_element_spec])
+    def serve_candidate_model(self, inputs):
+      """A dedicated function to trace and serve the trained Candidate Model."""
+      return self.candidate_model(inputs)  #
     
     def build(self, input_shape):
       # print(f'build {self.name} input_shape={input_shape}\n')
@@ -616,7 +627,9 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       s1 = self.candidate_model.compute_output_shape(input_shape)
       s2 = self.dot_layer.compute_output_shape([s0, s1])
       s3 = self.sigmoid_layer.compute_output_shape(s2)
-      return s3
+      _shape_3 = [i for i in s3]
+      _shape_3[0] = None
+      return _shape_3
       # return (None,)
     
     @keras.utils.register_keras_serializable(package=package,
@@ -864,32 +877,6 @@ def _get_serve_tf_examples_fn(model, tf_transform_output):
   # the model assets are handled correctly when exporting.
   model.tft_layer = tf_transform_output.transform_features_layer()
 
-  @tf.function
-  def serve_tf_examples_fn(serialized_tf_examples):
-    """Returns the output to be used in the serving signature."""
-    feature_spec = tf_transform_output.raw_feature_spec()
-    feature_spec.pop(LABEL_KEY)
-    parsed_features = tf.io.parse_example(serialized_tf_examples, feature_spec)
-    transformed_features = model.tft_layer(parsed_features)
-    return model(transformed_features)
-  return serve_tf_examples_fn
-
-def _get_transform_features_signature(model, tf_transform_output):
-  """Returns a serving signature that applies tf.Transform to features."""
-  # We need to track the layers in the model in order to save it.
-  # TODO(b/162357359): Revise once the bug is resolved.
-  model.tft_layer_eval = tf_transform_output.transform_features_layer()
-  @tf.function(input_signature=[
-      tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')
-  ])
-  def transform_features_fn(serialized_tf_example):
-    """Returns the transformed_features to be fed as input to evaluator."""
-    raw_feature_spec = tf_transform_output.raw_feature_spec()
-    raw_features = tf.io.parse_example(serialized_tf_example, raw_feature_spec)
-    transformed_features = model.tft_layer_eval(raw_features)
-    logging.info('eval_transformed_features = %s', transformed_features)
-    return transformed_features
-  return transform_features_fn
 
 # tfx.components.FnArgs
 def run_fn(fn_args):
@@ -1041,43 +1028,26 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   #TODO: consider adding the vocabularies as assets:
   #    see https://www.tensorflow.org/api_docs/python/tf/saved_model/Asset
   
-  from tfx.dsl.io import fileio
-  #print(f'fn_args.serving_model_dir={fn_args.serving_model_dir}')
-  #in TFX 1.16.0, we're using keras 2, and so this is the save that creates a SavedModel which passes
   
-  #https://github.com/tensorflow/tfx/blob/v1.16.0/docs/guide/keras.md?plain=1
+  call_sig = model.call.get_concrete_function(
+    train_dataset.element_spec[0]
+  )
+  
+  query_sig = model.serve_query_model.get_concrete_function(
+    train_dataset.element_spec[0]
+  )
+  
+  candidate_sig = model.serve_candidate_model.get_concrete_function(
+    train_dataset.element_spec[0]
+  )
+  
   signatures = {
-    'serving_default':
-      _get_serve_tf_examples_fn(model, tf_transform_output).get_concrete_function(
-        tf.TensorSpec(shape=[None], dtype=tf.string,name='examples')),
-    'transform_features':
-      _get_transform_features_signature(model, tf_transform_output),
+    'serving_default': call_sig,
+    'serving_query': query_sig,
+    'serving_candidate': candidate_sig,
   }
   
-  """
-  @tf.function(input_signature=[train_dataset.element_spec])
-  def serving_fn(inputs_dict_tuple):
-    if isinstance(inputs_dict_tuple, tuple):
-      batch = inputs_dict_tuple[0]
-      inputs_label = inputs_dict_tuple[1]
-    else:
-      batch = inputs_dict_tuple
-    tf.print("MODEL__annotations__=", model.__annotations__)
-    return model(inputs=batch['age'], inputs_1=batch['gender'],
-                  inputs_2=batch['genres'],
-                  inputs_3=batch['hr'], inputs_4=batch['hr_wk'],
-                  inputs_5=batch['month'],
-                  inputs_6=batch['movie_id'],
-                  inputs_7=batch['occupation'],
-                  inputs_8=batch['user_id'], inputs_9=batch['weekday'])
-  
-  tf.saved_model.save(model, fn_args.serving_model_dir,
-    signatures={'serving_default': serving_fn.get_concrete_function()})
-    #signatures=signatures)
-    #signatures={'serving_default': model.serving_default})
-  """
-  tf.saved_model.save(model, fn_args.serving_model_dir)
-  
+  tf.saved_model.save(model, fn_args.serving_model_dir, signatures=signatures)
   
   #loaded_saved_model = tf.saved_model.load(fn_args.serving_model_dir)
   #print(f'loaded SavedModel signatures: {loaded_saved_model.signatures}')

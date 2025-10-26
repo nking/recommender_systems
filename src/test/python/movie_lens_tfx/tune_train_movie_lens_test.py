@@ -228,11 +228,6 @@ class TuneTrainTest(tf.test.TestCase):
     model_artifact = model_list[0]
     model_uri = os.path.join(model_artifact.uri, "Format-Serving")
     print(f"test: model_uri={model_uri}")
-    loaded_saved_model = tf.saved_model.load(model_uri)
-    print(
-      f'test: loaded SavedModel signatures: {loaded_saved_model.signatures}')
-    infer = loaded_saved_model.signatures["serving_default"]
-    print(f'test: infer.structured_outputs={infer.structured_outputs}')
     
     # --- get the transformed test dataset to check that can run the model with expected input structure
     examples_list = store.get_artifacts_by_type("Examples")
@@ -274,46 +269,77 @@ class TuneTrainTest(tf.test.TestCase):
     #ds = test_ds
     ds = x #expected to work when saved has no signatures configured.  default config
     
+    #ds.batch(2)
+    
+    loaded_saved_model = tf.saved_model.load(model_uri)
+    print(f'test: loaded SavedModel signatures: {loaded_saved_model.signatures}')
+    infer = loaded_saved_model.signatures["serving_default"]
+    query_emb = loaded_saved_model.signatures["serving_query"]
+    candidate_emb = loaded_saved_model.signatures["serving_candidate"]
+    
+    print(f'test: infer.structured_outputs={infer.structured_outputs}')
+    #"""
     predictions = []
+    query_embeddings = []
+    candidate_embeddings = []
     for batch in ds:
-      inp = {'inputs': batch['age']}
-      for i, key in enumerate(ds.element_spec):
-        if i == 0:
-          continue
-        inp[f'inputs_{i}'] = batch[key]
-      # predictions.append(infer_default(batch))
-      # predictions.append(infer_default(inp))
-      predictions.append(
+      #TODO: consider making a reflection method that takes arguments element_spec, input_dict,
+      # infer_method and creates the invocations like this:
+      
+      """predictions.append(
         infer(inputs=batch['age'], inputs_1=batch['gender'],
-                      inputs_2=batch['genres'],
-                      inputs_3=batch['hr'], inputs_4=batch['hr_wk'],
-                      inputs_5=batch['month'],
-                      inputs_6=batch['movie_id'],
-                      inputs_7=batch['occupation'],
-                      inputs_8=batch['user_id'],
-                      inputs_9=batch['weekday']))
+          inputs_2=batch['genres'],
+          inputs_3=batch['hr'], inputs_4=batch['hr_wk'],
+          inputs_5=batch['month'],
+          inputs_6=batch['movie_id'],
+          inputs_7=batch['occupation'],
+          inputs_8=batch['user_id'],
+          inputs_9=batch['weekday']))"""
+      predictions.append(
+        infer(age=batch['age'], gender=batch['gender'],
+          genres=batch['genres'],
+          hr=batch['hr'], hr_wk=batch['hr_wk'],
+          month=batch['month'],
+          movie_id=batch['movie_id'],
+          occupation=batch['occupation'],
+          user_id=batch['user_id'],
+          weekday=batch['weekday']))
+      
+      query_embeddings.append(
+        query_emb(age=batch['age'], gender=batch['gender'],
+          genres=batch['genres'],
+          hr=batch['hr'], hr_wk=batch['hr_wk'],
+          month=batch['month'],
+          movie_id=batch['movie_id'],
+          occupation=batch['occupation'],
+          user_id=batch['user_id'],
+          weekday=batch['weekday']))
+      candidate_embeddings.append(
+        candidate_emb(age=batch['age'], gender=batch['gender'],
+          genres=batch['genres'],
+          hr=batch['hr'], hr_wk=batch['hr_wk'],
+          month=batch['month'],
+          movie_id=batch['movie_id'],
+          occupation=batch['occupation'],
+          user_id=batch['user_id'],
+          weekday=batch['weekday']))
+      
     print(f'predictions = {predictions}')
     num_rows = ds.reduce(0, lambda x, _: x + 1).numpy()
     #print(f'num_rows={num_rows},  num_pred={len(predictions)}, card={ds.cardinality().numpy()}')
     self.assertEqual(len(predictions), num_rows)
+    self.assertEqual(len(query_embeddings), num_rows)
+    self.assertEqual(len(candidate_embeddings), num_rows)
+    #"""
+    #TODO: add use of fingerprint to show example of using it to verify model
+    #fingerprint = tf.saved_model.experimental.read_fingerprint(saved_model_path)
     
-    """
-      loaded_saved_model = tf.saved_model.load(fn_args.serving_model_dir)
-      infer = loaded_saved_model.signatures["serving_default"]
-      
-      fingerprint = tf.saved_model.experimental.read_fingerprint(saved_model_path)
-
-
-      
-      
-      query_model = model.query_model
-      candidate_model = model.candidate_model
-      loaded_saved_model = tf.saved_model.load(fn_args.serving_model_dir)
-    """
     #for ways to load data for checking the model:
     # https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/docs/tutorials/transform/census.ipynb#L1496
     
     #TODO: for examining the SavedModel, see
     # https://github.com/tensorflow/docs/blob/master/site/en/r1/guide/saved_model.md#cli-to-inspect-and-execute-savedmodel
+    # to see the signatures and their inputs:
+    # saved_model_cli show --dir <path_to_saved_model_dir> --all
     
 
