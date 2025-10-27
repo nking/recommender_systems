@@ -134,7 +134,7 @@ def preprocessing_fn(inputs):
   outputs["weekday"] = tf.math.mod(days_since_1970, tf.constant(7, dtype=tf.int64))
   #week starting on Monday
   outputs["weekday"] = tf.add(outputs["weekday"], tf.constant(4, dtype=tf.int64))
-  #a cross of hour and weekday: hr * 7 + weekday
+  #a cross of hour and weekday: hr * 7 + weekday.  range is [0,168]. in UsrModel, tf.keras.layers.Embedding further modtransforms
   outputs["hr_wk"] = tf.add(tf.multiply(outputs["hr"], tf.constant(7, dtype=tf.int64)),\
       outputs["weekday"])
   

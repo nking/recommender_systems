@@ -3,9 +3,9 @@ import shutil
 
 from tfx.dsl.io import fileio
 from tfx.orchestration import metadata
-from tfx.components import StatisticsGen, SchemaGen
-
-from tensorflow_metadata.proto.v0 import schema_pb2
+from tfx.components import StatisticsGen, SchemaGen, ExampleValidator
+from tfx.utils import io_utils
+from tensorflow_metadata.proto.v0 import schema_pb2, anomalies_pb2
 from tensorflow_transform.tf_metadata import schema_utils
 from google.protobuf import text_format
 
@@ -48,6 +48,11 @@ class TuneTrainTest(tf.test.TestCase):
 
     schema_gen = SchemaGen(statistics=statistics_gen.outputs['statistics'],
       infer_feature_shape=True)
+    
+    # Performs anomaly detection based on statistics and data schema.
+    example_validator = ExampleValidator(
+      statistics=statistics_gen.outputs['statistics'],
+      schema=schema_gen.outputs['schema'])
 
     if get_kaggle():
       tr_dir = "/kaggle/working/"
@@ -122,7 +127,7 @@ class TuneTrainTest(tf.test.TestCase):
     #TODO: continue with components;
     # see https://github.com/tensorflow/tfx/blob/master/tfx/examples/penguin/penguin_pipeline_local.py
 
-    components = [ratings_example_gen, statistics_gen, schema_gen,
+    components = [ratings_example_gen, statistics_gen, schema_gen, example_validator,
                   ratings_transform, tuner, trainer]
 
     PIPELINE_NAME = 'TestPythonTransformPipeline'
@@ -165,30 +170,47 @@ class TuneTrainTest(tf.test.TestCase):
     #metadata_connection = metadata.Metadata(metadata_connection_config)
     store = metadata_store.MetadataStore(metadata_connection_config)
     artifact_types = store.get_artifact_types()
-    logging.debug(f"MLMD store artifact_types={artifact_types}")
+    print(f"MLMD store artifact_types={artifact_types}")
     artifacts = store.get_artifacts()
-    logging.debug(f"MLMD store artifacts={artifacts}")
+    print(f"MLMD store artifacts={artifacts}")
    
     executions = store.get_executions()
     logging.debug(f"MLMD store executions={executions}")
-    self.assertLessEqual(6, len(artifact_types))
-    self.assertLessEqual(6, len(artifacts))
-    self.assertLessEqual(6, len(executions))
+    self.assertLessEqual(7, len(artifact_types))
+    self.assertLessEqual(7, len(artifacts))
+    self.assertLessEqual(7, len(executions))
     # executions has custom_properties.key: "infiles_dict_ser"
     #    and custom_properties.key: "output_config_ser"
     artifact_count = len(artifacts)
     execution_count = len(executions)
     self.assertGreaterEqual(artifact_count, execution_count)
     self.assertGreaterEqual(artifact_count, execution_count)
-
+    
+    #ExampleValidator produces standard_artifacts.ExampleAnomalies
+    anomalies0_list = store.get_artifacts_by_type("ExampleAnomalies")
+    for artifact in anomalies0_list:
+      if "post_transform_anomalies" in artifact.uri:
+        anomalies_tranformed_uri = artifact.uri
+      else:
+        anomalies_raw_uri = artifact.uri
+    anomalies_tranformed_uri = os.path.join(anomalies_tranformed_uri, "SchemaDiff.pb")
+    anomalies_raw_uri = os.path.join(anomalies_raw_uri, "Split-train", "SchemaDiff.pb")
+    anomalies_raw = anomalies_pb2.Anomalies()
+    anomalies_raw.ParseFromString(
+      io_utils.read_bytes_file(anomalies_raw_uri)
+    )
+    self.assertNotEqual(anomalies_raw.ByteSize(), 0,
+      "The protobuf message for SchemaDiff for ExampleAnomalies should not be empty")
+    self.assertTrue(anomalies_raw.IsInitialized())
+    
     logging.debug(f"tuner.id={tuner.id}")
     logging.debug(f"trainer.id={trainer.id}")
     self.assertTrue(fileio.exists(os.path.join(PIPELINE_ROOT, tuner.id)))
     self.assertTrue(
       fileio.exists(os.path.join(PIPELINE_ROOT, trainer.id)))
 
-    #https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/types/standard_artifacts.py#L487
-    #TransformCache
+    #https://github.com/tensorflow/tfx/blob/v1.16.0/tfx/types/standard_artifacts.py
+    # #TransformCache
     #TransformGraph
     tuner_list = store.get_artifacts_by_type("TunerResults")
     logging.debug(f"tuner_list={tuner_list}")
@@ -219,6 +241,7 @@ class TuneTrainTest(tf.test.TestCase):
       hparams = json.loads(open(file_path, 'r').read())
       logging.debug(f"best_hyperparameters.txt keys()={hparams.keys()}")
     
+    # =================================
     model_run_list = store.get_artifacts_by_type("ModelRun")
     model_run_artifact = model_run_list[0]
     model_run_uri = model_run_artifact.uri
