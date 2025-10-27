@@ -383,7 +383,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       # print(f'compute_output_shape {self.name} input_shape={input_shape}, {input_shape['user_id'][0]}, {self.layer_sizes[-1:]}\n')
       # This is invoked after build by TwoTower
       # return self.output_shapes[0]
-      input_shape_3 = self.dense_layers.build(
+      input_shape_3 = self.dense_layers.compute_output_shape(
         self.embedding_model.compute_output_shape(input_shape))
       _shape_3 = [i for i in input_shape_3]
       _shape_3[0] = None
@@ -482,7 +482,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     def compute_output_shape(self, input_shape):
       # print(f'compute_output_shape {self.name} input_shape={input_shape}\n')
       # This is invoked after build by TwoTower
-      input_shape_3 = self.dense_layers.build(
+      input_shape_3 = self.dense_layers.compute_output_shape(
         self.embedding_model.compute_output_shape(input_shape))
       _shape_3 = [i for i in input_shape_3]
       _shape_3[0] = None
@@ -787,6 +787,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     metrics=[METRIC_FN, keras.metrics.MeanAbsoluteError()],
     run_eagerly=hp.get("run_eagerly")
   )
+  model.summary(print_fn=logging.info)
   is_tf_keras_model = isinstance(model, tf.keras.Model)
   is_keras_model = isinstance(model, keras.Model)
   is_keras_models_Model = isinstance(model, keras.models.Model)
