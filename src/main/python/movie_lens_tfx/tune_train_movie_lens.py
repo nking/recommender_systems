@@ -810,7 +810,7 @@ def get_default_hyperparameters(custom_config, input_element_spec) -> keras_tune
   #layers_sizes is a list of ints, so encode each list as a string, chices can only be int,float,bool,str
   hp.Choice("layer_sizes", values=[json.dumps([32])], default=json.dumps([32]))
   # ahmos for "age", "hr_wk", "month", "occupation", "gender"
-  hp.Fixed("feature_acronym", value="h")
+  hp.Fixed("feature_acronym", custom_config.get("feature_acronym", "h"))
   hp.Fixed("incl_genres", custom_config["incl_genres"])
   hp.Fixed('num_epochs', value=10)
   hp.Fixed('batch_size', TRAIN_BATCH_SIZE)
