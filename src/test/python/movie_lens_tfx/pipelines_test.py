@@ -82,7 +82,7 @@ class PipelinesTest(tf.test.TestCase):
       '--direct_num_workers=0'
     ]
     
-    baseline_components = pipeline_factory.build_components(MODEL_TYPE.BASELINE)
+    baseline_components = pipeline_factory.build_components(PIPELINE_TYPE.BASELINE)
     
     # create baseline model
     my_pipeline = tfx.dsl.Pipeline(
@@ -101,7 +101,7 @@ class PipelinesTest(tf.test.TestCase):
     artifacts = store.get_artifacts()
     logging.debug(f"MLMD store artifacts={artifacts}")
     
-    components = pipeline_factory.build_components(MODEL_TYPE.PRODUCTION)
+    components = pipeline_factory.build_components(PIPELINE_TYPE.PRODUCTION)
     # simulate experimentation of one model family
     my_pipeline = tfx.dsl.Pipeline(
       pipeline_name=PIPELINE_NAME,
