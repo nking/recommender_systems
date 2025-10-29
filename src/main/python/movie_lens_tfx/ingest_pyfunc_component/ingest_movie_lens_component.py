@@ -1,15 +1,12 @@
-from absl import logging
 import pprint
 
 from tfx.types import standard_artifacts, artifact_utils, \
-  standard_component_specs, channel_utils
+  channel_utils
 from tfx.dsl.component.experimental import annotations
 from tfx.dsl.component.experimental.decorators import component
 #from tfx.dsl.components.component import component
 
-from movie_lens_utils import *
-from ingest_movie_lens_beam import *
-from tfx.proto import example_gen_pb2
+from utils.ingest_movie_lens_beam import *
 
 from tfx import v1 as tfx
 

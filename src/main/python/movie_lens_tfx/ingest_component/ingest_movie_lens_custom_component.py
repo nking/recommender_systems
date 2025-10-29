@@ -3,19 +3,13 @@ import time
 
 from typing import Text, Optional
 
-import tensorflow as tf
-
-from absl import logging
-
 from tfx.components.example_gen.base_example_gen_executor import BaseExampleGenExecutor
 #from tfx.components.example_gen import utils
-from tfx.components.util import examples_utils
-from tfx.dsl.components.base import executor_spec, base_component, base_beam_component
+from tfx.dsl.components.base import executor_spec, base_beam_component
 from tfx import types
 from tfx.types.component_spec import ChannelParameter, ComponentSpec, ExecutionParameter
 
-from tfx.types import artifact_utils, standard_artifacts, \
-  standard_component_specs, channel_utils
+from tfx.types import artifact_utils, channel_utils
 
 #from tfx.dsl.component.experimental.annotations import InputArtifact
 #from tfx.dsl.component.experimental.annotations import OutputArtifact
@@ -23,10 +17,8 @@ from tfx.types import artifact_utils, standard_artifacts, \
 #from tfx.dsl.component.experimental.decorators import component
 #from tfx.types.experimental.simple_artifacts import Dataset
 
-from tfx.proto import example_gen_pb2
-
-from ingest_movie_lens_beam import *
-from movie_lens_utils import *
+from utils.ingest_movie_lens_beam import *
+from utils.movie_lens_utils import *
 
 from tfx import v1 as tfx
 
@@ -50,9 +42,7 @@ print(f"TFX version: {tfx.__version__}")
 #    such as sentences, time series, or videos.
 
 from tfx.types import standard_artifacts
-from tfx.types.artifact import Artifact
-from tfx.types.artifact import Property
-from tfx.types.artifact import PropertyType
+
 
 class IngestMovieLensExecutorSpec(ComponentSpec):
   """ComponentSpec for Custom TFX MovieLensExecutor Component."""

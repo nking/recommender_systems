@@ -1,11 +1,9 @@
-import glob
 import shutil
 
 from apache_beam.options.pipeline_options import PipelineOptions
-from apache_beam.testing.util import assert_that, is_not_empty
 
 from helper import *
-from ingest_movie_lens_beam_pa import *
+from misc.ingest_movie_lens_beam_pa import *
 
 tf.get_logger().propagate = False
 logging.set_verbosity(logging.WARNING)

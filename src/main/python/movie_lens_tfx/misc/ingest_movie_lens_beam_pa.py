@@ -14,10 +14,10 @@ performs a left inner join on ratings with users and movies.
 import random
 import time
 
-from movie_lens_utils import *
+from utils.movie_lens_utils import *
 #from apache_beam.pvalue import TaggedOutput
 
-from CustomUTF8Coder import CustomUTF8Coder
+from utils.CustomUTF8Coder import CustomUTF8Coder
 
 from absl import logging
 logging.set_verbosity(logging.WARNING)

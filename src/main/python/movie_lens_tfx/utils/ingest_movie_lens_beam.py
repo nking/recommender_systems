@@ -6,13 +6,11 @@ import apache_beam as beam
 
 import random
 
-from typing import Any, List, Tuple
-from movie_lens_utils import *
+from utils.movie_lens_utils import *
 #from apache_beam.pvalue import TaggedOutput
 
-from CustomUTF8Coder import CustomUTF8Coder
+from utils.CustomUTF8Coder import CustomUTF8Coder
 
-import absl
 from absl import logging
 logging.set_verbosity(logging.WARNING)
 logging.set_stderrthreshold(logging.WARNING)

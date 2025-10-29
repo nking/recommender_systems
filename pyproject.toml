@@ -1,8 +1,8 @@
 ##NOTE: for this to work, need to fill in the scripts section
 [project]
-name = "movie_lens_scripts_tfx"
+name = "recommender_systems_tfx_pipelines"
 version = "0.1.0"
-description = "TFX pipelines for kaggle recommender systems project"
+description = "TFX pipelines for Kaggle recommender systems project"
 authors = [
     { name = "Nichole King" },
 ]
@@ -18,6 +18,13 @@ dependencies = [
     "tensorflow-metadata==1.16.1",
     "ml-metadata==1.16.0",
 ]
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src/main/python"] # Specify where to find packages
+
 #also java >= 11... 11 for pyspark compatabiltity
 # there may be kubernetes version constraints, or native cloud constraints
 license = "MIT"
@@ -39,13 +46,6 @@ classifiers = [
 #  src/test/python
 ## can use this to list each method to expose:
 #[project.scripts]
-
-[tool.setuptools.packages.find]
-where = ["."] # List of directories to search for packages (default is ["."])
-include = ["CustomUTF8Coder", "movie_lens_utils", "ingest_movie_lens_beam_pa", "ingest_movie_lens_beam", "ingest_movie_lens_component", "ingest_movie_lens_custom_component", "transform_movie_lens"]
-exclude = [""] 
-namespaces = false # Set to true if you are using PEP 420 namespace packages
-
 
 [project.urls]
 Homepage = "https://www.kaggle.com/code/nicholeasuniquename/recommender-systems-with-tfx-pipelines"

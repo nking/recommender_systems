@@ -6,20 +6,12 @@ import tensorflow_model_analysis as tfma
 
 import enum
 
-from tensorflow_metadata.proto.v0 import schema_pb2
-from tensorflow_transform.tf_metadata import schema_utils
-from google.protobuf import text_format
 from tfx.dsl.components.common import resolver
 from tfx.proto import pusher_pb2
-from tfx.proto import trainer_pb2
 from tfx.types import Channel
 from tfx.types.standard_artifacts import Model
-from tfx.types.standard_artifacts import ModelBlessing
 
-from tfx.components import InfraValidator
-from tfx.proto import infra_validator_pb2
-
-from ingest_movie_lens_component import *
+from ingest_pyfunc_component.ingest_movie_lens_component import *
 
 class PIPELINE_TYPE(enum.Enum):
   PREPROCESSING = "preprocessing_data"

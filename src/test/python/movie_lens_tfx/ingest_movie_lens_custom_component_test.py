@@ -24,8 +24,8 @@ from tfx.components import StatisticsGen, SchemaGen
 
 from helper import *
 
-from ingest_movie_lens_custom_component import *
-from movie_lens_utils import *
+from ingest_component.ingest_movie_lens_custom_component import *
+from utils.movie_lens_utils import *
 
 from ml_metadata.metadata_store import metadata_store
 

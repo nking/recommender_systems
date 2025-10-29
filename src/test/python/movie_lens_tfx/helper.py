@@ -1,8 +1,6 @@
 #contains tf import:
 
-import os
-import sys
-from movie_lens_utils import *
+from utils.movie_lens_utils import *
 
 def get_kaggle() -> bool:
   cwd = os.getcwd()
@@ -13,6 +11,8 @@ def get_kaggle() -> bool:
   return kaggle
 
 def get_project_dir() -> str:
+  if get_kaggle():
+    return "/kaggle/working"
   cwd = os.getcwd()
   head = cwd
   proj_dir = ""
@@ -25,10 +25,7 @@ def get_project_dir() -> str:
   return proj_dir
 
 def get_bin_dir() -> str:
-  if get_kaggle():
-    return "/kaggle/working/bin"
-  else:
-    return os.path.join(get_project_dir(), "bin")
+  return os.path.join(get_project_dir(), "bin")
 
 
 def add_to_sys(proj_dir):

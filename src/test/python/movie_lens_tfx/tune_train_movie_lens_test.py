@@ -5,16 +5,12 @@ from tfx.dsl.io import fileio
 from tfx.orchestration import metadata
 from tfx.components import StatisticsGen, SchemaGen, ExampleValidator
 from tfx.utils import io_utils
-from tensorflow_metadata.proto.v0 import schema_pb2, anomalies_pb2
+from tensorflow_metadata.proto.v0 import anomalies_pb2
 from tensorflow_transform.tf_metadata import schema_utils
-from google.protobuf import text_format
 
-from ingest_movie_lens_component import *
+from ingest_pyfunc_component.ingest_movie_lens_component import *
 #import trainer_movie_lens
 
-import tensorflow_transform as tft
-
-from ml_metadata.proto import metadata_store_pb2
 from ml_metadata.metadata_store import metadata_store
 from tune_train_movie_lens import *
 

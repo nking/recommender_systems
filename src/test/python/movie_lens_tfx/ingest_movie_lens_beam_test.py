@@ -3,7 +3,7 @@ import time
 
 from apache_beam.testing.util import assert_that, is_not_empty, equal_to
 
-from ingest_movie_lens_beam import *
+from utils.ingest_movie_lens_beam import *
 
 logging.set_verbosity(logging.WARNING)
 logging.set_stderrthreshold(logging.WARNING)

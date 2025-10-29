@@ -1,11 +1,10 @@
-import os
 import shutil
 
 from tfx.dsl.io import fileio
 from tfx.orchestration import metadata
 from tfx.components import StatisticsGen, SchemaGen
 
-from ingest_movie_lens_component import *
+from ingest_pyfunc_component.ingest_movie_lens_component import *
 
 from ml_metadata.proto import metadata_store_pb2
 from ml_metadata.metadata_store import metadata_store
