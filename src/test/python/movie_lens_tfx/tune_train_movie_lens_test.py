@@ -186,11 +186,9 @@ class TuneTrainTest(tf.test.TestCase):
     anomalies0_list = store.get_artifacts_by_type("ExampleAnomalies")
     for artifact in anomalies0_list:
       if "post_transform_anomalies" in artifact.uri:
-        anomalies_tranformed_uri = artifact.uri
+        anomalies_tranformed_uri = os.path.join(artifact.uri, "SchemaDiff.pb")
       else:
-        anomalies_raw_uri = artifact.uri
-    anomalies_tranformed_uri = os.path.join(anomalies_tranformed_uri, "SchemaDiff.pb")
-    anomalies_raw_uri = os.path.join(anomalies_raw_uri, "Split-train", "SchemaDiff.pb")
+        anomalies_raw_uri = os.path.join(artifact.uri, "Split-train", "SchemaDiff.pb")
     anomalies_raw = anomalies_pb2.Anomalies()
     anomalies_raw.ParseFromString(
       io_utils.read_bytes_file(anomalies_raw_uri)

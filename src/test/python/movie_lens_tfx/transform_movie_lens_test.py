@@ -128,9 +128,9 @@ class TransformTest(tf.test.TestCase):
     #TransformGraph
     transform_graph_list = store.get_artifacts_by_type("TransformGraph")
     logging.debug(f"transform_graph_list={transform_graph_list}")
-    latest_transform_graph_artifact = sorted(transform_graph_list, \    #or use la
+    latest_transform_graph_artifact = sorted(transform_graph_list,  #or use la
       key=lambda x: x.create_time_since_epoch, reverse=True)[0]
-st_update_time_since_epoch
+
     transform_graph_uri = latest_transform_graph_artifact.uri
     logging.debug(f"transform_graph_uri={transform_graph_uri}")
 
