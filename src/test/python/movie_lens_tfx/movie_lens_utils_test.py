@@ -6,8 +6,8 @@ from movie_lens_tfx.utils.movie_lens_utils import _assert_dict_1
 from tfx.proto import example_gen_pb2
 
 from absl import logging
-logging.set_verbosity(logging.WARNING)
-logging.set_stderrthreshold(logging.WARNING)
+logging.set_verbosity(logging.INFO)
+logging.set_stderrthreshold(logging.INFO)
 
 class TestInfileDictUtils(unittest.TestCase):
 

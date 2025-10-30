@@ -20,8 +20,8 @@ from movie_lens_tfx.utils.movie_lens_utils import *
 from movie_lens_tfx.utils.CustomUTF8Coder import CustomUTF8Coder
 
 from absl import logging
-logging.set_verbosity(logging.WARNING)
-logging.set_stderrthreshold(logging.WARNING)
+logging.set_verbosity(logging.INFO)
+logging.set_stderrthreshold(logging.INFO)
 
 class ReadCSVToRecords(beam.PTransform):
   def __init__(self, infiles_dict):
@@ -59,7 +59,7 @@ class ReadCSVToRecords(beam.PTransform):
         #>> parquetio.WriteToParquet(\
         #file_path_prefix=file_path_prefix,\
         #schema=pa_schema, file_name_suffix='.parquet')
-      print(f'TYPE {key}={type(pc[key])}')
+      #print(f'TYPE {key}={type(pc[key])}')
       #class 'apache_beam.transforms.ptransform._ChainedPTransform'
     return pc
 

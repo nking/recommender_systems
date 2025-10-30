@@ -24,8 +24,8 @@ from tfx_bsl.public import tfxio
 
 from absl import logging
 
-logging.set_verbosity(logging.DEBUG)
-logging.set_stderrthreshold(logging.DEBUG)
+logging.set_verbosity(logging.INFO)
+logging.set_stderrthreshold(logging.INFO)
 
 TRAIN_BATCH_SIZE = 2
 EVAL_BATCH_SIZE = 2
@@ -77,7 +77,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   
   input_dataset_element_spec_ser = hp.get("input_dataset_element_spec_ser")
   input_dataset_element_spec = pickle.loads(base64.b64decode(input_dataset_element_spec_ser.encode('utf-8')))
-  print(f'input_dataset_element_spec={input_dataset_element_spec}')
+  logging.debug(f'input_dataset_element_spec={input_dataset_element_spec}')
   # NOTE: tfx expected the models to subclass tf.keras.Model, not keras.Model
   
   _input_dataset_element_spec = {}
@@ -227,7 +227,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         results.append(self.gender_embedding(inputs['gender']))
       res = keras.layers.Concatenate()(results)
       logging.debug(f'call {self.name} SHAPE ={res.shape}')
-      tf.print('CALL', self.name, ' shape=', res.shape)
+      #tf.print('CALL', self.name, ' shape=', res.shape)
       return res
     
     def get_config(self):
@@ -272,12 +272,12 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         ], name="genres_emb")
     
     def build(self, input_shape):
-      tf.print("build", self.name, "input_shape=:", input_shape)
-      tf.print(f"OUTPUT shapes:", self.movie_embedding.compute_output_shape( input_shape['movie_id']))
+      #tf.print("build", self.name, "input_shape=:", input_shape)
+      #tf.print(f"OUTPUT shapes:", self.movie_embedding.compute_output_shape( input_shape['movie_id']))
       self.movie_embedding.build(input_shape['movie_id'])
       if self.incl_genres:
         self.genres_embedding.build(input_shape['genres'])
-        tf.print(self.genres_embedding.compute_output_shape(input_shape['genres']))
+        #tf.print(self.genres_embedding.compute_output_shape(input_shape['genres']))
       self.built = True
     
     def compute_output_shape(self, input_shape):
@@ -299,11 +299,11 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       # shape is (batch_size, x, out_dim)
       if self.incl_genres:
         results.append(self.genres_embedding(inputs['genres']))
-      tf.print('concatenate shapes:', [r.shape for r in results])
+      #tf.print('concatenate shapes:', [r.shape for r in results])
       res = keras.layers.Concatenate(axis=-1)(results)
-      tf.print('call result,shape=', res.shape)
+      #tf.print('call result,shape=', res.shape)
       # logging.debug(f'call {self.name} SHAPE ={res.shape}')
-      tf.print('CALL', self.name, ' shape=', res.shape)
+      #tf.print('CALL', self.name, ' shape=', res.shape)
       return res
     
     def get_config(self):
@@ -396,7 +396,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       # print(f'call {self.name} type={type(inputs)}\n')
       feature_embedding = self.embedding_model(inputs, **kwargs)
       res = self.dense_layers(feature_embedding)
-      tf.print('CALL', self.name, ' shape=', res.shape)
+      #tf.print('CALL', self.name, ' shape=', res.shape)
       return res
     
     def get_config(self):
@@ -493,11 +493,11 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       # inputs should contain columns "movie_id", "genres"
       # logging.debug(f'call {self.name} type ={type(inputs)}\ntype ={inputs}\n')
       feature_embedding = self.embedding_model(inputs, **kwargs)
-      tf.print('invoked movie_emb.  shape=', feature_embedding.shape)
+      #tf.print('invoked movie_emb.  shape=', feature_embedding.shape)
       res = self.dense_layers(feature_embedding)
       # returns an np.ndarray wrapped in a tensor if inputs is tensor, else not wrapped
       # logging.debug(f'CALL {self.name} SHAPE ={res.shape}\n')
-      tf.print('CALL', self.name, ' shape=', res.shape)
+      #tf.print('CALL', self.name, ' shape=', res.shape)
       return res
     
     def get_config(self):
@@ -597,10 +597,10 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       logging.debug(f'call {self.name} inputs={inputs}\n')
       user_vector = self.query_model(inputs)
       movie_vector = self.candidate_model(inputs)
-      tf.print('U,V SHAPES: ', user_vector.shape, movie_vector.shape)
+      #tf.print('U,V SHAPES: ', user_vector.shape, movie_vector.shape)
       s = self.dot_layer([user_vector, movie_vector])
       s = self.sigmoid_layer(s)
-      tf.print('CALL', self.name, ' shape=', s.shape)
+      #tf.print('CALL', self.name, ' shape=', s.shape)
       return s
     
     @tf.function(input_signature=[input_dataset_element_spec])

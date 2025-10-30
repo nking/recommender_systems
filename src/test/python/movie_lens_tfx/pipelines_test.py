@@ -18,8 +18,8 @@ from movie_lens_tfx.PipelineComponentsFactory import *
 
 tf.get_logger().propagate = False
 from absl import logging
-logging.set_verbosity(logging.DEBUG)
-logging.set_stderrthreshold(logging.DEBUG)
+logging.set_verbosity(logging.INFO)
+logging.set_stderrthreshold(logging.INFO)
 
 class PipelinesTest(tf.test.TestCase):
 
@@ -44,7 +44,7 @@ class PipelinesTest(tf.test.TestCase):
     PIPELINE_ROOT = os.path.join(output_data_dir, PIPELINE_NAME)
     # remove results from previous test runs:
     try:
-      print(f"removing: {PIPELINE_ROOT}")
+      logging.debug(f"removing: {PIPELINE_ROOT}")
       shutil.rmtree(PIPELINE_ROOT)
     except OSError as e:
       pass
@@ -119,9 +119,9 @@ class PipelinesTest(tf.test.TestCase):
     # then human verification, then if passed, push to serving
     
     artifact_types = store.get_artifact_types()
-    print(f"MLMD store artifact_types={artifact_types}")
+    logging.debug(f"MLMD store artifact_types={artifact_types}")
     artifacts = store.get_artifacts()
-    print(f"MLMD store artifacts={artifacts}")
+    logging.debug(f"MLMD store artifacts={artifacts}")
    
     executions = store.get_executions()
     logging.debug(f"MLMD store executions={executions}")

@@ -12,15 +12,15 @@ from tfx.utils import name_utils
 from movie_lens_tfx.ingest_component.ingest_movie_lens_custom_component import *
 from helper import *
 
-logging.set_verbosity(logging.WARNING)
-logging.set_stderrthreshold(logging.WARNING)
+logging.set_verbosity(logging.INFO)
+logging.set_stderrthreshold(logging.INFO)
 
 class CSVExampleGenTest(tf.test.TestCase):
 
   def setUp(self):
     super().setUp()
     self.name = 'run with CSVExampleGen to examine automatic MLMD data'
-    print(os.environ)
+    logging.debug(os.environ)
     self.is_kaggle = get_kaggle()
 
   @mock.patch.object(publisher, 'Publisher')
@@ -100,13 +100,13 @@ class CSVExampleGenTest(tf.test.TestCase):
     self.assertTrue(fileio.exists(os.path.join(pipeline_root, users_example_gen.id)))
 
     for key, value in users_example_gen.outputs.items():
-      print(f'key={key}, value={value}')
+      logging.debug(f'key={key}, value={value}')
 
     #list files in alt_output_data_dir and in output_data_dir
-    print(f'listing files in output_data_dir {output_data_dir}:')
+    logging.debug(f'listing files in output_data_dir {output_data_dir}:')
     for dirname, _, filenames in os.walk(output_data_dir):
       for filename in filenames:
-        print(os.path.join(dirname, filename))
+        logging.debug(os.path.join(dirname, filename))
 
     store = metadata_store.MetadataStore(connection_config)
     artifact_types = store.get_artifact_types()

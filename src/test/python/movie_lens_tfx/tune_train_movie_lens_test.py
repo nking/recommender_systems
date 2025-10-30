@@ -18,8 +18,8 @@ from helper import *
 
 tf.get_logger().propagate = False
 from absl import logging
-logging.set_verbosity(logging.DEBUG)
-logging.set_stderrthreshold(logging.DEBUG)
+logging.set_verbosity(logging.INFO)
+logging.set_stderrthreshold(logging.INFO)
 
 class TuneTrainTest(tf.test.TestCase):
 
@@ -132,7 +132,7 @@ class TuneTrainTest(tf.test.TestCase):
     PIPELINE_ROOT = os.path.join(output_data_dir, PIPELINE_NAME)
     #remove results from previous test runs:
     try:
-      print(f"removing: {PIPELINE_ROOT}")
+      logging.debug(f"removing: {PIPELINE_ROOT}")
       shutil.rmtree(PIPELINE_ROOT)
     except OSError as e:
       pass
@@ -166,9 +166,9 @@ class TuneTrainTest(tf.test.TestCase):
     #metadata_connection = metadata.Metadata(metadata_connection_config)
     store = metadata_store.MetadataStore(metadata_connection_config)
     artifact_types = store.get_artifact_types()
-    print(f"MLMD store artifact_types={artifact_types}")
+    logging.debug(f"MLMD store artifact_types={artifact_types}")
     artifacts = store.get_artifacts()
-    print(f"MLMD store artifacts={artifacts}")
+    logging.debug(f"MLMD store artifacts={artifacts}")
    
     executions = store.get_executions()
     logging.debug(f"MLMD store executions={executions}")
@@ -244,7 +244,7 @@ class TuneTrainTest(tf.test.TestCase):
     model_list = store.get_artifacts_by_type("Model")
     model_artifact = model_list[0]
     model_uri = os.path.join(model_artifact.uri, "Format-Serving")
-    print(f"test: model_uri={model_uri}")
+    logging.debug(f"test: model_uri={model_uri}")
     
     # --- get the transformed test dataset to check that can run the model with expected input structure
     examples_list = store.get_artifacts_by_type("Examples")
@@ -253,14 +253,14 @@ class TuneTrainTest(tf.test.TestCase):
       key=lambda x: x.create_time_since_epoch, reverse=True)[0]
     # or use last_update_time_since_epoch
     transfomed_examples_uri = latest_examples_artifact.uri
-    print(f"transfomed_examples_uri={transfomed_examples_uri}")
+    logging.debug(f"transfomed_examples_uri={transfomed_examples_uri}")
     
     latest_schema_artifact = sorted(store.get_artifacts_by_type("Schema"),
       key=lambda x: x.last_update_time_since_epoch, reverse=True)[0]
     # or use last_update_time_since_epoch
     schema_uri = latest_schema_artifact.uri
     schema_uri = schema_uri.replace("pre_transform_schema", "post_transform_schema")
-    print(f"schema_uri={schema_uri}")
+    logging.debug(f"schema_uri={schema_uri}")
     schema_file_path = [os.path.join(schema_uri, name) for name in os.listdir(schema_uri)][0]
     
     schema = tfx.utils.parse_pbtxt_file(schema_file_path, schema_pb2.Schema())
@@ -289,12 +289,12 @@ class TuneTrainTest(tf.test.TestCase):
     #ds.batch(2)
     
     loaded_saved_model = tf.saved_model.load(model_uri)
-    print(f'test: loaded SavedModel signatures: {loaded_saved_model.signatures}')
+    logging.debug(f'test: loaded SavedModel signatures: {loaded_saved_model.signatures}')
     infer = loaded_saved_model.signatures["serving_default"]
     query_emb = loaded_saved_model.signatures["serving_query"]
     candidate_emb = loaded_saved_model.signatures["serving_candidate"]
     
-    print(f'test: infer.structured_outputs={infer.structured_outputs}')
+    logging.debug(f'test: infer.structured_outputs={infer.structured_outputs}')
     #"""
     predictions = []
     query_embeddings = []
@@ -341,7 +341,7 @@ class TuneTrainTest(tf.test.TestCase):
           user_id=batch['user_id'],
           weekday=batch['weekday']))
       
-    print(f'predictions = {predictions}')
+    logging.debug(f'predictions = {predictions}')
     num_rows = ds.reduce(0, lambda x, _: x + 1).numpy()
     #print(f'num_rows={num_rows},  num_pred={len(predictions)}, card={ds.cardinality().numpy()}')
     self.assertEqual(len(predictions), num_rows)

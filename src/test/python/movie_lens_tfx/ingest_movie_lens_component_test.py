@@ -28,8 +28,8 @@ from movie_lens_tfx.utils.movie_lens_utils import *
 from ml_metadata.metadata_store import metadata_store
 from absl import logging
 tf.get_logger().propagate = False
-logging.set_verbosity(logging.WARNING)
-logging.set_stderrthreshold(logging.WARNING)
+logging.set_verbosity(logging.INFO)
+logging.set_stderrthreshold(logging.INFO)
 
 from helper import *
 

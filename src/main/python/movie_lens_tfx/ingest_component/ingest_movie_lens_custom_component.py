@@ -28,12 +28,12 @@ building a custom component
 
 # Set up logging.
 tf.get_logger().propagate = False
-logging.set_verbosity(logging.WARNING)
-logging.set_stderrthreshold(logging.WARNING)
+logging.set_verbosity(logging.INFO)
+logging.set_stderrthreshold(logging.INFO)
 pp = pprint.PrettyPrinter()
 
-print(f"TensorFlow version: {tf.__version__}")
-print(f"TFX version: {tfx.__version__}")
+logging.debug(f"TensorFlow version: {tf.__version__}")
+logging.debug(f"TFX version: {tfx.__version__}")
 
 #from tfx.utils import json_utils
 

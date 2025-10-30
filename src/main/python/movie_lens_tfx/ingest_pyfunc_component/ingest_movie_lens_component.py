@@ -13,12 +13,12 @@ from tfx import v1 as tfx
 import tensorflow as tf
 
 tf.get_logger().propagate = False
-logging.set_verbosity(logging.WARNING)
-logging.set_stderrthreshold(logging.WARNING)
+logging.set_verbosity(logging.INFO)
+logging.set_stderrthreshold(logging.INFO)
 pp = pprint.PrettyPrinter()
 
-print(f"TensorFlow version: {tf.__version__}")
-print(f"TFX version: {tfx.__version__}")
+logging.debug(f"TensorFlow version: {tf.__version__}")
+logging.debug(f"TFX version: {tfx.__version__}")
 
 #when use_beam=True, when the TFX pipeline is compiled and run with a
 # Beam orchestrator, TFX automatically injects a Beam pipeline into
