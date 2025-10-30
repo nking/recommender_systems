@@ -1,3 +1,5 @@
+import os
+from typing import List
 
 from tfx.dsl.components.base import base_beam_component
 

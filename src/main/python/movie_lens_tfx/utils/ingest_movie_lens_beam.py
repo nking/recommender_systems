@@ -6,7 +6,7 @@ import apache_beam as beam
 
 import random
 
-from utils.movie_lens_utils import *
+from movie_lens_tfx.utils.movie_lens_utils import *
 #from apache_beam.pvalue import TaggedOutput
 
 from movie_lens_tfx.utils.CustomUTF8Coder import CustomUTF8Coder
