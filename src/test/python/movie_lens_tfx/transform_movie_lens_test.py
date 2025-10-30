@@ -4,7 +4,7 @@ from tfx.dsl.io import fileio
 from tfx.orchestration import metadata
 from tfx.components import StatisticsGen, SchemaGen
 
-from ingest_pyfunc_component.ingest_movie_lens_component import *
+from movie_lens_tfx.ingest_pyfunc_component.ingest_movie_lens_component import *
 
 from ml_metadata.proto import metadata_store_pb2
 from ml_metadata.metadata_store import metadata_store
@@ -128,9 +128,9 @@ class TransformTest(tf.test.TestCase):
     #TransformGraph
     transform_graph_list = store.get_artifacts_by_type("TransformGraph")
     logging.debug(f"transform_graph_list={transform_graph_list}")
-    latest_transform_graph_artifact = sorted(transform_graph_list, \
+    latest_transform_graph_artifact = sorted(transform_graph_list, \    #or use la
       key=lambda x: x.create_time_since_epoch, reverse=True)[0]
-    #or use last_update_time_since_epoch
+st_update_time_since_epoch
     transform_graph_uri = latest_transform_graph_artifact.uri
     logging.debug(f"transform_graph_uri={transform_graph_uri}")
 

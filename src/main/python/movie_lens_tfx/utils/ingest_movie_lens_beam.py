@@ -9,7 +9,7 @@ import random
 from utils.movie_lens_utils import *
 #from apache_beam.pvalue import TaggedOutput
 
-from utils.CustomUTF8Coder import CustomUTF8Coder
+from movie_lens_tfx.utils.CustomUTF8Coder import CustomUTF8Coder
 
 from absl import logging
 logging.set_verbosity(logging.WARNING)

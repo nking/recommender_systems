@@ -3,7 +3,7 @@ import shutil
 from apache_beam.options.pipeline_options import PipelineOptions
 
 from helper import *
-from misc.ingest_movie_lens_beam_pa import *
+from movie_lens_tfx.misc.ingest_movie_lens_beam_pa import *
 
 tf.get_logger().propagate = False
 logging.set_verbosity(logging.WARNING)

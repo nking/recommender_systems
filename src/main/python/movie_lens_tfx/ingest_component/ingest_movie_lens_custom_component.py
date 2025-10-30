@@ -17,8 +17,8 @@ from tfx.types import artifact_utils, channel_utils
 #from tfx.dsl.component.experimental.decorators import component
 #from tfx.types.experimental.simple_artifacts import Dataset
 
-from utils.ingest_movie_lens_beam import *
-from utils.movie_lens_utils import *
+from movie_lens_tfx.utils.ingest_movie_lens_beam import *
+from movie_lens_tfx.utils.movie_lens_utils import *
 
 from tfx import v1 as tfx
 

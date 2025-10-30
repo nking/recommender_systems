@@ -6,7 +6,7 @@ from tfx.dsl.component.experimental import annotations
 from tfx.dsl.component.experimental.decorators import component
 #from tfx.dsl.components.component import component
 
-from utils.ingest_movie_lens_beam import *
+from movie_lens_tfx.utils.ingest_movie_lens_beam import *
 
 from tfx import v1 as tfx
 

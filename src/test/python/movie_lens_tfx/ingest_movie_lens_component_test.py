@@ -22,8 +22,8 @@ from tfx.dsl.io import fileio
 from tfx.orchestration import metadata
 from tfx.components import StatisticsGen, SchemaGen
 
-from ingest_pyfunc_component.ingest_movie_lens_component import *
-from utils.movie_lens_utils import *
+from movie_lens_tfx.ingest_pyfunc_component.ingest_movie_lens_component import *
+from movie_lens_tfx.utils.movie_lens_utils import *
 
 from ml_metadata.metadata_store import metadata_store
 from absl import logging

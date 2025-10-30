@@ -4,7 +4,6 @@ repository for refactoring of code at https://www.kaggle.com/code/nicholeasuniqu
 NOT COMPLETE YET
 
 
-
 see library versions compatible with tfx 1.16.0
 #see dependencies https://github.com/tensorflow/transform
 those are installed to a conda virtual environment based on python 3.10
@@ -24,7 +23,7 @@ after ipykernel install and register.  The kernels are selectable
 in Google Cloud jupyter notebooks (in Vertex AI workbenches)
 and presumably in AWS SageMaker Studio notebooks, and Azure ML Studio.
 
-once within a shell using activated virtual env having python 3.10:
+Once within a shell using activated virtual env having python 3.10:
 
 if not using kaggle, make sure your platform glibxx libraries are
 updated because pyfarmhash needs GLIBCXX_3.4.32
@@ -40,7 +39,7 @@ if have 3.4.32 within the host system list, you can use this to copy over
 the more complete host library:
    cp /usr/lib/x86_64-linux-gnu/libstdc++.so.6 ~/miniconda3/envs/tfx_py310/lib/
 
-Then, the activated virtural envirnoment needs these packages:
+Then, the activated virtual environment needs these packages:
 
 pip -q install pyarrow==10.0.1
 pip -q install apache-beam==2.59.0
@@ -63,24 +62,20 @@ ingest components:
 
 =======
 
+setup.py is used because need to package the ingest component with
+all of its sibling imports for the pipeline.
+
+in project base directory, within activated virtual environment:
+  pip install --editable . 
+
 local testing, no CI/CD yet (pipeline uses scripts...):
   pycharm:
     using right click menu, mark the source tree directory:
-      src/main/python/movie_lens_tfx
+      src/main/python
     using right click menu, mark the test tree directory:
       src/test/python/movie_lens_tfx
     then pycharm tests will correctly resolve paths.
   bash or other shell environment:
-    the directory that python is executed from becomes the CWD, 
-    and so sibling scripts in the source directory cannot find
-    one another because they are looking for scripts relative to
-    the CWD.
-    workarounds that are non-invasive are:
-      - use pytest by setting properties in pytest.ini
-      - use pytest.ini along with pyproject.toml which is in the
-        source tree top directory src/main/python/movie_lens_tfx/
-      looks like one solution might be to list all the
-      scripts and methods to expose in the pyproject.toml
-      
-        
+    python and pytest can be used from the project's base
+    directory
   

@@ -11,7 +11,7 @@ from tfx.proto import pusher_pb2
 from tfx.types import Channel
 from tfx.types.standard_artifacts import Model
 
-from ingest_pyfunc_component.ingest_movie_lens_component import *
+from movie_lens_tfx.ingest_pyfunc_component.ingest_movie_lens_component import *
 
 class PIPELINE_TYPE(enum.Enum):
   PREPROCESSING = "preprocessing_data"

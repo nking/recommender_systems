@@ -10,11 +10,11 @@ import tensorflow_transform as tft
 
 from ml_metadata.proto import metadata_store_pb2
 from ml_metadata.metadata_store import metadata_store
-from tune_train_movie_lens import *
+from movie_lens_tfx.tune_train_movie_lens import *
 
 from helper import *
 
-from PipelineComponentsFactory import *
+from movie_lens_tfx.PipelineComponentsFactory import *
 
 tf.get_logger().propagate = False
 from absl import logging

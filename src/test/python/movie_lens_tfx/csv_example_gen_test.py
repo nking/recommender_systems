@@ -9,7 +9,7 @@ from tfx.orchestration import publisher
 from tfx.orchestration.launcher import in_process_component_launcher
 from tfx.utils import name_utils
 
-from ingest_component.ingest_movie_lens_custom_component import *
+from movie_lens_tfx.ingest_component.ingest_movie_lens_custom_component import *
 from helper import *
 
 logging.set_verbosity(logging.WARNING)

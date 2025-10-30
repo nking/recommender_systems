@@ -1,6 +1,6 @@
 #contains tf import:
 
-from utils.movie_lens_utils import *
+from movie_lens_tfx.utils.movie_lens_utils import *
 
 def get_kaggle() -> bool:
   cwd = os.getcwd()

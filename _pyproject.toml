@@ -1,6 +1,8 @@
-##NOTE: for this to work, need to fill in the scripts section
+[build-system]
+requires = ["setuptools>=72", "wheel", "tomli"]
+build-backend = "setuptools.build_meta"
 [project]
-name = "recommender_systems_tfx_pipelines"
+name = "movie_lens_tfx"
 version = "0.1.0"
 description = "TFX pipelines for Kaggle recommender systems project"
 authors = [
@@ -18,17 +20,8 @@ dependencies = [
     "tensorflow-metadata==1.16.1",
     "ml-metadata==1.16.0",
 ]
-[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
-
-[tool.setuptools.packages.find]
-where = ["src/main/python"] # Specify where to find packages
-
-#also java >= 11... 11 for pyspark compatabiltity
-# there may be kubernetes version constraints, or native cloud constraints
+readme = "README.md"
 license = "MIT"
-#license_files=["LICENSE"]
 
 classifiers = [
   #   3 - Alpha
@@ -37,6 +30,20 @@ classifiers = [
   "Development Status :: 1 - development",
   "Programming Language :: Python :: 3.10",
 ]
+
+
+[tool.setuptools]
+#packages = ["movie_lens_tfx"]
+
+[tool.setuptools.packages.find]
+where = ["src/main/python"]
+include = ['movie_lens_tfx', 'movie_lens_tfx.misc',
+  'movie_lens_tfx.utils', 'movie_lens_tfx.ingest_component',
+  'movie_lens_tfx.ingest_pyfunc_component', 'movie_lens_tfx']
+#exclude = ["tests"]
+
+#also java >= 11... 11 for pyspark compatabiltity
+# there may be kubernetes version constraints, or native cloud constraints
 
 #[tool.pytest.ini_options]
 #pythonpath = 

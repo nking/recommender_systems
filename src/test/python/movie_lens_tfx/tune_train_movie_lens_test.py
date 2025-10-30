@@ -8,11 +8,11 @@ from tfx.utils import io_utils
 from tensorflow_metadata.proto.v0 import anomalies_pb2
 from tensorflow_transform.tf_metadata import schema_utils
 
-from ingest_pyfunc_component.ingest_movie_lens_component import *
+from movie_lens_tfx.ingest_pyfunc_component.ingest_movie_lens_component import *
 #import trainer_movie_lens
 
 from ml_metadata.metadata_store import metadata_store
-from tune_train_movie_lens import *
+from movie_lens_tfx.tune_train_movie_lens import *
 
 from helper import *
 

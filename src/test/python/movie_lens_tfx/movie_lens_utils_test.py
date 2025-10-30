@@ -1,8 +1,8 @@
 import unittest
 #from ... main.python.infile_dict_util import *
 #from ... main.python.infile_dict_util import _assert_dict_1
-from utils.movie_lens_utils import *
-from utils.movie_lens_utils import _assert_dict_1
+from movie_lens_tfx.utils.movie_lens_utils import *
+from movie_lens_tfx.utils.movie_lens_utils import _assert_dict_1
 from tfx.proto import example_gen_pb2
 
 from absl import logging
