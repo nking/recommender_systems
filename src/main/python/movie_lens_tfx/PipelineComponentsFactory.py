@@ -14,6 +14,7 @@ from tfx.types import Channel
 from tfx.types.standard_artifacts import Model
 
 from movie_lens_tfx.ingest_pyfunc_component.ingest_movie_lens_component import *
+from movie_lens_tfx.misc import tfrecord_to_parquet
 
 class PIPELINE_TYPE(enum.Enum):
   PREPROCESSING = "preprocessing_data"
@@ -23,7 +24,7 @@ class PIPELINE_TYPE(enum.Enum):
 class PipelineComponentsFactory():
   def __init__(self, infiles_dict_ser:str, output_config_ser:str, transform_dir:str,
     user_id_max: int, movie_id_max:int, n_genres:int, n_age_groups:int,
-    min_eval_size:int=100, serving_model_dir:str=None):
+    min_eval_size:int=100, serving_model_dir:str=None, output_parquet_path:str=None):
     self.infiles_dict_ser = infiles_dict_ser
     self.output_config_ser = output_config_ser
     self.transform_dir = transform_dir
@@ -33,6 +34,7 @@ class PipelineComponentsFactory():
     self.n_age_groups = n_age_groups
     self.min_eval_size = min_eval_size
     self.serving_model_dir = serving_model_dir
+    self.output_parquet_path = output_parquet_path
     
   def build_components(self, type: PIPELINE_TYPE) -> List[base_beam_component.BaseBeamComponent]:
     tuner_custom_config = {
@@ -66,13 +68,20 @@ class PipelineComponentsFactory():
       statistics=statistics_gen.outputs['statistics'],
       schema=schema_gen.outputs['schema'])
     
-    if type == PIPELINE_TYPE.PREPROCESSING:
-      return [ratings_example_gen, statistics_gen, schema_gen, example_validator]
-    
     ratings_transform = tfx.components.Transform(
       examples=ratings_example_gen.outputs['output_examples'],
       schema=schema_gen.outputs['schema'],
       module_file=os.path.join(self.transform_dir, 'transform_movie_lens.py'))
+    
+    if type == PIPELINE_TYPE.PREPROCESSING:
+      parquet_task = tfrecord_to_parquet.FromTFRecordToParquet(
+        transform_graph=ratings_transform.outputs['transform_graph'],
+        transformed_examples=ratings_transform.outputs[
+          'transformed_examples'],
+        output_file_path=self.output_parquet_path
+      )
+      return [ratings_example_gen, statistics_gen, schema_gen,
+              example_validator, ratings_transform, parquet_task]
     
     # resolver, if needing last trained model as baseline model, needs to be invoked before
     # Tuner and Trainer.

@@ -5,6 +5,7 @@ from tfx.orchestration import metadata
 from tfx.components import StatisticsGen, SchemaGen
 
 from movie_lens_tfx.ingest_pyfunc_component.ingest_movie_lens_component import *
+from movie_lens_tfx.misc import tfrecord_to_parquet
 
 from ml_metadata.proto import metadata_store_pb2
 from ml_metadata.metadata_store import metadata_store
@@ -12,6 +13,7 @@ from ml_metadata.metadata_store import metadata_store
 from helper import *
 
 from absl import logging
+
 tf.get_logger().propagate = False
 logging.set_verbosity(logging.INFO)
 logging.set_stderrthreshold(logging.INFO)
@@ -29,28 +31,7 @@ class TransformTest(tf.test.TestCase):
   def test_MovieLensExampleGen(self):
 
     test_num = "transform_1"
-
-    ratings_example_gen = (MovieLensExampleGen(
-      infiles_dict_ser=self.infiles_dict_ser,
-      output_config_ser = self.output_config_ser))
-
-    statistics_gen = StatisticsGen(examples = ratings_example_gen.outputs['output_examples'])
-
-    schema_gen = SchemaGen(statistics=statistics_gen.outputs['statistics'],
-      infer_feature_shape=True)
-
-    if get_kaggle():
-      tr_dir = "/kaggle/working/"
-    else:
-      tr_dir = os.path.join(get_project_dir(), "src/main/python/movie_lens_tfx")
-
-    ratings_transform = tfx.components.Transform(
-      examples=ratings_example_gen.outputs['output_examples'],
-      schema=schema_gen.outputs['schema'],
-      module_file=os.path.join(tr_dir, 'transform_movie_lens.py'))
-
-    components = [ratings_example_gen, statistics_gen, schema_gen, ratings_transform]
-
+    
     PIPELINE_NAME = 'TestPythonTransformPipeline'
     #output_data_dir = os.path.join(os.environ.get('TEST_UNDECLARED_OUTPUTS_DIR',self.get_temp_dir()),self._testMethodName)
     output_data_dir = os.path.join(get_bin_dir(), test_num, self._testMethodName)
@@ -74,6 +55,36 @@ class TransformTest(tf.test.TestCase):
       '--direct_running_mode=multi_processing',
       '--direct_num_workers=0'
     ]
+
+    ratings_example_gen = (MovieLensExampleGen(
+      infiles_dict_ser=self.infiles_dict_ser,
+      output_config_ser = self.output_config_ser))
+
+    statistics_gen = StatisticsGen(examples = ratings_example_gen.outputs['output_examples'])
+
+    schema_gen = SchemaGen(statistics=statistics_gen.outputs['statistics'],
+      infer_feature_shape=True)
+
+    if get_kaggle():
+      tr_dir = "/kaggle/working/"
+    else:
+      tr_dir = os.path.join(get_project_dir(), "src/main/python/movie_lens_tfx")
+      
+    output_parquet_path = os.path.join(PIPELINE_ROOT, "transformed_parquet")
+
+    ratings_transform = tfx.components.Transform(
+      examples=ratings_example_gen.outputs['output_examples'],
+      schema=schema_gen.outputs['schema'],
+      module_file=os.path.join(tr_dir, 'transform_movie_lens.py'))
+    
+    #for additional EDA:
+    parquet_task = tfrecord_to_parquet.FromTFRecordToParquet(
+      transform_graph=ratings_transform.outputs['transform_graph'],
+      transformed_examples=ratings_transform.outputs['transformed_examples'],
+      output_file_path=output_parquet_path
+    )
+
+    components = [ratings_example_gen, statistics_gen, schema_gen, ratings_transform, parquet_task]
 
     #imple is tfx.v1.dsl.Pipeline  where tfx is aliased in import
     my_pipeline = tfx.dsl.Pipeline(
@@ -152,23 +163,10 @@ class TransformTest(tf.test.TestCase):
           artifact = store.get_artifacts_by_id([event.artifact_id])[0]
           if artifact.type_id == store.get_artifact_type('Examples').id:
             logging.debug(f"artifact={artifact}\nuri={artifact.uri}")
-
-    #!find /kaggle/working/bin -type f -iname "transformed_examples*.gz"
-    """
-    logging.debug(f"component transformed_examples uri={ratings_transform.outputs['transformed_examples'].get()[0].uri}")
-    logging.debug(f"component post_transform_schema uri={ratings_transform.outputs['post_transform_schema'].get()[0].uri}")
-    stats_path_train = os.path.join(transform_graph_uri, get_split_dir_name("train"), 'FeatureStats.pb')
-    stats_path_eval = os.path.join(transform_graph_uri, get_split_dir_name("eval"), 'FeatureStats.pb')
-    stats_path_test = os.path.join(transform_graph_uri, get_split_dir_name("test"),'FeatureStats.pb')
-    self.assertTrue(os.path.exists(stats_path_train))
-    self.assertTrue(os.path.exists(stats_path_eval))
-    self.assertTrue(os.path.exists(stats_path_test))
-
-    tfrecord_filenames = [os.path.join(stats_path_train, name) for name in os.listdir(stats_path_train)]
-    dataset = tf.data.TFRecordDataset(tfrecord_filenames, compression_type="GZIP")
-    #might need to parse the data
-    for tfrecord in dataset.take(5):
-      example = tf.train.Example()
-      example.ParseFromString(tfrecord.numpy())
-      logging.debug(f"a transform example={example}")
-    """
+    
+    import polars as pl
+    for split_name in ["train", "eval", "test"]:
+      in_file_pattern = os.path.join(output_parquet_path, f"Split-{split_name}", "*")
+      #df = pl.read_parquet(in_file_pattern)
+      df = pl.scan_parquet(in_file_pattern)
+      print(f"POLARS: {split_name}: {df.describe()}")
