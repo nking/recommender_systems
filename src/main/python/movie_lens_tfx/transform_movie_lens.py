@@ -58,6 +58,7 @@ def preprocessing_fn(inputs):
   'timestamp': <tf.Tensor 'inputs_6_copy:0' shape=(None, 1) dtype=int64>,
   'user_id': <tf.Tensor 'inputs_7_copy:0' shape=(None, 1) dtype=int64>}
 
+  NOTE: these are all float outputs now
   outputs={
   'user_id': <tf.Tensor 'inputs_7_copy:0' shape=(None, 1) dtype=int64>,
   'movie_id': <tf.Tensor 'inputs_3_copy:0' shape=(None, 1) dtype=int64>,

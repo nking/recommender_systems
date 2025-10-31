@@ -27,12 +27,12 @@ logging.debug(f"TFX version: {tfx.__version__}")
 #A parameter is an argument (int, float, bytes, or unicode string)
 
 @component(use_beam=True)
-def MovieLensExampleGen( \
-  #name: tfx.dsl.components.Parameter[str], \
-  infiles_dict_ser: tfx.dsl.components.Parameter[str], \
-  output_config_ser: tfx.dsl.components.Parameter[str], \
-  output_examples: tfx.dsl.components.OutputArtifact[standard_artifacts.Examples], \
-  #output_split_config: tfx.dsl.components.OutputArtifact[standard_artifacts.SplitConfig],\
+def MovieLensExampleGen(
+  #name: tfx.dsl.components.Parameter[str],
+  infiles_dict_ser: tfx.dsl.components.Parameter[str],
+  output_config_ser: tfx.dsl.components.Parameter[str],
+  output_examples: tfx.dsl.components.OutputArtifact[standard_artifacts.Examples],
+  #output_split_config: tfx.dsl.components.OutputArtifact[standard_artifacts.SplitConfig],
   beam_pipeline: annotations.BeamComponentParameter[beam.Pipeline]=None):
   """
   ingest the ratings, movies, and users files, left join them on ratings,
