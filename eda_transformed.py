@@ -181,20 +181,17 @@ colors = px.colors.qualitative.Plotly
 
 genres_set = set(genres)
 
-MIN_SUPPORT = 0.3  # items must appear in 30% of transactions
-MIN_ITEMSET_SIZE = 3 # min size of itemset
-MIN_CONFIDENCE = 0.6  # The rule X => Y is valid if 60% of transactions containing X also contain Y.
-
+MIN_SUPPORT = 0.3  # items must appear in MIN_SUPPORT*100% of transactions
+MIN_ITEMSET_SIZE = 1 # min size of itemset
+MIN_CONFIDENCE = 0.6  # The rule X => Y is valid if MIN_CONFIDENCE*100% of transactions containing X also contain Y.3
 #make co-occurence matrix and heatmap
-def genres_co_occurence_heatmap(filtered, split_name:str, label_low:str, label_high:str,
-    item:str="genres_sparse"):
+def genres_co_occurence_heatmap(filtered, split_name:str, rating:int,
+    item:str="genres"):
     
     exploded = filtered.explode(item)
     unique_items = exploded[item].unique().to_list()
     basket_item = (
-        # convert to string for pivoting
-        exploded.with_columns([pl.col(item).cast(pl.Utf8)])
-        .pivot(
+        exploded.pivot(
             values=item,
             index="row",
             on=item,
@@ -202,7 +199,7 @@ def genres_co_occurence_heatmap(filtered, split_name:str, label_low:str, label_h
         )
         .fill_null(0)
         .with_columns([
-            pl.col(col).cast(pl.Int32) for col in exploded[item].cast(pl.Utf8).unique().to_list()
+            pl.col(col).cast(pl.Int32) for col in unique_items
         ])
     )
     matrix = basket_item.drop("row").to_numpy()
@@ -212,9 +209,9 @@ def genres_co_occurence_heatmap(filtered, split_name:str, label_low:str, label_h
         color_continuous_scale="RdBu_r", # Red-Blue reversed for correlation
         title="Co-occurrence Matrix Heatmap"
     )
-    fig.write_image(os.path.join(img_dir, f"{split_name}_genre_cooccurence_rating_{label_low}_{label_high}_heatmap.png"))
+    fig.write_image(os.path.join(img_dir, f"{split_name}_genre_cooccurence_rating_{rating}_heatmap.png"))
 
-def genres_frequent_itemsets(df_sparse, split_name, label_low, label_high):
+def genres_frequent_itemsets(df_sparse, split_name, rating):
     #this method is largely a response from Gemini after asking for frequent_item sets with constraints
     # Support measures how frequently an itemset appears in the data. 
     # Confidence measures the reliability of an "if-then" rule, indicating the probability of an item 
@@ -226,33 +223,56 @@ def genres_frequent_itemsets(df_sparse, split_name, label_low, label_high):
     #  Lift < 1: items are purchased together less often than expected.
     #  Lift = 1: The items are independent.
     from pyspark.sql import SparkSession
+    from pyspark.sql.types import ArrayType, StringType, StructField, StructType
     from pyspark.ml.fpm import FPGrowth
-    import pandas as pd
     from pyspark.sql.functions import size as spark_size
+    from pyspark.sql import functions as F
     
     spark = SparkSession.builder.appName("FPGrowthExample").getOrCreate()
-    print(f'df_sparse.head={df_sparse.head(2)}')
-    _df = df_sparse.select(['genres_sparse'])
-    _df = _df.with_columns(
-          pl.col("genres_sparse").list.eval(pl.element().replace({k:v for k,v in enumerate(genres)}, default=pl.lit(None))
-          ).alias("transaction"))
-    _df = _df.select(['transaction'])
+    print(f'df_sparse.head={df_sparse.head(5)}')
+    _df = df_sparse.select(['genres'])
+    
     pandas_df = _df.to_pandas()
-    #EDITING here
-    spark_df = spark.createDataFrame(pandas_df)
+    pandas_df['genres'] = pandas_df['genres'].apply(list) #necessary for older versions of pyspark or pandas
+    schema = StructType([
+      StructField("genres", ArrayType(StringType(), containsNull=False),
+                  True)
+    ])
+    spark_df = spark.createDataFrame(pandas_df, schema=schema)
+    print(f'spark_df schema=')
+    spark_df.printSchema()
+    print(f'head: {spark_df.take(5)}')
+    
+    """
+    #using pyarrow failed for this older pyspark library
+    arrow_table = _df.to_arrow()
+    single_chunk_table = arrow_table.combine_chunks()
+    schema = StructType([
+      StructField("genres", ArrayType(StringType(), containsNull=True), True)
+    ])
+    spark_df = spark.createDataFrame(single_chunk_table, schema=schema)
+    spark_df.printSchema()
+    spark_df.show()
+    """
+    
     fp_growth = FPGrowth(
-        itemsCol="transaction",
-        minSupport=MIN_SUPPORT,
-        numPartitions=10
+        itemsCol="genres",
+        minSupport=MIN_SUPPORT, minConfidence=MIN_CONFIDENCE,
     )
     model = fp_growth.fit(spark_df)
     frequent_itemsets_spark = model.freqItemsets
-    frequent_itemsets_spark_filtered = frequent_itemsets_spark.filter(
-        frequent_itemsets_spark.items.cast("array<string>").size() >= MIN_ITEMSET_SIZE
+    print(f"\nfrequent_itemsets_spark:")
+    frequent_itemsets_spark.show(truncate=False)
+    
+    filtered_itemsets = frequent_itemsets_spark.filter(
+      F.size(F.col("items")) >= MIN_ITEMSET_SIZE
     )
+    print(f"\nfiltered_itemsets:")
+    filtered_itemsets.show(truncate=False)
+
     # Collect results and convert to Pandas for Plotly
     # Collecting to the driver is only feasible for results that fit in memory.
-    results_pd = frequent_itemsets_spark_filtered.toPandas()
+    results_pd = filtered_itemsets.toPandas()
     
     # Prepare data for visualization (e.g., convert list of items to a comma-separated string)
     results_pd['itemset_str'] = results_pd['items'].apply(lambda x: ", ".join(x))
@@ -272,7 +292,7 @@ def genres_frequent_itemsets(df_sparse, split_name, label_low, label_high):
     )
     fig.update_yaxes(tickformat=".2%") # Format y-axis as percentage
     fig.write_image(os.path.join(img_dir, 
-        f"{split_name}_genres_itemsets_rating_{label_low}_{label_high}.png"))
+        f"{split_name}_genres_itemsets_rating_{rating}.png"))
 
     #with the fpgrowth model, we can extract association rules, lift and confidence
     
@@ -300,7 +320,7 @@ def genres_frequent_itemsets(df_sparse, split_name, label_low, label_high):
         lambda row: f"{row['Antecedent_X']} => {row['Consequent_Y']}", axis=1
     )
 
-    print(f'{split_name}, rating range [{label_low}, {label_high}]')
+    print(f'{split_name}, rating {rating}]')
     # Sort by Lift for the most interesting rules
     rules_pd = rules_pd.sort_values(by='lift', ascending=False)
     print(f"Generated Rules (Top 5 by Lift):")
@@ -332,7 +352,7 @@ def genres_frequent_itemsets(df_sparse, split_name, label_low, label_high):
         marker=dict(sizemode='area', sizeref=2.*max(rules_pd['support'])/(15**2), sizemin=4)
     )
     fig_rules.write_image(os.path.join(img_dir, 
-        f"{split_name}_genres_assoc_rules_rating_{label_low}_{label_high}.png"))
+        f"{split_name}_genres_assoc_rules_rating_{rating}.png"))
     
     spark.stop()
     
@@ -380,14 +400,13 @@ for split_name in ["train", "eval", "test"]:
     df = df.with_columns(
         pl.col("genres").map_elements(movie_lens_utils.deserialize, return_dtype=pl.List(pl.Float32))
     )
+    # add an index for row number:
+    df = df.with_row_index("row")
     
-    print(f"\n{split_name}: {df.head(5)}")
+    print(f"\n{split_name} df: {df.sort('user_id').head(5)}")
     print(f'DESCRIBE:\n{df.describe()}')
     
-    write_dist_corr_heatmap(df, skip_columns=set(["genres"]), outfile_name=f"{split_name}_dist_corr_heatmap.png")
- 
-    #add an index for row number:
-    df = df.with_row_index("row")
+    write_dist_corr_heatmap(df, skip_columns=set(["genres", "row"]), outfile_name=f"{split_name}_dist_corr_heatmap.png")
     
     df = df.with_columns(
         pl.col("occupation").map_elements(lambda x: labels_dict['occupation'].get(x,x)).alias("occ")
@@ -396,6 +415,24 @@ for split_name in ["train", "eval", "test"]:
     #    pl.col("occ").cast(pl.Categorical)
     #)
     
+    print(f"\ndf w/ occ: {df.sort('user_id').head(5)}")
+    
+    df_sparse_str = df.with_columns(
+      pl.col("genres").list.eval(pl.arg_where(pl.element().cast(pl.Boolean)))
+      .alias("genres")
+    )
+    df_sparse_str = df_sparse_str.with_columns(
+      pl.col("genres").list.eval(pl.element().replace_strict(
+        {k: v for k, v in enumerate(genres)}, default=pl.lit(None)))
+      .alias("genres"))
+    # change rating back to range [0,5] rouned to nearest integer
+    df_sparse_str = df_sparse_str.with_columns(
+      (pl.col("rating") * 5).round(0).cast(pl.Int64)
+      .alias("rating")
+    )
+    print(f'df_sparse_str={df_sparse_str.sort("user_id").head(5)}')
+    
+    """
     exploded = df.with_columns(
         pl.col("genres").list.to_array(width=n_genres).arr.to_struct(
                 fields=[f"{genres[i]}" for i in range(n_genres)]
@@ -405,7 +442,7 @@ for split_name in ["train", "eval", "test"]:
    
     n_occupations = len(labels_dict_arrays['occupation'])
     n_page = n_occupations//3
-    """
+  
     for genre in genres_set:
         fig=px.box(exploded, x=genre, y='rating', color='gender')
         fig.write_image(os.path.join(img_dir, f"{split_name}_{genre}_gender_box.png"))
@@ -417,8 +454,8 @@ for split_name in ["train", "eval", "test"]:
             fig=px.box(filtered, x=genre, y='rating', color='occ')
             fig.write_image(os.path.join(img_dir, f"{split_name}_{genre}_occupation_{page_idx}_box.png"))
             page_idx += 1
-    """
     del exploded
+    """
     
     #pairplots of "rating", "gender", "age", "occ", "hr_wk", "month", "weekday"
     """
@@ -430,39 +467,30 @@ for split_name in ["train", "eval", "test"]:
             fig.write_image(os.path.join(img_dir, f"{split_name}_{feat1}_{feat2}_pair_plot.png"))
     """
     #for market basket analysis, will make a sparsely populated column
-    df_sparse = df.with_columns(
-        pl.col("genres")
-        .list.eval(
-            pl.arg_where(pl.element().cast(pl.Boolean))
-        )
-        .alias("genres_sparse")
-    )
-    exploded = df_sparse.explode('genres_sparse')
-    print(f'exploded.columns={exploded.columns}')
-    print(f'exploded head={exploded.head(2)}')
+   
+    exploded = df_sparse_str.explode('genres')
     
-    for rating_lower in [0, 0.2, 0.4, 0.6, 0.8, 1.0]:
-        filtered = exploded.filter(pl.col("rating").is_between(rating_lower, rating_lower+0.2))
+    print(f'exploded.columns={exploded.columns}')
+    print(f'exploded head={exploded.sort("user_id").head(5)}')
+    
+    for rating in [5, 4, 3, 2, 1]:
+        filtered = exploded.filter(pl.col("rating") == rating)
         print(f'filtered.columns={filtered.columns}')
-        print(f'filtered head={filtered.head(2)}')
+        print(f'filtered head={filtered.sort("user_id").head(2)}')
         #pie chart counting each genre
-        genres_counts = filtered['genres_sparse'].value_counts()#.reset_index()
+        genres_counts = filtered['genres'].value_counts()#.reset_index()
         genres_counts.columns = ['Genre', 'Count']
-        genres_counts = genres_counts.with_columns(pl.all().cast(pl.Int64))
-        label_low = str(int(rating_lower*5))
-        label_high = str(int((rating_lower+0.2)*5))
+        genres_counts = genres_counts.with_columns(pl.col('Count').cast(pl.Int64))
         print(f'dtypes={genres_counts.dtypes}')
         print(f'head={genres_counts.head(5)}')
-        genres_counts = genres_counts.with_columns(
-          pl.col("Genre").replace({k:v for k,v in enumerate(genres)},default=pl.lit(None)).alias("Genre"))
         fig = px.pie(genres_counts, values='Count', names='Genre',
-            title=f'Genres for rating {label_low}-{label_high}')
-        fig.write_image(os.path.join(img_dir, f"{split_name}_genres_rating_{int(rating_lower*5)}.png"))
+            title=f'Genres for rating {rating}')
+        fig.write_image(os.path.join(img_dir, f"{split_name}_genres_rating_{rating}.png"))
+  
+        filtered = df_sparse_str.filter(pl.col("rating") == rating)
+        genres_co_occurence_heatmap(filtered, split_name, rating, "genres")
 
-        filtered = df_sparse.filter(pl.col("rating").is_between(rating_lower, rating_lower+0.2))
-        genres_co_occurence_heatmap(filtered, split_name, label_low, label_high, "genres_sparse")
-
-        genres_frequent_itemsets(df_sparse, split_name, label_low, label_high)
+        genres_frequent_itemsets(filtered, split_name, rating)
 
     """            
     many more to add...
