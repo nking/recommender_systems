@@ -181,8 +181,8 @@ colors = px.colors.qualitative.Plotly
 
 genres_set = set(genres)
 
-MIN_SUPPORT = 0.3  # items must appear in MIN_SUPPORT*100% of transactions
-MIN_ITEMSET_SIZE = 1 # min size of itemset
+MIN_SUPPORT = 0.005  # items must appear in MIN_SUPPORT*100% of transactions
+MIN_ITEMSET_SIZE = 3 # min size of itemset
 MIN_CONFIDENCE = 0.6  # The rule X => Y is valid if MIN_CONFIDENCE*100% of transactions containing X also contain Y.3
 #make co-occurence matrix and heatmap
 def genres_co_occurence_heatmap(filtered, split_name:str, rating:int,
@@ -207,13 +207,14 @@ def genres_co_occurence_heatmap(filtered, split_name:str, rating:int,
     fig = px.imshow(
         co_occurrence, x=genres, y=genres,
         color_continuous_scale="RdBu_r", # Red-Blue reversed for correlation
-        title="Co-occurrence Matrix Heatmap"
+        title=f"{split_name}, rating {rating}: Co-occurrence Matrix Heatmap"
     )
     fig.write_image(os.path.join(img_dir, f"{split_name}_genre_cooccurence_rating_{rating}_heatmap.png"))
 
-def genres_frequent_itemsets(df_sparse, split_name, rating):
+def movies_frequent_itemsets(df, split_name, rating):
     #this method is largely a response from Gemini after asking for frequent_item sets with constraints
-    # Support measures how frequently an itemset appears in the data. 
+    # Support measures how frequently an itemset appears in the data.
+    #  reducing min support increases the length of the itemsets in the results, genreally.
     # Confidence measures the reliability of an "if-then" rule, indicating the probability of an item 
     #  appearing given another has appeared. 
     #  reliability of P(Y|X)
@@ -223,20 +224,38 @@ def genres_frequent_itemsets(df_sparse, split_name, rating):
     #  Lift < 1: items are purchased together less often than expected.
     #  Lift = 1: The items are independent.
     from pyspark.sql import SparkSession
-    from pyspark.sql.types import ArrayType, StringType, StructField, StructType
+    from pyspark.sql.types import ArrayType, StringType, StructField, StructType, LongType, IntegerType
     from pyspark.ml.fpm import FPGrowth
     from pyspark.sql.functions import size as spark_size
     from pyspark.sql import functions as F
+    import json
+    import multiprocessing
     
-    spark = SparkSession.builder.appName("FPGrowthExample").getOrCreate()
-    print(f'df_sparse.head={df_sparse.head(5)}')
-    _df = df_sparse.select(['genres'])
+    num_logical_cores = multiprocessing.cpu_count()
+    print(f"start spark session for {num_logical_cores} local cores")
     
-    pandas_df = _df.to_pandas()
-    pandas_df['genres'] = pandas_df['genres'].apply(list) #necessary for older versions of pyspark or pandas
+    spark = SparkSession.builder.appName("FPGrowthExample").master(f"local[{num_logical_cores}]").getOrCreate()
+    
+    df = df.select(['movie_ids'])
+    df = df.with_columns(pl.col("movie_ids").cast(pl.List(pl.Int32)))
+    print(f"dtype={df.dtypes}")
+    print(f'head={df.head(5)}')
+    
+    pandas_df = df.to_pandas()
+    print(f'pandas_df.head={pandas_df.head(5)}')
+    
+    def cast_list_to_python_ints(int_list):
+      """Casts all elements in a list from NumPy int32 to Python int."""
+      if int_list is None:
+        return None
+      # This explicit list comprehension forces the conversion to Python int
+      return [int(x) for x in int_list]
+    
+    pandas_df['movie_ids'] = pandas_df['movie_ids'].apply(cast_list_to_python_ints)
+    print(f'pandas_df.dtypes={pandas_df.dtypes}')
+    
     schema = StructType([
-      StructField("genres", ArrayType(StringType(), containsNull=False),
-                  True)
+      StructField("movie_ids", ArrayType(IntegerType(), containsNull=False),True)
     ])
     spark_df = spark.createDataFrame(pandas_df, schema=schema)
     print(f'spark_df schema=')
@@ -256,7 +275,7 @@ def genres_frequent_itemsets(df_sparse, split_name, rating):
     """
     
     fp_growth = FPGrowth(
-        itemsCol="genres",
+        itemsCol="movie_ids",
         minSupport=MIN_SUPPORT, minConfidence=MIN_CONFIDENCE,
     )
     model = fp_growth.fit(spark_df)
@@ -275,25 +294,53 @@ def genres_frequent_itemsets(df_sparse, split_name, rating):
     results_pd = filtered_itemsets.toPandas()
     
     # Prepare data for visualization (e.g., convert list of items to a comma-separated string)
-    results_pd['itemset_str'] = results_pd['items'].apply(lambda x: ", ".join(x))
+    #results_pd['itemset_str'] = results_pd['items'].apply(lambda x: ", ".join(x))
+    results_pd['itemset_str'] = results_pd['items'].apply(json.dumps)
 
     # Calculate Support for visualization (freq / total_transactions)
     total_transactions = spark_df.count()
     results_pd['support'] = results_pd['freq'] / total_transactions
     
+    results_pd = results_pd.sort_values(by='support', ascending=False)
+    
+    print(f"results_pd len={len(results_pd)}")
+    print(f"sorted by support={results_pd.head(5)}")
+    
+    if len(results_pd) == 0:
+      spark.stop()
+      return
+    
     # Visualize with Plotly Express (Bar Chart is common)
     fig = px.bar(
-        results_pd.sort_values(by='support', ascending=False),
+        results_pd.head(100),
         x='itemset_str',
         y='support',
-        title=f'Frequent Genre Itemsets (Min Support: {MIN_SUPPORT*100}%, Min Size: {MIN_ITEMSET_SIZE})',
+        title=f'{split_name}, rating {rating}, Frequent movie Itemsets (Min Support: {MIN_SUPPORT*100}%, Min Size: {MIN_ITEMSET_SIZE})',
         labels={'itemset_str': 'Itemset', 'support': 'Support (%)'},
-        template='plotly_white'
+        color='itemset_str',
+        color_discrete_sequence=px.colors.qualitative.Bold,
     )
     fig.update_yaxes(tickformat=".2%") # Format y-axis as percentage
     fig.write_image(os.path.join(img_dir, 
-        f"{split_name}_genres_itemsets_rating_{rating}.png"))
+        f"{split_name}_movies_itemsets_rating_{rating}.png"))
 
+    #sort results_pd by itemset length, support
+    results_pd['itemset_len'] = results_pd['items'].apply(len)
+    results_pd = results_pd.sort_values(by=['itemset_len', 'support'], ascending=[False,False])
+    print(f"sorted by itemset_length then support={results_pd.head(5)}")
+    fig = px.bar(
+      results_pd.head(100),
+      x='itemset_str',
+      y='support',
+      title=f'{split_name}, rating {rating},  movie Itemsets (Min Support: {MIN_SUPPORT * 100}%, Min Size: {MIN_ITEMSET_SIZE})',
+      labels={'itemset_str': 'Itemset', 'support': 'Support (%)'},
+      color='itemset_str',
+      color_discrete_sequence=px.colors.qualitative.Bold,
+    )
+    fig.update_yaxes(tickformat=".2%")  # Format y-axis as percentage
+    fig.write_image(os.path.join(img_dir,
+                                 f"{split_name}_movies_itemsets_rating_{rating}_2.png"))
+    
     #with the fpgrowth model, we can extract association rules, lift and confidence
     
     # Generate the association rules
@@ -314,8 +361,10 @@ def genres_frequent_itemsets(df_sparse, split_name, rating):
         """Converts a list of items into a readable string format {item1, item2}"""
         return "{" + ", ".join(itemset) + "}"
     
-    rules_pd['Antecedent_X'] = rules_pd['antecedent'].apply(format_itemset)
-    rules_pd['Consequent_Y'] = rules_pd['consequent'].apply(format_itemset)
+    #rules_pd['Antecedent_X'] = rules_pd['antecedent'].apply(format_itemset)
+    #rules_pd['Consequent_Y'] = rules_pd['consequent'].apply(format_itemset)
+    rules_pd['Antecedent_X'] = rules_pd['antecedent'].apply(json.dumps)
+    rules_pd['Consequent_Y'] = rules_pd['consequent'].apply(json.dumps)
     rules_pd['Rule_Label'] = rules_pd.apply(
         lambda row: f"{row['Antecedent_X']} => {row['Consequent_Y']}", axis=1
     )
@@ -325,7 +374,10 @@ def genres_frequent_itemsets(df_sparse, split_name, rating):
     rules_pd = rules_pd.sort_values(by='lift', ascending=False)
     print(f"Generated Rules (Top 5 by Lift):")
     print(rules_pd[['Rule_Label', 'confidence', 'lift', 'support']].head())
-
+    if len(results_pd) == 0:
+      spark.stop()
+      return
+ 
     # Create the Scatter Plot
     fig_rules = px.scatter(
         rules_pd,
@@ -334,7 +386,7 @@ def genres_frequent_itemsets(df_sparse, split_name, rating):
         size='support', # Use support to determine the size of the bubble
         color='lift', # Color the points based on the lift value
         hover_name='Rule_Label', # Show the rule text on hover
-        title=f'Association Rules Analysis (Min Confidence: {MIN_CONFIDENCE})',
+        title=f'{split_name}, rating {rating}: Association Rules Analysis (Min Confidence: {MIN_CONFIDENCE})',
         labels={'confidence': 'Confidence (P(Y|X))', 'lift': 'Lift (Interestingness)'},
         template='plotly_white'
     )
@@ -352,7 +404,7 @@ def genres_frequent_itemsets(df_sparse, split_name, rating):
         marker=dict(sizemode='area', sizeref=2.*max(rules_pd['support'])/(15**2), sizemin=4)
     )
     fig_rules.write_image(os.path.join(img_dir, 
-        f"{split_name}_genres_assoc_rules_rating_{rating}.png"))
+        f"{split_name}_movies_assoc_rules_rating_{rating}.png"))
     
     spark.stop()
     
@@ -484,13 +536,20 @@ for split_name in ["train", "eval", "test"]:
         print(f'dtypes={genres_counts.dtypes}')
         print(f'head={genres_counts.head(5)}')
         fig = px.pie(genres_counts, values='Count', names='Genre',
-            title=f'Genres for rating {rating}')
+            title=f'{split_train} rating {rating}: Genres')
         fig.write_image(os.path.join(img_dir, f"{split_name}_genres_rating_{rating}.png"))
   
         filtered = df_sparse_str.filter(pl.col("rating") == rating)
         genres_co_occurence_heatmap(filtered, split_name, rating, "genres")
 
-        genres_frequent_itemsets(filtered, split_name, rating)
+        #NOTE: looked at frequent itemsets of genres as the basket items and found no assoc rules
+        
+        #further filter to only user_id and movie_id
+        #group movie_id by user_id
+        filtered = filtered.select(["user_id", "movie_id"])
+        filtered = filtered.group_by("user_id").agg(pl.col("movie_id").unique().alias("movie_ids"))
+        filtered = filtered.select(["movie_ids"])
+        movies_frequent_itemsets(filtered, split_name, rating)
 
     """            
     many more to add...
