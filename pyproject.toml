@@ -1,0 +1,62 @@
+[build-system]
+requires = ["setuptools>=72", "wheel", "tomli"]
+build-backend = "setuptools.build_meta"
+[project]
+name = "movie_lens_tfx"
+version = "0.1.0"
+description = "TFX pipelines for Kaggle recommender systems project"
+authors = [
+    { name = "Nichole King" },
+]
+#readme = "README.md"
+requires-python = ">=3.10.0,<3.11.0"
+dependencies = [
+    "pyarrow==10.0.1",
+    "apache-beam==2.59.0",
+    "tensorflow==2.16.1",
+    "tensorflow-transform==1.16.0",
+    "tfx==1.16.0",
+    "tensorflow-data-validation==1.16.1",
+    "tensorflow-metadata==1.16.1",
+    "ml-metadata==1.16.0",
+]
+readme = "README.md"
+license = "MIT"
+
+classifiers = [
+  #   3 - Alpha
+  #   4 - Beta
+  #   5 - Production/Stable
+  "Development Status :: 1 - development",
+  "Programming Language :: Python :: 3.10",
+]
+
+
+[tool.setuptools]
+#packages = ["movie_lens_tfx"]
+
+[tool.setuptools.packages.find]
+where = ["src/main/python"]
+include = ['movie_lens_tfx', 'movie_lens_tfx.misc',
+  'movie_lens_tfx.utils', 'movie_lens_tfx.ingest_component',
+  'movie_lens_tfx.ingest_pyfunc_component', 'movie_lens_tfx']
+#exclude = ["tests"]
+
+#also java >= 11... 11 for pyspark compatabiltity
+# there may be kubernetes version constraints, or native cloud constraints
+
+#[tool.pytest.ini_options]
+#pythonpath = 
+#  src/main/python 
+#  src/drafts/python 
+#testpaths  = 
+#  src/test/python
+## can use this to list each method to expose:
+#[project.scripts]
+
+[project.urls]
+Homepage = "https://www.kaggle.com/code/nicholeasuniquename/recommender-systems-with-tfx-pipelines"
+Repository = "https://github.com/nking/recommender_systems.git"
+
+[project.optional-dependencies]
+test = ["pytest"]
