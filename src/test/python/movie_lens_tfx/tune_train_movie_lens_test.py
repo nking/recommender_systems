@@ -315,12 +315,15 @@ class TuneTrainTest(tf.test.TestCase):
       predictions.append(
         infer(age=batch['age'], gender=batch['gender'],
           genres=batch['genres'],
-          hr=batch['hr'], hr_wk=batch['hr_wk'],
+          hr=batch['hr'],
+          hr_wk=batch['hr_wk'],
           month=batch['month'],
           movie_id=batch['movie_id'],
           occupation=batch['occupation'],
+          sec_into_yr=batch['sec_into_yr'],
           user_id=batch['user_id'],
-          weekday=batch['weekday']))
+          weekday=batch['weekday'],
+          yr=batch['yr']))
       
       query_embeddings.append(
         query_emb(age=batch['age'], gender=batch['gender'],
@@ -329,8 +332,10 @@ class TuneTrainTest(tf.test.TestCase):
           month=batch['month'],
           movie_id=batch['movie_id'],
           occupation=batch['occupation'],
+          sec_into_yr=batch['sec_into_yr'],
           user_id=batch['user_id'],
-          weekday=batch['weekday']))
+          weekday=batch['weekday'],
+          yr=batch['yr']))
       candidate_embeddings.append(
         candidate_emb(age=batch['age'], gender=batch['gender'],
           genres=batch['genres'],
@@ -338,8 +343,10 @@ class TuneTrainTest(tf.test.TestCase):
           month=batch['month'],
           movie_id=batch['movie_id'],
           occupation=batch['occupation'],
+          sec_into_yr=batch['sec_into_yr'],
           user_id=batch['user_id'],
-          weekday=batch['weekday']))
+          weekday=batch['weekday'],
+          yr=batch['yr']))
       
     logging.debug(f'predictions = {predictions}')
     num_rows = ds.reduce(0, lambda x, _: x + 1).numpy()

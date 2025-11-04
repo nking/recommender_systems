@@ -484,7 +484,7 @@ for split_name in ["train", "eval", "test"]:
     )
     print(f'df_sparse_str={df_sparse_str.sort("user_id").head(5)}')
     
-    """
+    #"""
     exploded = df.with_columns(
         pl.col("genres").list.to_array(width=n_genres).arr.to_struct(
                 fields=[f"{genres[i]}" for i in range(n_genres)]
@@ -507,17 +507,17 @@ for split_name in ["train", "eval", "test"]:
             fig.write_image(os.path.join(img_dir, f"{split_name}_{genre}_occupation_{page_idx}_box.png"))
             page_idx += 1
     del exploded
-    """
+    #"""
     
     #pairplots of "rating", "gender", "age", "occ", "hr_wk", "month", "weekday"
-    """
+    #"""
     _features = ["rating", "gender", "age", "occ", "hr_wk", "month", "weekday"]
     for i, feat1 in enumerate(_features):
         for j in range(i+1, len(_features)):
             feat2 = _features[j]
             fig=px.scatter(df, x=feat1, y=feat2)
             fig.write_image(os.path.join(img_dir, f"{split_name}_{feat1}_{feat2}_pair_plot.png"))
-    """
+    #"""
     #for market basket analysis, will make a sparsely populated column
    
     exploded = df_sparse_str.explode('genres')
@@ -536,7 +536,7 @@ for split_name in ["train", "eval", "test"]:
         print(f'dtypes={genres_counts.dtypes}')
         print(f'head={genres_counts.head(5)}')
         fig = px.pie(genres_counts, values='Count', names='Genre',
-            title=f'{split_train} rating {rating}: Genres')
+            title=f'{split_name} rating {rating}: Genres')
         fig.write_image(os.path.join(img_dir, f"{split_name}_genres_rating_{rating}.png"))
   
         filtered = df_sparse_str.filter(pl.col("rating") == rating)
@@ -550,7 +550,13 @@ for split_name in ["train", "eval", "test"]:
         filtered = filtered.group_by("user_id").agg(pl.col("movie_id").unique().alias("movie_ids"))
         filtered = filtered.select(["movie_ids"])
         movies_frequent_itemsets(filtered, split_name, rating)
-
+        
+    #for prefixspan and sequence modeling, need timestamp:
+    #df = df.with_columns(
+    #  (pl.date(pl.col("yr"), 1, 1)
+    #    .cast(pl.Datetime)) + pl.duration(seconds=pl.col("sec_into_yr"))
+    #  .alias("timestamp")
+    #)
     """            
     many more to add...
     

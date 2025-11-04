@@ -77,7 +77,7 @@ class TransformTest(tf.test.TestCase):
       schema=schema_gen.outputs['schema'],
       module_file=os.path.join(tr_dir, 'transform_movie_lens.py'))
     
-    #for additional EDA:
+    #for additional EDA in notebook:
     parquet_task = tfrecord_to_parquet.FromTFRecordToParquet(
       transform_graph=ratings_transform.outputs['transform_graph'],
       transformed_examples=ratings_transform.outputs['transformed_examples'],
@@ -166,7 +166,7 @@ class TransformTest(tf.test.TestCase):
     
     import polars as pl
     for split_name in ["train", "eval", "test"]:
-      in_file_pattern = os.path.join(output_parquet_path, f"Split-{split_name}", "*")
-      #df = pl.read_parquet(in_file_pattern)
-      df = pl.scan_parquet(in_file_pattern)
-      print(f"POLARS: {split_name}: {df.describe()}")
+      in_file_pattern = os.path.join(output_parquet_path, f"Split-{split_name}*")
+      df = pl.read_parquet(in_file_pattern)
+      #df = pl.scan_parquet(in_file_pattern)
+      print(f"POLARS: {split_name}:\n{df.columns},\n{df.dtypes}\n{df.head()}\n{df.describe()}")

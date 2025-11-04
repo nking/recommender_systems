@@ -34,8 +34,9 @@ METRIC_FN = keras.metrics.RootMeanSquaredError()
 
 MAX_TUNE_TRIALS = 2
 
+#NOTE: could be improved by writing the headers to a file in the Transform stage and reading them here:
 FEATURE_KEYS = [
-  'user_id', 'movie_id', 'gender', 'age', 'occupation', 'genres', 'hr', 'weekday', 'hr_wk', 'month'
+    'user_id', 'movie_id', 'gender', 'age', 'occupation', 'genres', 'hr', 'weekday', 'hr_wk', 'month','yr', 'sec_into_yr'
 ]
 LABEL_KEY = 'rating'
 N_GENRES = 18
@@ -987,7 +988,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
     fn_args.data_accessor,
     tf_transform_output,
     EVAL_BATCH_SIZE)
-  
+    
   hp = keras_tuner.HyperParameters.from_config(fn_args.hyperparameters)
   
   logging.info('HyperParameters for training: %s' % hp.get_config())
@@ -1029,17 +1030,18 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   #TODO: consider adding the vocabularies as assets:
   #    see https://www.tensorflow.org/api_docs/python/tf/saved_model/Asset
   
+  input_element_spec = train_dataset.element_spec[0]
   
   call_sig = model.call.get_concrete_function(
-    train_dataset.element_spec[0]
+    input_element_spec
   )
   
   query_sig = model.serve_query_model.get_concrete_function(
-    train_dataset.element_spec[0]
+    input_element_spec
   )
   
   candidate_sig = model.serve_candidate_model.get_concrete_function(
-    train_dataset.element_spec[0]
+    input_element_spec
   )
   
   signatures = {
@@ -1049,6 +1051,9 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   }
   
   tf.saved_model.save(model, fn_args.serving_model_dir, signatures=signatures)
+  
+  #the model signatures expected as input are positional keywords ordere.
+  # to see the epected order, use saved_model_cli show --dir <path_to_format-serving-dir> --all
   
   #loaded_saved_model = tf.saved_model.load(fn_args.serving_model_dir)
   #print(f'loaded SavedModel signatures: {loaded_saved_model.signatures}')

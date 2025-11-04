@@ -64,6 +64,7 @@ ingest components:
 
 setup.py is used because need to package the ingest component with
 all of its sibling imports for the pipeline.
+pyproject.toml is also present with same information.
 
 in project base directory, within activated virtual environment:
   pip install --editable . 

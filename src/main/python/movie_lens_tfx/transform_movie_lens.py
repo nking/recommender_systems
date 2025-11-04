@@ -57,22 +57,24 @@ def preprocessing_fn(inputs):
   'rating': <tf.Tensor 'inputs_5_copy:0' shape=(None, 1) dtype=int64>,
   'timestamp': <tf.Tensor 'inputs_6_copy:0' shape=(None, 1) dtype=int64>,
   'user_id': <tf.Tensor 'inputs_7_copy:0' shape=(None, 1) dtype=int64>}
-
-  NOTE: these are all float outputs now
-  outputs={
-  'user_id': <tf.Tensor 'inputs_7_copy:0' shape=(None, 1) dtype=int64>,
-  'movie_id': <tf.Tensor 'inputs_3_copy:0' shape=(None, 1) dtype=int64>,
-  'rating': <tf.Tensor 'truediv:0' shape=(None, 1) dtype=float32>,
-  'gender': <tf.Tensor 'None_Lookup/LookupTableFindV2:0' shape=(None, 1) dtype=int64>,
-  'age': <tf.Tensor 'None_Lookup_1/LookupTableFindV2:0' shape=(None, 1) dtype=int64>,
-  'occupation': <tf.Tensor 'inputs_4_copy:0' shape=(None, 1) dtype=int64>,
-  'genres': <tf.Tensor 'RaggedToTensor_1/RaggedTensorToTensor:0' shape=(None, 1, 18) dtype=float32>,
-  'hr': <tf.Tensor 'FloorMod:0' shape=(None, 1) dtype=int64>,
-  'weekday': <tf.Tensor 'Add:0' shape=(None, 1) dtype=int64>,
-  'hr_wk': <tf.Tensor 'Add_1:0' shape=(None, 1) dtype=int64>,
-  'month': <tf.Tensor 'Cast_8:0' shape=(None, 1) dtype=int64>}
+    
+    outputs={
+    'user_id': <tf.Tensor 'Cast:0' shape=(None, 1) dtype=float32>,
+    'movie_id': <tf.Tensor 'Cast_1:0' shape=(None, 1) dtype=float32>,
+    'rating': <tf.Tensor 'truediv:0' shape=(None, 1) dtype=float32>,
+    'gender': <tf.Tensor 'Cast_3:0' shape=(None, 1) dtype=float32>,
+    'age': <tf.Tensor 'Cast_4:0' shape=(None, 1) dtype=float32>,
+    'occupation': <tf.Tensor 'Cast_5:0' shape=(None, 1) dtype=float32>,
+    'genres': <tf.Tensor 'RaggedToTensor_1/RaggedTensorToTensor:0' shape=(None, 1, 18) dtype=float32>,
+    'hr': <tf.Tensor 'Cast_8:0' shape=(None, 1) dtype=float32>,
+    'weekday': <tf.Tensor 'Cast_9:0' shape=(None, 1) dtype=float32>,
+    'hr_wk': <tf.Tensor 'Cast_10:0' shape=(None, 1) dtype=float32>,
+    'month': <tf.Tensor 'Cast_11:0' shape=(None, 1) dtype=float32>,
+    'yr': <tf.Tensor 'Cast_12:0' shape=(None, 1) dtype=float32>,
+    'sec_into_yr': <tf.Tensor 'Cast_13:0' shape=(None, 1) dtype=float32>
+      }
   """
-  logging.debug(f"inputs={inputs}")
+  #tf.print(f"inputs={inputs}")
 
   outputs = {'user_id': tf.cast(inputs['user_id'], dtype=tf.float32),
              'movie_id': tf.cast(inputs['movie_id'], dtype=tf.float32)}
@@ -122,44 +124,54 @@ def preprocessing_fn(inputs):
   chicago_tz_offset = tf.constant(18000, dtype=tf.int64)
   #ts is w.r.t. 1970 01 01, Thursday, 0 hr
   ts = tf.subtract(inputs["timestamp"], chicago_tz_offset)
-
-  outputs["hr"] = tf.cast(tf.round(tf.divide(\
-    tf.cast(ts, dtype=tf.float64), tf.constant(3600., dtype=tf.float64))),\
-    dtype=tf.int64)
+  #tf.print("ts=", ts)
+  
+  outputs["hr"] = tf.math.floordiv(ts,  tf.constant(3600, dtype=tf.int64))
   outputs["hr"] = tf.math.mod(outputs['hr'], tf.constant(24, dtype=tf.int64))
 
-  days_since_1970 = tf.cast(tf.round(tf.divide(\
-    tf.cast(ts, dtype=tf.float64), tf.constant(86400., dtype=tf.float64))),\
-    dtype=tf.int64)
+  days_since_1970 = tf.math.floordiv(ts, tf.constant(86400, dtype=tf.int64))
 
   outputs["weekday"] = tf.math.mod(days_since_1970, tf.constant(7, dtype=tf.int64))
   #week starting on Monday
   outputs["weekday"] = tf.add(outputs["weekday"], tf.constant(4, dtype=tf.int64))
   #a cross of hour and weekday: hr * 7 + weekday.  range is [0,168]. in UsrModel, tf.keras.layers.Embedding further modtransforms
-  outputs["hr_wk"] = tf.add(tf.multiply(outputs["hr"], tf.constant(7, dtype=tf.int64)),\
-      outputs["weekday"])
+  outputs["hr_wk"] = tf.add(tf.multiply(outputs["hr"], tf.constant(7, dtype=tf.int64)),
+    outputs["weekday"])
   
-  for key in ["hr", "weekday", "hr_wk"]:
-    outputs[key] = tf.cast(outputs[key], dtype=tf.float32)
-
   #there is probably a relationship between genres and month, so calc month too.
-  outputs["month"] = tf.cast(tf.round(\
-    tf.divide(tf.cast(days_since_1970, tf.float64), tf.constant(30, dtype=tf.float64))), dtype=tf.float32)
-
-  ## year can be useful for timeseries analysis.
-  ## there is a leap year every 4 years, starting at 1972.
-  ## month calc using 30 days for every month, roughly.
-  ## 365 days for non-leap years, 366 for leap years
-  ## number of Leap years = (dY // 4)
-  ## (dY - (dY//4)) * 365 + (dY//4) * 366 = days_since_1970
-  ## dY = days_since_1970 / (365 - 365/4 + 366/4)
-  #dy = tf.cast(tf.round(\
-  #  tf.divide(\
-  #    tf.cast(days_since_1970, dtype=tf.float32),\
-  #    tf.constant(365 - (365./4) + (366./4), dtype=tf.float32))), dtype=tf.int64)
-  #outputs["year"] = tf.add(tf.constant(1970, dtype=tf.int64), dy)
+  outputs["month"] = tf.math.floordiv(days_since_1970, tf.constant(30, dtype=tf.int64))
   
-  logging.debug(f"outputs={outputs}")
+  for key in ["hr", "weekday", "hr_wk", "month"]:
+    outputs[key] = tf.cast(outputs[key], dtype=tf.float32)
+  
+  ## adding year and sec_into_yr to later reconstruct timestamp for prefixspan, time series, etc
+  _365 = tf.constant(365, dtype=tf.int64)
+  _366 = tf.constant(366, dtype=tf.int64)
+  _1 = tf.constant(1, dtype=tf.int64)
+  _2 = tf.constant(2, dtype=tf.int64)
+  _366_plus_3_times_365 = tf.constant(1461, dtype=tf.int64)
+  _2_times_365 = tf.constant(730, dtype=tf.int64)
+  days_since_1972 = tf.subtract(days_since_1970, _2_times_365)
+  ## n_ly = 1 + (days_since_1972//(366 + 365*3))
+  ## n_non_ly = (days_since_1972 - n_ly*366)//365
+  ## yr = 1972 + n_ly + n_non_ly
+  ## sec_into_yr = ts - (((366 * n_ly) + (365 * (n_non_ly + 2))) * 24 * 60 * 60)
+  #    range is [0, 31536000 || 31622400]
+  
+  n_ly = tf.add(_1, tf.math.floordiv(days_since_1972, _366_plus_3_times_365))
+  n_non_ly = tf.math.floordiv(tf.subtract(days_since_1972, tf.multiply(n_ly, _366)), _365)
+  outputs["yr"] = tf.add(tf.add(tf.constant(1972, dtype=tf.int64), n_ly), n_non_ly)
+  outputs["yr"] = tf.cast(outputs["yr"], tf.float32)
+  ##sec_into_yr = ts - (((366 * n_ly) + (365 * (n_non_ly + 2))) * 24 * 60 * 60)
+  #   where +2 is for 1970, 1971
+  _t1 = tf.multiply(_366, n_ly)
+  _t2 = tf.multiply(_365, tf.add(n_non_ly, _2))
+  outputs["sec_into_yr"] = tf.subtract(ts,
+      tf.multiply(tf.add(_t1, _t2), tf.constant(24 * 60 * 60, dtype=tf.int64)))
+  outputs["sec_into_yr"] = tf.cast(outputs["sec_into_yr"], dtype=tf.float32)
+  
+  #tf.print("sec_into_yr=", outputs["sec_into_yr"])
+  #tf.print(f"outputs={outputs}")
 
   return outputs
 
