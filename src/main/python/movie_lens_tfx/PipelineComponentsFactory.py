@@ -71,6 +71,8 @@ class PipelineComponentsFactory():
       statistics=statistics_gen.outputs['statistics'],
       schema=schema_gen.outputs['schema'])
     
+    example_resolver = None
+    example_diff = None
     if run_example_diff:
       example_resolver = tfx.dsl.Resolver(
         strategy_class=tfx.dsl.experimental.LatestArtifactStrategy,
@@ -98,7 +100,7 @@ class PipelineComponentsFactory():
           'transformed_examples'],
         output_file_path=self.output_parquet_path
       )
-      if tuner_custom_config:
+      if run_example_diff:
         return [example_gen, statistics_gen, schema_gen, example_resolver, example_diff,
                 example_validator, ratings_transform, parquet_task]
       else:

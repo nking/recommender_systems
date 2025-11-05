@@ -191,9 +191,16 @@ genres_set = set(genres)
 #make co-occurence matrix and heatmap
 def genres_co_occurence_heatmap(filtered, split_name:str, rating:int,
     item:str="genres"):
+  
+    print(f'genres_co_occurence_heatmap filtered={filtered}')
+    print(f'{filtered.columns}')
+    print(f'{filtered.dtypes}')
     
     exploded = filtered.explode(item)
     unique_items = exploded[item].unique().to_list()
+    
+    print(f'unique_items={unique_items.dtypes}')
+    
     basket_item = (
         exploded.pivot(
             values=item,
@@ -265,18 +272,18 @@ for split_name in ["train", "eval", "test"]:
       (pl.col("rating") * 5).round(0).cast(pl.Int64).alias("rating")
     )
     df = df.with_columns(
-      pl.col("movie_id").cast(pl.Int32)
+      pl.col("*").exclude(['genres']).cast(pl.Int32)
     )
-    df = df.with_columns(pl.col('yr').cast(pl.Int32))
-    df = df.with_columns(pl.col('sec_into_yr').cast(pl.Int32))
-    
+    df = df.with_columns(
+      pl.col("genres").cast(pl.List(pl.Int32))
+    )
     print(f"\n{split_name} df: {df.sort('user_id').head(5)}")
     print(f'DESCRIBE:\n{df.describe()}')
     
     write_dist_corr_heatmap(df, skip_columns=set(["genres", "row"]), outfile_name=f"{split_name}_dist_corr_heatmap.png")
     
     df = df.with_columns(
-        pl.col("occupation").map_elements(lambda x: labels_dict['occupation'].get(x,x)).alias("occ")
+        pl.col("occupation").map_elements(lambda x: labels_dict['occupation'].get(x,x), return_dtype=pl.String).alias("occ")
     )
     
     print(f"\ndf w/ occ: {df.sort('user_id').head(5)}")
