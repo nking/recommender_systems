@@ -9,7 +9,7 @@ import tensorflow_model_analysis as tfma
 import enum
 
 from tfx.dsl.components.common import resolver
-from tfx.proto import pusher_pb2
+from tfx.proto import pusher_pb2, range_config_pb2
 from tfx.types import Channel
 from tfx.types.standard_artifacts import Model
 
@@ -36,7 +36,7 @@ class PipelineComponentsFactory():
     self.serving_model_dir = serving_model_dir
     self.output_parquet_path = output_parquet_path
     
-  def build_components(self, type: PIPELINE_TYPE) -> List[base_beam_component.BaseBeamComponent]:
+  def build_components(self, type: PIPELINE_TYPE, run_example_diff:bool=False) -> List[base_beam_component.BaseBeamComponent]:
     tuner_custom_config = {
       'user_id_max': self.user_id_max,
       'movie_id_max': self.movie_id_max,
@@ -51,13 +51,16 @@ class PipelineComponentsFactory():
     if type == PIPELINE_TYPE.BASELINE:
       tuner_custom_config["feature_acronym"] = ""
       tuner_custom_config["include_genres"] = False
+      if run_example_diff:
+        logging.error("for BASELINE, cannot select run_example_diff=True, so setting that to False now")
+        run_example_diff = False
       
-    ratings_example_gen = (MovieLensExampleGen(
+    example_gen = (MovieLensExampleGen(
       infiles_dict_ser=self.infiles_dict_ser,
       output_config_ser=self.output_config_ser))
     
     statistics_gen = StatisticsGen(
-      examples=ratings_example_gen.outputs['output_examples'])
+      examples=example_gen.outputs['output_examples'])
     
     schema_gen = SchemaGen(
       statistics=statistics_gen.outputs['statistics'],
@@ -68,8 +71,23 @@ class PipelineComponentsFactory():
       statistics=statistics_gen.outputs['statistics'],
       schema=schema_gen.outputs['schema'])
     
+    if run_example_diff:
+      example_resolver = tfx.dsl.Resolver(
+        strategy_class=tfx.dsl.experimental.LatestArtifactStrategy,
+        # Or SpanRangeStrategy
+        config={},
+        examples=tfx.dsl.Channel(
+          type=tfx.types.standard_artifacts.Examples,
+          producer_component_id=example_gen.id
+        )
+      ).with_id('latest_examples_resolver')
+      example_diff = tfx.components.ExampleDiff(
+        examples_test=example_gen.outputs['examples'],
+        examples_base=example_resolver.outputs['examples'],
+      )
+    
     ratings_transform = tfx.components.Transform(
-      examples=ratings_example_gen.outputs['output_examples'],
+      examples=example_gen.outputs['output_examples'],
       schema=schema_gen.outputs['schema'],
       module_file=os.path.join(self.transform_dir, 'transform_movie_lens.py'))
     
@@ -80,7 +98,11 @@ class PipelineComponentsFactory():
           'transformed_examples'],
         output_file_path=self.output_parquet_path
       )
-      return [ratings_example_gen, statistics_gen, schema_gen,
+      if tuner_custom_config:
+        return [example_gen, statistics_gen, schema_gen, example_resolver, example_diff,
+                example_validator, ratings_transform, parquet_task]
+      else:
+        return [example_gen, statistics_gen, schema_gen,
               example_validator, ratings_transform, parquet_task]
     
     # resolver, if needing last trained model as baseline model, needs to be invoked before
@@ -198,7 +220,7 @@ class PipelineComponentsFactory():
     """
     
     if type == PIPELINE_TYPE.BASELINE:
-      return [ratings_example_gen, statistics_gen, schema_gen,
+      return [example_gen, statistics_gen, schema_gen,
               example_validator, ratings_transform, tuner, trainer, model_resolver, evaluator]
     
     # Checks whether the model passed the validation steps and pushes the model
@@ -210,7 +232,13 @@ class PipelineComponentsFactory():
         filesystem=pusher_pb2.PushDestination.Filesystem(
           base_directory=self.serving_model_dir)))
     
-    return [ratings_example_gen, statistics_gen, schema_gen,
+    if run_example_diff:
+      return [example_gen, statistics_gen, schema_gen, example_resolver, example_diff,
+              example_validator,
+              ratings_transform, model_resolver, tuner, trainer,
+              evaluator, pusher]
+    else:
+      return [example_gen, statistics_gen, schema_gen,
                   example_validator,
                   ratings_transform, model_resolver, tuner, trainer,
                   evaluator, pusher]
