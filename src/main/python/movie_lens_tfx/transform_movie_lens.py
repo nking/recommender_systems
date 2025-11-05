@@ -38,6 +38,71 @@ def create_static_table(var_list, var_dtype):
       key_dtype=var_dtype, value_dtype=tf.int64)
   return tf.lookup.StaticHashTable(init, default_value=-1)
 
+def _transform_timestamp(timestamp, outputs:dict):
+  #diff due to leap sec is < 1 minute total since 1972
+
+  #chicago is -5 hours from UTC = 60sec*60min*5hr = 18000
+  chicago_tz_offset = tf.constant(18000, dtype=tf.int64)
+  #ts is w.r.t. 1970 01 01, Thursday, 0 hr
+  ts = tf.subtract(timestamp, chicago_tz_offset)
+  #tf.print("ts=", ts)
+  
+  _1 = tf.constant(1, dtype=tf.int64)
+  
+  outputs["hr"] = tf.math.floordiv(ts,  tf.constant(3600, dtype=tf.int64))
+  outputs["hr"] = tf.math.mod(outputs['hr'], tf.constant(24, dtype=tf.int64))
+  outputs["hr"] = tf.subtract(outputs["hr"], _1)
+  
+  #24 hr/day * 60 min/hr * 60 sec/min = 86400 sec/day
+  days_since_1970 = tf.math.floordiv(ts, tf.constant(86400, dtype=tf.int64))
+
+  outputs["weekday"] = tf.math.mod(days_since_1970, tf.constant(7, dtype=tf.int64))
+  #week starting on Monday
+  outputs["weekday"] = tf.add(outputs["weekday"], tf.constant(4, dtype=tf.int64))
+  #a cross of hour and weekday: hr * 7 + weekday.  range is [0,168]. in UsrModel, tf.keras.layers.Embedding further modtransforms
+  outputs["hr_wk"] = tf.add(tf.multiply(outputs["hr"], tf.constant(7, dtype=tf.int64)),
+    outputs["weekday"])
+  
+  for key in ["hr", "weekday", "hr_wk"]:
+    outputs[key] = tf.cast(outputs[key], dtype=tf.float32)
+  
+  ## adding year and sec_into_yr to later reconstruct timestamp for prefixspan, time series, etc
+  _365 = tf.constant(365, dtype=tf.int64)
+  _366 = tf.constant(366, dtype=tf.int64)
+  _2 = tf.constant(2, dtype=tf.int64)
+  _366_plus_3_times_365 = tf.constant(1461, dtype=tf.int64)
+  _2_times_365 = tf.constant(730, dtype=tf.int64)
+  days_since_1972 = tf.subtract(days_since_1970, _2_times_365)
+  ## n_ly = 1 + (days_since_1972//(366 + 365*3))
+  ## n_non_ly = (days_since_1972 - n_ly*366)//365
+  ## yr = 1972 + n_ly + n_non_ly
+  ## sec_into_yr = ts - (((366 * n_ly) + (365 * (n_non_ly + 2))) * 24 * 60 * 60)
+  #    range is [0, 31536000 || 31622400]
+  
+  n_ly = tf.add(_1, tf.math.floordiv(days_since_1972, _366_plus_3_times_365))
+  n_non_ly = tf.math.floordiv(tf.subtract(days_since_1972, tf.multiply(n_ly, _366)), _365)
+  outputs["yr"] = tf.add(tf.add(tf.constant(1972, dtype=tf.int64), n_ly), n_non_ly)
+  outputs["yr"] = tf.cast(outputs["yr"], tf.float32)
+  
+  ##sec_into_yr = ts - (((366 * n_ly) + (365 * (n_non_ly + 2))) * 24 * 60 * 60)
+  #   where +2 is for 1970, 1971
+  _t1 = tf.multiply(_366, n_ly)
+  _t2 = tf.multiply(_365, tf.add(n_non_ly, _2))
+  outputs["sec_into_yr"] = tf.subtract(ts,
+      tf.multiply(tf.add(_t1, _t2), tf.constant(24 * 60 * 60, dtype=tf.int64)))
+  outputs["sec_into_yr"] = tf.cast(outputs["sec_into_yr"], dtype=tf.float32)
+  
+  # there is probably a relationship between genres and month, so calc month too.
+  # TODO: do this more precisely
+  """
+  30 days: September, April, June, and November
+  31 days: all the rest except Feb,
+  February has 28 days, except leap year has 29 days
+  """
+  outputs["month"] = tf.math.floordiv(days_since_1970,
+    tf.constant(30, dtype=tf.int64))
+  outputs['month'] = tf.cast(outputs['month'], dtype=tf.float32)
+
 def preprocessing_fn(inputs):
   """
   :param inputs: map of feature keys with values = tensors of
@@ -118,57 +183,7 @@ def preprocessing_fn(inputs):
   logging.debug(f"inputs['genres']={inputs['genres']}")
   outputs['genres'] = transform_genres(inputs['genres'])
 
-  #diff due to leap sec is < 1 minute total since 1972
-
-  #chicago is -5 hours from UTC = 60sec*60min*5hr = 18000
-  chicago_tz_offset = tf.constant(18000, dtype=tf.int64)
-  #ts is w.r.t. 1970 01 01, Thursday, 0 hr
-  ts = tf.subtract(inputs["timestamp"], chicago_tz_offset)
-  #tf.print("ts=", ts)
-  
-  outputs["hr"] = tf.math.floordiv(ts,  tf.constant(3600, dtype=tf.int64))
-  outputs["hr"] = tf.math.mod(outputs['hr'], tf.constant(24, dtype=tf.int64))
-
-  days_since_1970 = tf.math.floordiv(ts, tf.constant(86400, dtype=tf.int64))
-
-  outputs["weekday"] = tf.math.mod(days_since_1970, tf.constant(7, dtype=tf.int64))
-  #week starting on Monday
-  outputs["weekday"] = tf.add(outputs["weekday"], tf.constant(4, dtype=tf.int64))
-  #a cross of hour and weekday: hr * 7 + weekday.  range is [0,168]. in UsrModel, tf.keras.layers.Embedding further modtransforms
-  outputs["hr_wk"] = tf.add(tf.multiply(outputs["hr"], tf.constant(7, dtype=tf.int64)),
-    outputs["weekday"])
-  
-  #there is probably a relationship between genres and month, so calc month too.
-  outputs["month"] = tf.math.floordiv(days_since_1970, tf.constant(30, dtype=tf.int64))
-  
-  for key in ["hr", "weekday", "hr_wk", "month"]:
-    outputs[key] = tf.cast(outputs[key], dtype=tf.float32)
-  
-  ## adding year and sec_into_yr to later reconstruct timestamp for prefixspan, time series, etc
-  _365 = tf.constant(365, dtype=tf.int64)
-  _366 = tf.constant(366, dtype=tf.int64)
-  _1 = tf.constant(1, dtype=tf.int64)
-  _2 = tf.constant(2, dtype=tf.int64)
-  _366_plus_3_times_365 = tf.constant(1461, dtype=tf.int64)
-  _2_times_365 = tf.constant(730, dtype=tf.int64)
-  days_since_1972 = tf.subtract(days_since_1970, _2_times_365)
-  ## n_ly = 1 + (days_since_1972//(366 + 365*3))
-  ## n_non_ly = (days_since_1972 - n_ly*366)//365
-  ## yr = 1972 + n_ly + n_non_ly
-  ## sec_into_yr = ts - (((366 * n_ly) + (365 * (n_non_ly + 2))) * 24 * 60 * 60)
-  #    range is [0, 31536000 || 31622400]
-  
-  n_ly = tf.add(_1, tf.math.floordiv(days_since_1972, _366_plus_3_times_365))
-  n_non_ly = tf.math.floordiv(tf.subtract(days_since_1972, tf.multiply(n_ly, _366)), _365)
-  outputs["yr"] = tf.add(tf.add(tf.constant(1972, dtype=tf.int64), n_ly), n_non_ly)
-  outputs["yr"] = tf.cast(outputs["yr"], tf.float32)
-  ##sec_into_yr = ts - (((366 * n_ly) + (365 * (n_non_ly + 2))) * 24 * 60 * 60)
-  #   where +2 is for 1970, 1971
-  _t1 = tf.multiply(_366, n_ly)
-  _t2 = tf.multiply(_365, tf.add(n_non_ly, _2))
-  outputs["sec_into_yr"] = tf.subtract(ts,
-      tf.multiply(tf.add(_t1, _t2), tf.constant(24 * 60 * 60, dtype=tf.int64)))
-  outputs["sec_into_yr"] = tf.cast(outputs["sec_into_yr"], dtype=tf.float32)
+  _transform_timestamp(inputs['timestamp'], outputs)
   
   #tf.print("sec_into_yr=", outputs["sec_into_yr"])
   #tf.print(f"outputs={outputs}")
