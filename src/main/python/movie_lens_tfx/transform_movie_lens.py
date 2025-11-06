@@ -41,24 +41,30 @@ def create_static_table(var_list, var_dtype):
 def _transform_timestamp(timestamp, outputs:dict):
   #diff due to leap sec is < 1 minute total since 1972
 
-  #chicago is -5 hours from UTC = 60sec*60min*5hr = 18000
-  chicago_tz_offset = tf.constant(18000, dtype=tf.int64)
-  #ts is w.r.t. 1970 01 01, Thursday, 0 hr
-  ts = tf.subtract(timestamp, chicago_tz_offset)
+  #chicago is -5 or -6 hours from UTC depending on daylight savings = 60sec*60min*5hr = 18000
+  # will leav all calcs in UTC reference frame because relative values are most important
+  #chicago_tz_offset = tf.constant(18000, dtype=tf.int64)
+  #ts is w.r.t. 1970 01 01, Thursday, 0 hr, but is Wed Wednesday, December 31, 1969 19:00:00 for chicago tz
+  #ts = tf.subtract(timestamp, chicago_tz_offset)
+  ts = timestamp
   #tf.print("ts=", ts)
   
   _1 = tf.constant(1, dtype=tf.int64)
   
   outputs["hr"] = tf.math.floordiv(ts,  tf.constant(3600, dtype=tf.int64))
   outputs["hr"] = tf.math.mod(outputs['hr'], tf.constant(24, dtype=tf.int64))
-  outputs["hr"] = tf.subtract(outputs["hr"], _1)
   
   #24 hr/day * 60 min/hr * 60 sec/min = 86400 sec/day
   days_since_1970 = tf.math.floordiv(ts, tf.constant(86400, dtype=tf.int64))
 
-  outputs["weekday"] = tf.math.mod(days_since_1970, tf.constant(7, dtype=tf.int64))
-  #week starting on Monday
-  outputs["weekday"] = tf.add(outputs["weekday"], tf.constant(4, dtype=tf.int64))
+  #reference is w.r.t. Thursday
+  # mon=1, tues=2, wed=3, thur=4, fri=5, sat=6, sun=7
+  #                           =0      1      2      3
+  #                 add 3, mod 7, add 1
+  outputs["weekday"] = tf.add(days_since_1970, tf.constant(3, dtype=tf.int64))
+  outputs["weekday"] = tf.math.mod(outputs["weekday"], tf.constant(7, dtype=tf.int64))
+  outputs["weekday"] = tf.add(outputs["weekday"], tf.constant(1, dtype=tf.int64))
+  
   #a cross of hour and weekday: hr * 7 + weekday.  range is [0,168]. in UsrModel, tf.keras.layers.Embedding further modtransforms
   outputs["hr_wk"] = tf.add(tf.multiply(outputs["hr"], tf.constant(7, dtype=tf.int64)),
     outputs["weekday"])

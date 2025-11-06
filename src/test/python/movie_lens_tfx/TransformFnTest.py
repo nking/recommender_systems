@@ -27,17 +27,21 @@ class TransformFnTest(unittest.TestCase):
       target_datetime = start_of_year + elapsed_time
       #this includes negative chicago offset
       epoch_timestamp = int(target_datetime.timestamp())
-      #remove chicago offset
-      est = epoch_timestamp + chicago_tz_offset
       #seems the leap-year 2000 estimate is 1 day less than expected
       #print(f'expected={timestamp}, calc={est}')
     
-    expected = {'yr': [2000, 2001], 'month': [12, 1], 'hr': [16, 17]}
+    #$$Sunday, December 31, 2000 22:29:12 UTC
+    #Saturday, January 6, 2001 23:35:39 UTC
+    expected = {'yr': [2000, 2001], 'month': [12, 1], 'hr': [22, 23], 'weekday':[7, 6]}
     for x, y in zip(expected['yr'], outputs['yr']):
       y = int(y.numpy().item())
       self.assertEqual(x, y)
       
     for x, y in zip(expected['hr'], outputs['hr']):
+      y = int(y.numpy().item())
+      self.assertEqual(x, y)
+      
+    for x, y in zip(expected['weekday'], outputs['weekday']):
       y = int(y.numpy().item())
       self.assertEqual(x, y)
     
