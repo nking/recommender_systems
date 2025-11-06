@@ -56,12 +56,6 @@ from pyspark.sql.functions import size as spark_size
 from pyspark.sql import functions as F
 import json
 import multiprocessing
-pl.Config.set_fmt_str_lengths(900)
-
-
-
-# In[3]:
-
 
 def can_reject_indep(x : np.ndarray, y:np.ndarray, alpha:float = 0.05, debug:bool=False):
   """
@@ -81,10 +75,6 @@ def can_reject_indep(x : np.ndarray, y:np.ndarray, alpha:float = 0.05, debug:boo
   if debug:
     print(f"nC={lhs}\nppf(1-{alpha}, dof={x.shape[-1]})={rhs}")
   return lhs >= rhs
-
-
-# In[4]:
-
 
 CTZ = pytz.timezone("America/Chicago")
 genres = ["Action", "Adventure", "Animation", "Children", "Comedy",
@@ -184,22 +174,17 @@ parquet_path = os.path.join(PIPELINE_ROOT, "transformed_parquet")
 pl.Config.set_tbl_rows(50)
 pl.Config.set_tbl_width_chars(-1)
 pl.Config.set_tbl_cols(-1)
+pl.Config.set_fmt_str_lengths(900)
+pl.Config.set_fmt_table_cell_list_len(900)
 colors = px.colors.qualitative.Plotly 
 
 genres_set = set(genres)
 
 #make co-occurence matrix and heatmap
-def genres_co_occurence_heatmap(filtered, split_name:str, rating:int,
+def genres_co_occurence_heatmap(exploded, split_name:str, rating:int,
     item:str="genres"):
   
-    print(f'genres_co_occurence_heatmap filtered={filtered}')
-    print(f'{filtered.columns}')
-    print(f'{filtered.dtypes}')
-    
-    exploded = filtered.explode(item)
     unique_items = exploded[item].unique().to_list()
-    
-    print(f'unique_items={unique_items.dtypes}')
     
     basket_item = (
         exploded.pivot(
@@ -263,49 +248,66 @@ for split_name in ["train", "eval", "test"]:
     in_file_pattern = os.path.join(parquet_path, f"Split-{split_name}*")
     df = pl.read_parquet(in_file_pattern)
     #df = pl.scan_parquet(in_file_pattern)
+    
+    #genres are normalized multi-hot
     df = df.with_columns(
         pl.col("genres").map_elements(movie_lens_utils.deserialize, return_dtype=pl.List(pl.Float32))
     )
+    
     # add an index for row number:
     df = df.with_row_index("row")
     df = df.with_columns(
-      (pl.col("rating") * 5).round(0).cast(pl.Int64).alias("rating")
+      (pl.col("rating") * 5).round(0).cast(pl.Int32).alias("rating")
     )
     df = df.with_columns(
-      pl.col("*").exclude(['genres']).cast(pl.Int32)
+      pl.col("*").exclude(['genres']).round(0).cast(pl.Int32)
     )
+    #because 'genres' is normalized multi-hot, use ceil before cast
     df = df.with_columns(
-      pl.col("genres").cast(pl.List(pl.Int32))
+      pl.col("genres").list.eval(pl.element().ceil().cast(pl.Int32)).alias("genres")
     )
-    print(f"\n{split_name} df: {df.sort('user_id').head(5)}")
-    print(f'DESCRIBE:\n{df.describe()}')
     
-    write_dist_corr_heatmap(df, skip_columns=set(["genres", "row"]), outfile_name=f"{split_name}_dist_corr_heatmap.png")
-    
+    #write the genres to sparse indexes
     df = df.with_columns(
-        pl.col("occupation").map_elements(lambda x: labels_dict['occupation'].get(x,x), return_dtype=pl.String).alias("occ")
+      pl.col("genres")
+      .list.eval((pl.element() == 1).arg_true())
+      .alias("sparse_genres_str")
     )
-    
-    print(f"\ndf w/ occ: {df.sort('user_id').head(5)}")
-    
-    df_sparse_str = df.with_columns(
-      pl.col("genres").list.eval(pl.arg_where(pl.element().cast(pl.Boolean)))
-      .alias("genres")
+    name_series = pl.Series(genres)
+    df = df.with_columns(
+      pl.col("sparse_genres_str")
+      .list.eval(
+        pl.element().map_elements(lambda x: name_series[x], return_dtype=pl.String)
+      )
+      .alias("sparse_genres_str")
     )
-    df_sparse_str = df_sparse_str.with_columns(
-      pl.col("genres").list.eval(pl.element().replace_strict(
-        {k: v for k, v in enumerate(genres)}, default=pl.lit(None)))
-      .alias("genres"))
+    """
+    ┌───────┬─────┬────────┬────────────────────────────────────────────────────────┬─────┬───────┬───────┬──────────┬────────────┬────────┬─────────────┬─────────┬─────────┬──────┬──────────────────────┐
+    │ row   ┆ age ┆ gender ┆ genres                                                 ┆ hr  ┆ hr_wk ┆ month ┆ movie_id ┆ occupation ┆ rating ┆ sec_into_yr ┆ user_id ┆ weekday ┆ yr   ┆ sparse_genres_str    │
+    │ ---   ┆ --- ┆ ---    ┆ ---                                                    ┆ --- ┆ ---   ┆ ---   ┆ ---      ┆ ---        ┆ ---    ┆ ---         ┆ ---     ┆ ---     ┆ ---  ┆ ---                  │
+    │ i32   ┆ i32 ┆ i32    ┆ list[i32]                                              ┆ i32 ┆ i32   ┆ i32   ┆ i32      ┆ i32        ┆ i32    ┆ i32         ┆ i32     ┆ i32     ┆ i32  ┆ list[str]            │
+    ╞═══════╪═════╪════════╪════════════════════════════════════════════════════════╪═════╪═══════╪═══════╪══════════╪════════════╪════════╪═════════════╪═════════╪═════════╪══════╪══════════════════════╡
+    │ 39363 ┆ 0   ┆ 0      ┆ [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0] ┆ 17  ┆ 126   ┆ 377   ┆ 938      ┆ 10         ┆ 4      ┆ 31512552    ┆ 1       ┆ 7       ┆ 2000 ┆ ["Musical"]          │
+    │ 66350 ┆ 0   ┆ 0      ┆ [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0] ┆ 17  ┆ 126   ┆ 377   ┆ 1270     ┆ 10         ┆ 5      ┆ 31510856    ┆ 1       ┆ 7       ┆ 2000 ┆ ["Comedy", "Sci-Fi"] │
+
+    """
     
-    print(f'df_sparse_str={df_sparse_str.sort("user_id").head(5)}')
+    # add label columns
+    df = df.with_columns(
+      pl.col("occupation").map_elements(
+        lambda x: labels_dict['occupation'].get(x, x),
+        return_dtype=pl.String).alias("occ")
+    )
     
     #"""
+    write_dist_corr_heatmap(df, skip_columns=set(["genres", "row", "occ", "sparse_genres_str"]), outfile_name=f"{split_name}_dist_corr_heatmap.png")
+    
     exploded = df.with_columns(
         pl.col("genres").list.to_array(width=n_genres).arr.to_struct(
                 fields=[f"{genres[i]}" for i in range(n_genres)]
             )
         ).unnest("genres")
-    print(f'columns:\n{exploded.columns}')
+    #print(f'columns:\n{exploded.columns}')
    
     n_occupations = len(labels_dict_arrays['occupation'])
     n_page = n_occupations//3
@@ -334,164 +336,44 @@ for split_name in ["train", "eval", "test"]:
             fig.write_image(os.path.join(img_dir, f"{split_name}_{feat1}_{feat2}_pair_plot.png"))
     #"""
     #for market basket analysis, will make a sparsely populated column
-   
-    exploded = df_sparse_str.explode('genres')
     
-    print(f'exploded.columns={exploded.columns}')
-    print(f'exploded head={exploded.sort("user_id").head(5)}')
+    extraction_expressions = [
+      pl.col("genres").list.get(i).alias(genres[i]) for i in range(len(genres))
+    ]
+    exploded = df.with_columns(extraction_expressions).drop("genres")
+    
+    #print(f'exploded.head={exploded.head(5)}')
+    #print(f'exploded.head sorted by user_id={exploded.sort("user_id").head(5)}')
+    
+    """
+     ───────┬─────┬────────┬─────┬───────┬───────┬──────────┬────────────┬────────┬─────────────┬─────────┬─────────┬──────┬──────────────────────┬──────────────┬────────┬───────────┬───────────┬──────────┬────────┬───────┬─────────────┬───────┬─────────┬───────────┬────────┬─────────┬─────────┬─────────┬────────┬──────────┬─────┬─────────┐
+    │ row   ┆ age ┆ gender ┆ hr  ┆ hr_wk ┆ month ┆ movie_id ┆ occupation ┆ rating ┆ sec_into_yr ┆ user_id ┆ weekday ┆ yr   ┆ sparse_genres_str    ┆ occ          ┆ Action ┆ Adventure ┆ Animation ┆ Children ┆ Comedy ┆ Crime ┆ Documentary ┆ Drama ┆ Fantasy ┆ Film-Noir ┆ Horror ┆ Musical ┆ Mystery ┆ Romance ┆ Sci-Fi ┆ Thriller ┆ War ┆ Western │
+    │ ---   ┆ --- ┆ ---    ┆ --- ┆ ---   ┆ ---   ┆ ---      ┆ ---        ┆ ---    ┆ ---         ┆ ---     ┆ ---     ┆ ---  ┆ ---                  ┆ ---          ┆ ---    ┆ ---       ┆ ---       ┆ ---      ┆ ---    ┆ ---   ┆ ---         ┆ ---   ┆ ---     ┆ ---       ┆ ---    ┆ ---     ┆ ---     ┆ ---     ┆ ---    ┆ ---      ┆ --- ┆ ---     │
+    │ i32   ┆ i32 ┆ i32    ┆ i32 ┆ i32   ┆ i32   ┆ i32      ┆ i32        ┆ i32    ┆ i32         ┆ i32     ┆ i32     ┆ i32  ┆ list[str]            ┆ str          ┆ i32    ┆ i32       ┆ i32       ┆ i32      ┆ i32    ┆ i32   ┆ i32         ┆ i32   ┆ i32     ┆ i32       ┆ i32    ┆ i32     ┆ i32     ┆ i32     ┆ i32    ┆ i32      ┆ i32 ┆ i32     │
+    ╞═══════╪═════╪════════╪═════╪═══════╪═══════╪══════════╪════════════╪════════╪═════════════╪═════════╪═════════╪══════╪══════════════════════╪══════════════╪════════╪═══════════╪═══════════╪══════════╪════════╪═══════╪═════════════╪═══════╪═════════╪═══════════╪════════╪═════════╪═════════╪═════════╪════════╪══════════╪═════╪═════════╡
+    │ 39363 ┆ 0   ┆ 0      ┆ 17  ┆ 126   ┆ 377   ┆ 938      ┆ 10         ┆ 4      ┆ 31512552    ┆ 1       ┆ 7       ┆ 2000 ┆ ["Musical"]          ┆ K-12 student ┆ 0      ┆ 0         ┆ 0         ┆ 0        ┆ 0      ┆ 0     ┆ 0           ┆ 0     ┆ 0       ┆ 0         ┆ 0      ┆ 1       ┆ 0       ┆ 0       ┆ 0      ┆ 0        ┆ 0   ┆ 0       │
+    │ 43661 ┆ 0   ┆ 0      ┆ 17  ┆ 126   ┆ 377   ┆ 1035     ┆ 10         ┆ 5      ┆ 31512552    ┆ 1       ┆ 7       ┆ 2000 ┆ ["Musical"]          ┆ K-12 student ┆ 0      ┆ 0         ┆ 0         ┆ 0        ┆ 0      ┆ 0     ┆ 0           ┆ 0     ┆ 0       ┆ 0         ┆ 0      ┆ 1       ┆ 0       ┆ 0       ┆ 0      ┆ 0        ┆ 0   ┆ 0       │
+    │ 61139 ┆ 0   ┆ 0      ┆ 17  ┆ 126   ┆ 377   ┆ 1246     ┆ 10         ┆ 4      ┆ 31512892    ┆ 1       ┆ 7       ┆ 2000 ┆ ["Drama"]            ┆ K-12 student ┆ 0      ┆ 0         ┆ 0         ┆ 0        ┆ 0      ┆ 0     ┆ 0           ┆ 1     ┆ 0       ┆ 0         ┆ 0      ┆ 0       ┆ 0       ┆ 0       ┆ 0      ┆ 0        ┆ 0   ┆ 0       │
+    │ 66350 ┆ 0   ┆ 0      ┆ 17  ┆ 126   ┆ 377   ┆ 1270     ┆ 10         ┆ 5      ┆ 31510856    ┆ 1       ┆ 7       ┆ 2000 ┆ ["Comedy", "Sci-Fi"] ┆ K-12 student ┆ 0      ┆ 0         ┆ 0         ┆ 0        ┆ 1      ┆ 0     ┆ 0           ┆ 0     ┆ 0       ┆ 0         ┆ 0      ┆ 0       ┆ 0       ┆ 0       ┆ 1      ┆ 0        ┆ 0   ┆ 0       │
+    │ 82572 ┆ 0   ┆ 0      ┆ 18  ┆ 132   ┆ 377   ┆ 1545     ┆ 10         ┆ 4      ┆ 498939      ┆ 1       ┆ 6       ┆ 2001 ┆ ["Drama"]            ┆ K-12 student ┆ 0      ┆ 0         ┆ 0         ┆ 0        ┆ 0      ┆ 0     ┆ 0           ┆ 1     ┆ 0       ┆ 0         ┆ 0      ┆ 0       ┆ 0       ┆ 0       ┆ 0      ┆ 0        ┆ 0   ┆ 0       │
+    └
+    """
+    
     for rating in [5, 4, 3, 2, 1]:
-        filtered = exploded.filter(pl.col("rating") == rating)
-        print(f'filtered.columns={filtered.columns}')
-        print(f'filtered head={filtered.sort("user_id").head(2)}')
-        #pie chart counting each genre
-        genres_counts = filtered['genres'].value_counts()#.reset_index()
+        filtered = df.filter(pl.col("rating") == rating)
+        #pie chart counting each genre.  explode the sparse strings into their own rows
+        filtered = filtered.select(['row', 'sparse_genres_str'])
+        filtered = filtered.explode('sparse_genres_str')
+        genres_counts = filtered['sparse_genres_str'].value_counts()#.reset_index()
         genres_counts.columns = ['Genre', 'Count']
         genres_counts = genres_counts.with_columns(pl.col('Count').cast(pl.Int64))
-        print(f'dtypes={genres_counts.dtypes}')
-        print(f'head={genres_counts.head(5)}')
+        #print(f'dtypes={genres_counts.dtypes}')
+        #print(f'head={genres_counts.head(5)}')
         fig = px.pie(genres_counts, values='Count', names='Genre',
             title=f'{split_name} rating {rating}: Genres')
         fig.write_image(os.path.join(img_dir, f"{split_name}_genres_rating_{rating}_pie.png"))
   
-        filtered = df_sparse_str.filter(pl.col("rating") == rating)
-        genres_co_occurence_heatmap(filtered, split_name, rating, "genres")
+        genres_co_occurence_heatmap(filtered, split_name, rating, "sparse_genres_str")
 
-        #NOTE: looked at frequent itemsets of genres as the basket items and found no assoc rules
-        
-        #further filter to only user_id and movie_id
-        #group movie_id by user_id
-        filtered = filtered.select(["user_id", "movie_id"])
-        filtered = filtered.group_by("user_id").agg(pl.col("movie_id").unique().alias("movie_ids"))
-        filtered = filtered.select(["movie_ids"])
-        #order doesn't matter for FPGrowth, except that we want sets to be unique for their composition
-        filtered = filtered.with_columns(
-          pl.col("movie_ids").list.sort()
-        )
         
 print(f'wrote multivariate EDA images to {img_dir}')
-
-
-# ### using TFDV
-
-# #load the transformed examples
-# 
-# from tfx.dsl.io import fileio
-# from tfx.orchestration import metadata
-# from tfx.components import StatisticsGen, SchemaGen, ExampleValidator
-# from tfx.utils import io_utils
-# from tensorflow_metadata.proto.v0 import anomalies_pb2, schema_pb2
-# from tensorflow_transform.tf_metadata import schema_utils
-# 
-# #from movie_lens_tfx.ingest_pyfunc_component.ingest_movie_lens_component import *
-# #from movie_lens_tfx.tune_train_movie_lens import *
-# #from tfx import v1 as tfx
-# 
-# schema_list = store.get_artifacts_by_type("Schema")
-# schema_list = sorted(schema_list,
-#   key=lambda x: x.create_time_since_epoch, reverse=True)
-# for artifact in schema_list:
-#     if "post_transform_schema" in artifact.uri:
-#         schema_uri = artifact.uri
-#         break
-# assert(schema_uri is not None)
-# schema_file_path = [os.path.join(schema_uri, name) for name in os.listdir(schema_uri)][0]
-# schema = tfx.utils.parse_pbtxt_file(schema_file_path, schema_pb2.Schema())
-# feature_spec = schema_utils.schema_as_feature_spec(schema).feature_spec
-# 
-# examples_list = store.get_artifacts_by_type("Examples")
-# #print(f"examples_list={examples_list}")
-# examples_list = sorted(examples_list,
-#   key=lambda x: x.create_time_since_epoch, reverse=True)
-# for artifact in examples_list:
-#     if "transformed_examples" in artifact.uri:
-#         transformed_examples_uri = artifact.uri
-#         break
-# assert(transformed_examples_uri is not None)
-# logging.debug(f"transfomed_examples_uri={transformed_examples_uri}")
-# transform_uri = transformed_examples_uri[0:transformed_examples_uri.index("transformed_examples")]
-# 
-# """
-# transformed_examples
-# post_transform_anomalies 
-# post_transform_schema
-# pre_transform_stats
-# post_transform_stats
-# transform_graph
-# updated_analyzer_cache
-# pre_transform_schema
-# """
-# 
-# def parse_tf_example(example_proto, feature_spec):
-#     return tf.io.parse_single_example(example_proto, feature_spec)
-# for split_name in ["train", "eval", "test"]:
-#     tfrecord_uri = os.path.join(transform_uri, f"Split-{split_name}")
-#     file_paths = [os.path.join(tfrecord_uri, name) for name in os.listdir(tfrecord_uri)]
-#     ds_ser = tf.data.TFRecordDataset(file_paths, compression_type="GZIP")
-#     ds = ds_ser.map(lambda x: parse_tf_example(x, feature_spec))
-# 
-#     """
-#     
-#     """
-# 
-# 
-
-# ## Run baseline model pipeline with full dataset
-
-# pipeline_factory = PipelineComponentsFactory(
-#   infiles_dict_ser=infiles_dict_ser, output_config_ser=output_config_ser,
-#   transform_dir=tr_dir, user_id_max=user_id_max, movie_id_max=movie_id_max,
-#   n_genres=n_genres, n_age_groups=n_age_groups, min_eval_size=MIN_EVAL_SIZE,
-#   serving_model_dir=serving_model_dir,
-# )
-# 
-# beam_pipeline_args = [
-#   '--direct_running_mode=multi_processing',
-#   '--direct_num_workers=0'
-#     ]
-
-# baseline_components = pipeline_factory.build_components(MODEL_TYPE.BASELINE)
-#     
-# # create baseline model
-# my_pipeline = tfx.dsl.Pipeline(
-#   pipeline_name=PIPELINE_NAME,
-#   pipeline_root=PIPELINE_ROOT,
-#   components=baseline_components,
-#   enable_cache=ENABLE_CACHE,
-#   metadata_connection_config=metadata_connection_config,
-#   beam_pipeline_args=beam_pipeline_args,
-# )
-# 
-# tfx.orchestration.LocalDagRunner().run(my_pipeline)
-
-# artifact_types = store.get_artifact_types()
-# logging.debug(f"MLMD store artifact_types={artifact_types}")
-# artifacts = store.get_artifacts()
-# logging.debug(f"MLMD store artifacts={artifacts}")
-# 
-# components = pipeline_factory.build_components(MODEL_TYPE.PRODUCTION)
-# # simulate experimentation of one model family
-# my_pipeline = tfx.dsl.Pipeline(
-#   pipeline_name=PIPELINE_NAME,
-#   pipeline_root=PIPELINE_ROOT,
-#   components=components,
-#   enable_cache=ENABLE_CACHE,
-#   metadata_connection_config=metadata_connection_config,
-#   beam_pipeline_args=beam_pipeline_args,
-# )
-# 
-# tfx.orchestration.LocalDagRunner().run(my_pipeline)
-# 
-
-# artifact_types = store.get_artifact_types()
-# print(f"MLMD store artifact_types={artifact_types}")
-# artifacts = store.get_artifacts()
-# print(f"MLMD store artifacts={artifacts}")
-# 
-# executions = store.get_executions()
-# logging.debug(f"MLMD store executions={executions}")
-# 
-# # executions has custom_properties.key: "infiles_dict_ser"
-# #    and custom_properties.key: "output_config_ser"
-# artifact_count = len(artifacts)
-# execution_count = len(executions)
-# 
