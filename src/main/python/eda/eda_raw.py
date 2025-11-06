@@ -3,15 +3,6 @@
 
 # run this after local notebook has run the PRE-PROCESSING pipeline build
 
-import shutil
-
-from tfx.orchestration import metadata
-
-import tensorflow_transform as tft
-
-from ml_metadata.proto import metadata_store_pb2
-from ml_metadata.metadata_store import metadata_store
-
 import sys
 import os
 sys.path.append(os.path.join(os.getcwd(), "src/test/python/movie_lens_tfx"))
@@ -29,16 +20,8 @@ logging.set_stderrthreshold(logging.WARNING)
 
 # ## EDA on the raw data
 
-# ### w/ Polars, Seaborn, and Matplotlib
-
-# In[2]:
-
-
 import polars as pl
-#import matplotlib.pyplot as plt
-#seaborn version installed is 0.12.2.  need>= 0.13.0 for polars
-#import seaborn as sns
-#import seaborn_polars as snl
+
 from scipy.stats.distributions import chi2
 from collections import OrderedDict
 import re
@@ -47,16 +30,9 @@ from datetime import datetime
 import pytz
 import dcor
 import numpy as np
-#import altair as alt
 import plotly.express as px
-#needs pip install plotly jupyterlab anywidget
 
 pl.Config.set_fmt_str_lengths(900)
-
-
-
-# In[3]:
-
 
 def can_reject_indep(x : np.array, y:np.array, alpha:float = 0.05, debug:bool=False):
   """
@@ -76,9 +52,6 @@ def can_reject_indep(x : np.array, y:np.array, alpha:float = 0.05, debug:bool=Fa
   if debug:
     print(f"nC={lhs}\nppf(1-{alpha}, dof={x.shape[-1]})={rhs}")
   return lhs >= rhs
-
-
-# In[4]:
 
 
 CTZ = pytz.timezone("America/Chicago")
@@ -125,9 +98,6 @@ labels_dict_arrays = {}
 for k in labels_dict:
     labels_dict_arrays[k]=[labels_dict[k][k2] for k2 in labels_dict[k]]
 
-
-# In[ ]:
-
 img_dir = os.path.join(get_bin_dir(), "local_notebook", "images")
 os.makedirs(img_dir, exist_ok=True)
 
@@ -137,7 +107,7 @@ for key in file_paths:
     processed_buffer = io.StringIO()
     file_path = file_paths[key]
     schema = schemas[key]
-    print(f"key={key}, file_path={file_path}")
+    #print(f"key={key}, file_path={file_path}")
     with open(file_path, "r", encoding='iso-8859-1') as file:
         for line in file:
             line2 = line.replace('::', '\t')
@@ -235,15 +205,18 @@ for key in file_paths:
                 #        color_discrete_map = {feature: "blue", feature2: "green", feature3:"red"} )
                 #    fig.show(renderer='notebook')
 
-
 df_no_match = dfs['movies'].join(dfs['ratings'], on="movie_id", how="anti")
 print(f'{len(df_no_match)} movies were not rated')
 df_no_match = dfs['users'].join(dfs['ratings'], on="user_id", how="anti")
 print(f'{len(df_no_match)} users did not rate')
 
 for key in dfs:
-    print(f'\n{key}: DESCRIBE')
-    print(dfs[key].describe)
+  print(f'\n{key}: HEAD')
+  print(dfs[key].head())
+  print(f'\n{key}: DESCRIBE')
+  print(dfs[key].describe)
 
 del df
 del dfs
+
+print(f'\nimages were written to {img_dir}')
