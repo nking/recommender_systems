@@ -3,12 +3,7 @@
 
 # run this after local notebook has run the PRE-PROCESSING pipeline build
 
-from tfx.orchestration import metadata
-
-import tensorflow_transform as tft
-
-from ml_metadata.proto import metadata_store_pb2
-from ml_metadata.metadata_store import metadata_store
+#TODO: consider imporving this one day
 
 import sys
 import os
@@ -30,19 +25,8 @@ if 'PLOT_PREFIXSPAN' not in locals() and 'PLOT_PREFIXSPAN' not in globals():
   PLOT_PREFIXSPAN = False
 
 import polars as pl
-#import matplotlib.pyplot as plt
-#seaborn version installed is 0.12.2.  need>= 0.13.0 for polars
-#import seaborn as sns
-#import seaborn_polars as snl
-from scipy.stats.distributions import chi2
 from collections import OrderedDict
-import re
-import io
-from datetime import datetime
 import pytz
-import dcor
-import numpy as np
-#import altair as alt
 import plotly.express as px
 #needs pip install plotly jupyterlab anywidget
 from pyspark.sql import SparkSession
@@ -167,6 +151,28 @@ MIN_CONFIDENCE = 0.6  # The rule X => Y is valid if MIN_CONFIDENCE*100% of trans
 MIN_SUPPORT_PREFIXSPAN = 0.005
 MAX_PATTERN_LENGTH = 20 #max seqeuntail pattern length for PrefixSpan
 
+def get_spark_session():
+  """
+  get a spark session.
+  """
+  num_logical_cores = multiprocessing.cpu_count()
+  num_logical_cores = 1
+  print(f"start spark session for {num_logical_cores} local cores")
+  spark = (
+    SparkSession.builder.appName(f"MLLIB")
+    .master(f"local[{num_logical_cores}]")
+    .config("spark.driver.memory", "4g")
+    .getOrCreate())
+  return spark
+  
+def stop_session(spark):
+  try:
+    if spark.getActiveSession():
+      spark.stop()
+    return
+  except Exception:
+    spark.stop()
+
 def _plot_fpgrowth_assoc_rules(model, split_name, rating, is_inferrence:bool=False):
   # Generate the association rules
   # This returns a PySpark DataFrame with columns: antecedent, consequent, confidence, lift, support
@@ -243,21 +249,8 @@ def _plot_fpgrowth_assoc_rules(model, split_name, rating, is_inferrence:bool=Fal
     path = f"{split_name}_movies_assoc_rules_rating_{rating}.png"
   fig_rules.write_image(os.path.join(img_dir, path))
 
-def stop_session(spark):
-  try:
-    if spark.getActiveSession():
-      spark.stop()
-    return
-  except Exception:
-    spark.stop()
-
-def movies_prefixspan(df, split_name, rating):
+def movies_prefixspan(df, split_name, rating, spark):
   """use pyspark's PrefixSpan MLLib model"""
-  num_logical_cores = multiprocessing.cpu_count()
-  print(f"start spark session for {num_logical_cores} local cores")
-  num_logical_cores="*"
-  
-  spark = SparkSession.builder.appName(f"PrefixSpan_{split_name}_{rating}").master(f"local[{num_logical_cores}]").getOrCreate()
   
   df = df.with_columns(pl.col("movie_ids").cast(pl.List(pl.Int32)))
   print(f"{split_name} prefixscan input df dtype={df.dtypes}")
@@ -295,7 +288,7 @@ def movies_prefixspan(df, split_name, rating):
   spark_df = spark.createDataFrame(
     pandas_df[['sequence_col']],schema=schema
   )
-  
+ 
   prefix_span = PrefixSpan(
     minSupport=MIN_SUPPORT_PREFIXSPAN,
     maxPatternLength=MAX_PATTERN_LENGTH,
@@ -311,16 +304,13 @@ def movies_prefixspan(df, split_name, rating):
   # and "freq" is a 64 bit integer of the freq/support count
   
   if patterns_df is None or patterns_df.count() == 0:
-    stop_session(spark)
     return
   
   try:
     patterns_pd = patterns_df.toPandas()
     if len(patterns_pd) == 0:
-      stop_session(spark)
       return
   except Exception as e:
-    stop_session(spark)
     return
   
   print(f'patterns_pd head\n{patterns_pd.head()}')
@@ -381,9 +371,14 @@ def movies_prefixspan(df, split_name, rating):
   )
   fig.write_image(os.path.join(img_dir,
     f"{split_name}_movies_prefixspan_rating_{rating}_scatter.png"))
-  stop_session(spark)
+  
+  del spark_df
+  del prefix_span
+  del patterns_df
+  del patterns_pd
+  del fig
 
-def movies_frequent_itemsets(df, split_name, rating):
+def movies_frequent_itemsets(df, split_name, rating, spark):
     """use pyspark's FPGrowth MLLib model.
     Note that ideally, these are model families in the pipeline Tuner stage, but here, using it
     for EDA"""
@@ -398,13 +393,6 @@ def movies_frequent_itemsets(df, split_name, rating):
     #  Lift < 1: items are purchased together less often than expected.
     #  Lift = 1: The items are independent.
     #gemini was used in this method, especially helpful in resolving version related data formatting.
-    
-    num_logical_cores = multiprocessing.cpu_count()
-    print(f"start spark session for {num_logical_cores} local cores")
-    num_logical_cores="*"
-    
-    spark = (SparkSession.builder.appName(f"FPGrowth_{split_name}_{rating}")
-      .master(f"local[{num_logical_cores}]").getOrCreate())
     
     df = df.select(['movie_ids'])
     #df = df.with_columns(pl.col("movie_ids").cast(pl.List(pl.Int32)))
@@ -453,10 +441,8 @@ def movies_frequent_itemsets(df, split_name, rating):
     print(f'TYPE={type(frequent_itemsets_spark)}')
     try:
       if frequent_itemsets_spark.isEmpty():
-        stop_session(spark)
         return
     except Exception:
-      stop_session(spark)
       return
     
     print(f"\nfrequent_itemsets_spark:")
@@ -486,7 +472,6 @@ def movies_frequent_itemsets(df, split_name, rating):
     print(f"sorted by support={results_pd.head(5)}")
     
     if len(results_pd) == 0:
-      stop_session(spark)
       return
     
     # Visualize with Plotly Express (Bar Chart is common)
@@ -537,8 +522,16 @@ def movies_frequent_itemsets(df, split_name, rating):
     
     _plot_fpgrowth_assoc_rules(model, split_name, rating, False)
     
-    stop_session(spark)
+    del df
+    del pandas_df
+    del spark_df
+    del model
+    del filtered_itemsets
+    del results_pd
+    del fig
     
+spark = get_spark_session()
+
 for split_name in ["train", "eval", "test"]:
     in_file_pattern = os.path.join(parquet_path, f"Split-{split_name}*")
     df = pl.read_parquet(in_file_pattern)
@@ -611,7 +604,7 @@ for split_name in ["train", "eval", "test"]:
           pl.col("movie_ids").list.sort()
         )
         
-        movies_frequent_itemsets(filtered, split_name, rating)
+        movies_frequent_itemsets(filtered, split_name, rating, spark)
         del filtered
     
         if PLOT_PREFIXSPAN:
@@ -628,6 +621,8 @@ for split_name in ["train", "eval", "test"]:
           filtered = filtered.select(["user_id", "movie_id"])
           filtered = filtered.group_by("user_id").agg(pl.col("movie_id").unique().alias("movie_ids"))
           filtered = filtered.select(["movie_ids"])
-          movies_prefixspan(filtered, split_name, rating)
-        
+          
+          movies_prefixspan(filtered, split_name, rating, spark)
+     
+stop_session(spark)
 print(f'wrote multivariate EDA images to {img_dir}')
