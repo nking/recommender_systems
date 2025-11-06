@@ -195,6 +195,6 @@ class IngestAndJoin(beam.PTransform):
       if _name != 'title' and _name != 'movie_id':
         columns.append((_name, _type))
 
-    logging.debug(f"columns={columns}")
-
+    logging.debug(f"output ingest columns={columns}")
+    
     return ratings, columns

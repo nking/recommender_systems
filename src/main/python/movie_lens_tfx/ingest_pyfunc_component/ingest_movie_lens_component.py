@@ -105,6 +105,8 @@ def MovieLensExampleGen(
       pipeline | f"IngestAndJoin_{random.randint(0,1000000000)}" \
       >> IngestAndJoin(infiles_dict = infiles_dict)
 
+    logging.debug(f'column_name_type_list={column_name_type_list}')
+    
     # create tf.train.Examples from PCollection before split:
     ratings_examples = ratings_pc \
       | f'ToTFExample_{random.randint(0, 1000000000000)}' \

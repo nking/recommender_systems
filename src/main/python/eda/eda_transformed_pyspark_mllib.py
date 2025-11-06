@@ -272,8 +272,8 @@ def movies_prefixspan(df, split_name, rating, spark):
     return [[item] for item in sequence]
   
   pandas_df['sequence_col'] = pandas_df['movie_ids'].apply(sequence_to_itemsets)
-  print(f'{split_name}_{rating:} prefixscan input pandas_df.head={pandas_df.head(5)}')
-  print(f'dtypes={pandas_df.dtypes}')
+  #print(f'{split_name}_{rating:} prefixscan input pandas_df.head={pandas_df.head(5)}')
+  #print(f'dtypes={pandas_df.dtypes}')
 
   schema = StructType([
     StructField("sequence_col",
@@ -313,7 +313,7 @@ def movies_prefixspan(df, split_name, rating, spark):
   except Exception as e:
     return
   
-  print(f'patterns_pd head\n{patterns_pd.head()}')
+  #print(f'patterns_pd head\n{patterns_pd.head()}')
   
   # Convert the sequence (Array<Array<Item>>) to a readable string
   patterns_pd['pattern_str'] = patterns_pd['sequence'].apply(
@@ -396,11 +396,11 @@ def movies_frequent_itemsets(df, split_name, rating, spark):
     
     df = df.select(['movie_ids'])
     #df = df.with_columns(pl.col("movie_ids").cast(pl.List(pl.Int32)))
-    print(f"dtype={df.dtypes}")
-    print(f'head={df.head(5)}')
+    #print(f"dtype={df.dtypes}")
+    #print(f'head={df.head(5)}')
     
     pandas_df = df.to_pandas()
-    print(f'pandas_df.head={pandas_df.head(5)}')
+    #print(f'pandas_df.head={pandas_df.head(5)}')
     
     def cast_list_to_python_ints(int_list):
       """Casts all elements in a list from NumPy int32 to Python int."""
@@ -410,15 +410,15 @@ def movies_frequent_itemsets(df, split_name, rating, spark):
       return [int(x) for x in int_list]
     
     pandas_df['movie_ids'] = pandas_df['movie_ids'].apply(cast_list_to_python_ints)
-    print(f'pandas_df.dtypes={pandas_df.dtypes}')
+    #print(f'pandas_df.dtypes={pandas_df.dtypes}')
     
     schema = StructType([
       StructField("movie_ids", ArrayType(IntegerType(), containsNull=False),True)
     ])
     spark_df = spark.createDataFrame(pandas_df, schema=schema)
-    print(f'spark_df schema=')
+    #print(f'spark_df schema=')
     spark_df.printSchema()
-    print(f'head: {spark_df.take(2)}')
+    #print(f'head: {spark_df.take(2)}')
     
     """
     #using pyarrow failed for this older pyspark library
@@ -438,7 +438,7 @@ def movies_frequent_itemsets(df, split_name, rating, spark):
     )
     model = fp_growth.fit(spark_df)
     frequent_itemsets_spark = model.freqItemsets
-    print(f'TYPE={type(frequent_itemsets_spark)}')
+    #print(f'TYPE={type(frequent_itemsets_spark)}')
     try:
       if frequent_itemsets_spark.isEmpty():
         return
@@ -469,7 +469,7 @@ def movies_frequent_itemsets(df, split_name, rating, spark):
     results_pd = results_pd.sort_values(by='support', ascending=False)
     
     print(f"results_pd len={len(results_pd)}")
-    print(f"sorted by support={results_pd.head(5)}")
+    print(f"sorted by support, head(5)={results_pd.head(5)}")
     
     if len(results_pd) == 0:
       return
@@ -491,7 +491,7 @@ def movies_frequent_itemsets(df, split_name, rating, spark):
     #sort results_pd by itemset length, support
     results_pd['itemset_len'] = results_pd['items'].apply(len)
     results_pd = results_pd.sort_values(by=['itemset_len', 'support'], ascending=[False,False])
-    print(f"sorted by itemset_length then support={results_pd.head(5)}")
+    print(f"sorted by itemset_length then support, head(5)={results_pd.head(5)}")
     fig = px.bar(
       results_pd.head(100),
       x='itemset_str',
@@ -557,7 +557,7 @@ for split_name in ["train", "eval", "test"]:
     #    pl.col("occ").cast(pl.Categorical)
     #)
     
-    print(f"\ndf w/ occ: {df.sort('user_id').head(5)}")
+    #print(f"\ndf w/ occ: {df.sort('user_id').head(5)}")
     
     df_sparse_str = df.with_columns(
       pl.col("genres").list.eval(pl.arg_where(pl.element().cast(pl.Boolean)))
@@ -568,24 +568,24 @@ for split_name in ["train", "eval", "test"]:
         {k: v for k, v in enumerate(genres)}, default=pl.lit(None)))
       .alias("genres"))
     
-    print(f'df_sparse_str={df_sparse_str.sort("user_id").head(5)}')
+    #print(f'df_sparse_str={df_sparse_str.sort("user_id").head(5)}')
     
     #for market basket analysis, will make a sparsely populated column
    
     exploded = df_sparse_str.explode('genres')
     
-    print(f'exploded.columns={exploded.columns}')
-    print(f'exploded head={exploded.sort("user_id").head(5)}')
+    #print(f'exploded.columns={exploded.columns}')
+    #print(f'exploded head={exploded.sort("user_id").head(5)}')
     for rating in [5, 4, 3, 2, 1]:
         filtered = exploded.filter(pl.col("rating") == rating)
-        print(f'filtered.columns={filtered.columns}')
-        print(f'filtered head={filtered.sort("user_id").head(2)}')
+        #print(f'filtered.columns={filtered.columns}')
+        #print(f'filtered head={filtered.sort("user_id").head(2)}')
         #pie chart counting each genre
         genres_counts = filtered['genres'].value_counts()#.reset_index()
         genres_counts.columns = ['Genre', 'Count']
         genres_counts = genres_counts.with_columns(pl.col('Count').cast(pl.Int64))
-        print(f'dtypes={genres_counts.dtypes}')
-        print(f'head={genres_counts.head(5)}')
+        #print(f'dtypes={genres_counts.dtypes}')
+        #print(f'head={genres_counts.head(5)}')
         fig = px.pie(genres_counts, values='Count', names='Genre',
             title=f'{split_name} rating {rating}: Genres')
         fig.write_image(os.path.join(img_dir, f"{split_name}_genres_rating_{rating}.png"))
