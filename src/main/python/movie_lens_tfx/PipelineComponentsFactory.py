@@ -36,7 +36,8 @@ class PipelineComponentsFactory():
     self.serving_model_dir = serving_model_dir
     self.output_parquet_path = output_parquet_path
     
-  def build_components(self, type: PIPELINE_TYPE, run_example_diff:bool=False, schema_path:str=None) -> List[base_beam_component.BaseBeamComponent]:
+  def build_components(self, type: PIPELINE_TYPE, run_example_diff:bool=False, pre_transform_schema_path:str=None,
+    post_transform_schema_path:str=None) -> List[base_beam_component.BaseBeamComponent]:
     tuner_custom_config = {
       'user_id_max': self.user_id_max,
       'movie_id_max': self.movie_id_max,
@@ -66,18 +67,18 @@ class PipelineComponentsFactory():
       statistics=statistics_gen.outputs['statistics'],
       infer_feature_shape=True)
     
-    schema_importer = None
-    if schema_path is not None:
-      schema_importer = tfx.dsl.Importer(
-        source_uri=schema_path,
+    pre_transform_schema_importer = None
+    if pre_transform_schema_path is not None:
+      pre_transform_schema_importer = tfx.dsl.Importer(
+        source_uri=pre_transform_schema_path,
         artifact_type=tfx.types.standard_artifacts.Schema).with_id(
-        'schema_importer')
-      example_validator = ExampleValidator(
+        'pre_transform_schema_importer')
+      pre_transform_example_validator = ExampleValidator(
         statistics=statistics_gen.outputs['statistics'],
-        schema=schema_importer.outputs['result'])
+        schema=pre_transform_schema_importer.outputs['result'])
     else:
      # Performs anomaly detection based on statistics and data schema.
-      example_validator = ExampleValidator(
+      pre_transform_example_validator = ExampleValidator(
         statistics=statistics_gen.outputs['statistics'],
         schema=schema_gen.outputs['schema'])
     
@@ -106,14 +107,13 @@ class PipelineComponentsFactory():
     if type == PIPELINE_TYPE.PREPROCESSING:
       parquet_task = tfrecord_to_parquet.FromTFRecordToParquet(
         transform_graph=ratings_transform.outputs['transform_graph'],
-        transformed_examples=ratings_transform.outputs[
-          'transformed_examples'],
+        transformed_examples=ratings_transform.outputs['transformed_examples'],
         output_file_path=self.output_parquet_path
       )
       components = [example_gen, statistics_gen, schema_gen]
-      if schema_importer is not None:
-        components.append(schema_importer)
-      components.append(example_validator)
+      if pre_transform_schema_importer is not None:
+        components.append(pre_transform_schema_importer)
+      components.append(pre_transform_example_validator)
       if example_resolver is not None:
         components.extend([example_resolver, example_diff])
       components.extend([ratings_transform, parquet_task])
@@ -236,9 +236,9 @@ class PipelineComponentsFactory():
     if type == PIPELINE_TYPE.BASELINE:
       #TODO: save schema.pbtxt to version control when have a working version
       components = [example_gen, statistics_gen, schema_gen]
-      if schema_importer is not None:
-        components.append(schema_importer)
-      components.extend([example_validator, ratings_transform, tuner, trainer, model_resolver, evaluator])
+      if pre_transform_schema_importer is not None:
+        components.append(pre_transform_schema_importer)
+      components.extend([pre_transform_example_validator, ratings_transform, tuner, trainer, model_resolver, evaluator])
       return components
     
     # Checks whether the model passed the validation steps and pushes the model
@@ -251,9 +251,9 @@ class PipelineComponentsFactory():
           base_directory=self.serving_model_dir)))
     
     components = [example_gen, statistics_gen, schema_gen]
-    if schema_importer is not None:
-      components.append(schema_importer)
-    components.append(example_validator)
+    if pre_transform_schema_importer is not None:
+      components.append(pre_transform_schema_importer)
+    components.append(pre_transform_example_validator)
     if example_resolver is not None:
       components.extend([example_resolver, example_diff])
     components.extend([ratings_transform, model_resolver, tuner, trainer,evaluator, pusher])
