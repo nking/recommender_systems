@@ -36,14 +36,14 @@ class PipelineComponentsFactory():
     self.serving_model_dir = serving_model_dir
     self.output_parquet_path = output_parquet_path
     
-  def build_components(self, type: PIPELINE_TYPE, run_example_diff:bool=False, pre_transform_schema_path:str=None,
-    post_transform_schema_path:str=None) -> List[base_beam_component.BaseBeamComponent]:
+  def build_components(self, type: PIPELINE_TYPE, run_example_diff:bool=False, pre_transform_schema_dir_path:str=None,
+    post_transform_schema_dir_path:str=None) -> List[base_beam_component.BaseBeamComponent]:
     tuner_custom_config = {
       'user_id_max': self.user_id_max,
       'movie_id_max': self.movie_id_max,
       'n_genres': self.n_genres,
       'n_age_groups': self.n_age_groups,
-      'feature_acronym': "h",
+      'feature_acronym': "a",
       'run_eagerly': False,
       "use_bias_corr": False,
       'incl_genres': True,
@@ -68,9 +68,9 @@ class PipelineComponentsFactory():
       infer_feature_shape=True)
     
     pre_transform_schema_importer = None
-    if pre_transform_schema_path is not None:
+    if pre_transform_schema_dir_path is not None:
       pre_transform_schema_importer = tfx.dsl.Importer(
-        source_uri=pre_transform_schema_path,
+        source_uri=pre_transform_schema_dir_path,
         artifact_type=tfx.types.standard_artifacts.Schema).with_id(
         'pre_transform_schema_importer')
       pre_transform_example_validator = ExampleValidator(
