@@ -1059,7 +1059,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
     log_dir=fn_args.model_run_dir, update_freq='epoch')
   
   stop_early = tf.keras.callbacks.EarlyStopping(
-    monitor=f'val_loss', min_delta=1E-3, patience=3)
+    monitor=f'val_loss', min_delta=1E-4, patience=3)
   
   """
   checkpoint_dir = os.path.join(fn_args.serving_model_dir, 'checkpoint')
