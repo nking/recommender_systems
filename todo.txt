@@ -1,6 +1,4 @@
-- current:
-  add adjustment of global batch_size for distribution
-  strategy
+- add a signature for the string serialized tf.Examples
 
 - future: consider use of ZCTAs and geohashing for 'zipcodes'
 
