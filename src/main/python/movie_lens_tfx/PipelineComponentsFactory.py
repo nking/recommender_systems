@@ -22,9 +22,11 @@ class PIPELINE_TYPE(enum.Enum):
   PRODUCTION = "production"
 
 class PipelineComponentsFactory():
-  def __init__(self, infiles_dict_ser:str, output_config_ser:str, transform_dir:str,
+  def __init__(self, num_examples:int, infiles_dict_ser:str, output_config_ser:str, transform_dir:str,
     user_id_max: int, movie_id_max:int, n_genres:int, n_age_groups:int,
-    min_eval_size:int=100, serving_model_dir:str=None, output_parquet_path:str=None):
+    min_eval_size:int=100, batch_size:int=64, num_epochs:int=20, device:str="CPU",
+    serving_model_dir:str=None, output_parquet_path:str=None):
+    self.num_examples = num_examples
     self.infiles_dict_ser = infiles_dict_ser
     self.output_config_ser = output_config_ser
     self.transform_dir = transform_dir
@@ -33,8 +35,11 @@ class PipelineComponentsFactory():
     self.n_genres = n_genres
     self.n_age_groups = n_age_groups
     self.min_eval_size = min_eval_size
+    self.batch_size = batch_size
+    self.num_epochs = num_epochs
     self.serving_model_dir = serving_model_dir
     self.output_parquet_path = output_parquet_path
+    self.device = device
     
   def build_components(self, type: PIPELINE_TYPE, run_example_diff:bool=False, pre_transform_schema_dir_path:str=None,
     post_transform_schema_dir_path:str=None) -> List[base_beam_component.BaseBeamComponent]:
@@ -47,6 +52,10 @@ class PipelineComponentsFactory():
       'run_eagerly': False,
       "use_bias_corr": False,
       'incl_genres': True,
+      'BATCH_SIZE':self.batch_size,
+      "NUM_EPOCHS":self.num_epochs,
+      "device":self.device,
+      "num_examples":self.num_examples,
     }
     
     if type == PIPELINE_TYPE.BASELINE:
@@ -134,21 +143,15 @@ class PipelineComponentsFactory():
       # model_blessing=Channel(type=ModelBlessing)
     ).with_id('latest_model_resolver'))
     # 'latest_blessed_model_resolver')
-    
+   
     tuner = tfx.components.Tuner(
       module_file=os.path.join(self.transform_dir, 'tune_train_movie_lens.py'),
       examples=ratings_transform.outputs['transformed_examples'],
       # schema is already in the transform graph
       transform_graph=ratings_transform.outputs['transform_graph'],
       # args: splits, num_steps.  splits defaults are assumed if none given
-      train_args=tfx.proto.TrainArgs(num_steps=5),
-      eval_args=tfx.proto.EvalArgs(num_steps=5),
       custom_config=tuner_custom_config,
     )
-    
-    trainer_custom_config = {
-      'device': "CPU",
-    }
     
     # see https://github.com/tensorflow/tfx/blob/master/tfx/examples/penguin/penguin_pipeline_local.py
     # trainer = trainer_movie_lens.MovieLensTrainer(
@@ -156,11 +159,7 @@ class PipelineComponentsFactory():
       module_file=os.path.join(self.transform_dir, 'tune_train_movie_lens.py'),
       examples=ratings_transform.outputs['transformed_examples'],
       transform_graph=ratings_transform.outputs['transform_graph'],
-      schema=schema_gen.outputs['schema'],
       hyperparameters=(tuner.outputs['best_hyperparameters']),
-      train_args=tfx.proto.TrainArgs(num_steps=5),
-      eval_args=tfx.proto.EvalArgs(num_steps=5),
-      custom_config=trainer_custom_config,
     )
   
     # for the current trained model to be blessed,
@@ -187,21 +186,19 @@ class PipelineComponentsFactory():
             #start with simple to see blessing
             tfma.MetricConfig(
               class_name='ExampleCount',
-              # Requires at least 1 example to be present in the evaluation data.
+              # Requires at least min_eval_size examples to be present in the evaluation data.
               # This is the simplest possible "blessing" check.
               threshold=tfma.MetricThreshold(
                 value_threshold=tfma.GenericValueThreshold(
                   lower_bound={'value': self.min_eval_size}
-                ))
-            #tfma.MetricConfig(class_name='MeanAbsoluteError',
-            #  threshold=tfma.MetricThreshold(change_threshold=tfma.GenericChangeThreshold(
-            #    direction=tfma.MetricDirection.LOWER_IS_BETTER,
-            #    #MAE is 0.26, diff is 0.02.  next_mae must be <= 026 + 0.08 for value=-0.08
-            #    absolute={'value': -0.1}
-            #  ))
-            ),
+                ))),
+            tfma.MetricConfig(class_name='MeanAbsoluteError',
+              # rating scale 0:5 is 0.:1.0 so error of 1 in a rating is 0.20. fail for error of 2 in a rating = 0.4
+              threshold=tfma.MetricThreshold(
+                value_threshold=tfma.GenericValueThreshold(
+                  lower_bound={'value': 0.4}
+                ))),
             #tfma.MetricConfig(class_name='MeanSquaredError'),
-            #tfma.MetricConfig(class_name='ExampleCount')
           ]
         )
       ])
@@ -238,7 +235,8 @@ class PipelineComponentsFactory():
       components = [example_gen, statistics_gen, schema_gen]
       if pre_transform_schema_importer is not None:
         components.append(pre_transform_schema_importer)
-      components.extend([pre_transform_example_validator, ratings_transform, tuner, trainer, model_resolver, evaluator])
+      components.extend([pre_transform_example_validator, ratings_transform,
+        tuner, trainer, model_resolver, evaluator])
       return components
     
     # Checks whether the model passed the validation steps and pushes the model

@@ -61,7 +61,7 @@ class TransformTest(tf.test.TestCase):
       output_config_ser = self.output_config_ser))
 
     statistics_gen = StatisticsGen(examples = ratings_example_gen.outputs['output_examples'])
-
+    
     schema_gen = SchemaGen(statistics=statistics_gen.outputs['statistics'],
       infer_feature_shape=True)
 
@@ -170,3 +170,4 @@ class TransformTest(tf.test.TestCase):
       df = pl.read_parquet(in_file_pattern)
       #df = pl.scan_parquet(in_file_pattern)
       print(f"POLARS: {split_name}:\n{df.columns},\n{df.dtypes}\n{df.head()}\n{df.describe()}")
+   

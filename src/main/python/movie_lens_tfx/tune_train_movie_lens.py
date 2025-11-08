@@ -5,14 +5,16 @@ import pickle
 # and related files
 # they have co Copyright 2020 Google LLC. All Rights Reserved.
 # Licensed under the Apache License, Version 2.0 (the "License");
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 import tensorflow as tf
 import tensorflow.keras as keras
 import enum
 import os
+import math
 import json
 import keras_tuner
 import tensorflow_transform as tft
+from tensorflow_metadata.proto.v0 import statistics_pb2
 #tuner needs this:
 from tfx.components.trainer.fn_args_utils import FnArgs
 
@@ -27,12 +29,13 @@ from absl import logging
 logging.set_verbosity(logging.INFO)
 logging.set_stderrthreshold(logging.INFO)
 
-TRAIN_BATCH_SIZE = 2
-EVAL_BATCH_SIZE = 2
+DEFAULT_BATCH_SIZE = 64
+DEFAULT_NUM_EPOCHS = 20
+
 LOSS_FN = keras.losses.MeanSquaredError() #name=mean_squared_error
 METRIC_FN = keras.metrics.RootMeanSquaredError()
 
-MAX_TUNE_TRIALS = 2
+MAX_TUNE_TRIALS_DEFAULT = 10
 
 #NOTE: could be improved by writing the headers to a file in the Transform stage and reading them here:
 FEATURE_KEYS = [
@@ -375,8 +378,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     def build(self, input_shape):
       # print(f'build {self.name} input_shape={input_shape}\n')
       self.embedding_model.build(input_shape)
-      input_shape_2 = self.embedding_model.compute_output_shape(
-        input_shape)
+      input_shape_2 = self.embedding_model.compute_output_shape(input_shape)
       self.dense_layers.build(input_shape_2)
       self.built = True
     
@@ -475,8 +477,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     def build(self, input_shape):
       # print(f'build {self.name} input_shape={input_shape}\n')
       self.embedding_model.build(input_shape)
-      input_shape_2 = self.embedding_model.compute_output_shape(
-        input_shape)
+      input_shape_2 = self.embedding_model.compute_output_shape(input_shape)
       self.dense_layers.build(input_shape_2)
       self.built = True
     
@@ -751,44 +752,57 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         config[key] = keras.utils.deserialize_keras_object(config[key])
       return cls(**config)
   
-  model = TwoTowerDNN(
-    n_users=hp.get("user_id_max") + 1,
-    n_movies=hp.get("movie_id_max") + 1,
-    n_age_groups=hp.get("n_age_groups") + 1,
-    n_genres=hp.get("n_genres"),
-    layer_sizes=hp.get('layer_sizes'),
-    embed_out_dim=hp.get('embed_out_dim'),
-    reg=None, drop_rate=0.1,
-    feature_acronym=hp.get("feature_acronym"),
-    use_bias_corr=hp.get('use_bias_corr'),
-    incl_genres=hp.get('incl_genres'),
-  )
+  # use strategy
+  d = hp.get("device")
+  if d == "GPU":
+    device = Device.GPU
+  elif d == "TPU":
+    device = Device.TPU
+  else:
+    device = Device.CPU
+  strategy, device = _get_strategy(device)
   
-  input_shapes = {}
-  # input_shapes[element] = (batch_size,)
-  for element in FEATURE_KEYS:
-    if element == "genres":
-      input_shapes[element] = (None, 1, N_GENRES)
-    else:
-      input_shapes[element] = (None, 1)
+  with strategy.scope():
+    model = TwoTowerDNN(
+      n_users=hp.get("user_id_max") + 1,
+      n_movies=hp.get("movie_id_max") + 1,
+      n_age_groups=hp.get("n_age_groups") + 1,
+      n_genres=hp.get("n_genres"),
+      layer_sizes=hp.get('layer_sizes'),
+      embed_out_dim=hp.get('embed_out_dim'),
+      reg=None, drop_rate=0.1,
+      feature_acronym=hp.get("feature_acronym"),
+      use_bias_corr=hp.get('use_bias_corr'),
+      incl_genres=hp.get('incl_genres'),
+    )
   
-  model.build(input_shapes)
+    input_shapes = {}
+    # input_shapes[element] = (batch_size,)
+    for element in FEATURE_KEYS:
+      if element == "genres":
+        input_shapes[element] = (None, 1, N_GENRES)
+      else:
+        input_shapes[element] = (None, 1)
+    
+    model.build(input_shapes)
   
-  optimizer = keras.optimizers.Adam(
-    learning_rate=hp.get('learning_rate'))
-  
-  # LOSS:
-  # can use Ordinal Logistic Regression for classification into ratings categories
-  # or MSE: when loss=MSE, choose RMSE as eval metric, but they are affected by outliers
-  #  so consider MAE
-  #  so consider MAE
-  model.compile(
-    loss=LOSS_FN,
-    optimizer=optimizer,
-    metrics=[METRIC_FN, keras.metrics.MeanAbsoluteError()],
-    run_eagerly=hp.get("run_eagerly")
-  )
+    optimizer = keras.optimizers.Adam(
+      learning_rate=hp.get('learning_rate'))
+    
+    # LOSS:
+    # can use Ordinal Logistic Regression for classification into ratings categories
+    # or MSE: when loss=MSE, choose RMSE as eval metric, but they are affected by outliers
+    #  so consider MAE
+    #  so consider MAE
+    model.compile(
+      loss=LOSS_FN,
+      optimizer=optimizer,
+      metrics=[METRIC_FN, keras.metrics.MeanAbsoluteError()],
+      run_eagerly=hp.get("run_eagerly")
+    )
+    
   model.summary(print_fn=logging.info)
+  
   is_tf_keras_model = isinstance(model, tf.keras.Model)
   is_keras_model = isinstance(model, keras.Model)
   is_keras_models_Model = isinstance(model, keras.models.Model)
@@ -802,6 +816,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
 
 def get_default_hyperparameters(custom_config, input_element_spec) -> keras_tuner.HyperParameters:
   """Returns hyperparameters for building Keras model."""
+  #print(f'get_default_hyperparameters: custom_config={custom_config}')
   hp = keras_tuner.HyperParameters()
   # Defines search space.
   hp.Choice('learning_rate', [1e-4], default=1e-4)
@@ -814,16 +829,23 @@ def get_default_hyperparameters(custom_config, input_element_spec) -> keras_tune
   hp.Fixed("feature_acronym", custom_config.get("feature_acronym", "h"))
   hp.Fixed("incl_genres", custom_config["incl_genres"])
   hp.Fixed('num_epochs', value=10)
-  hp.Fixed('batch_size', TRAIN_BATCH_SIZE)
+  hp.Fixed('BATCH_SIZE', custom_config.get("BATCH_SIZE", DEFAULT_BATCH_SIZE))
+  hp.Fixed('NUM_EPOCHS', custom_config.get("NUM_EPOCHS", DEFAULT_NUM_EPOCHS))
   hp.Fixed("use_bias_corr", value=custom_config["use_bias_corr"])
   hp.Fixed('user_id_max', value=custom_config["user_id_max"])
   hp.Fixed('movie_id_max', custom_config["movie_id_max"])
   hp.Fixed('n_age_groups', custom_config["n_age_groups"])
   hp.Fixed('n_genres', custom_config["n_genres"])
   hp.Fixed('run_eagerly', custom_config["run_eagerly"])
+  hp.Fixed('device', custom_config.get("device", 'CPU'))
+  hp.Fixed('MAX_TUNE_TRIALS', custom_config.get("MAX_TUNE_TRIALS", MAX_TUNE_TRIALS_DEFAULT))
   hp.Fixed('input_dataset_element_spec_ser', (base64.b64encode(pickle.dumps(input_element_spec))).decode('utf-8'))
+  num_train = int(custom_config.get("num_examples")*0.8)
+  num_eval = int(custom_config.get("num_examples") * 0.1)
+  hp.Fixed("num_train", num_train)
+  hp.Fixed("num_eval", num_eval)
+  
   return hp
-
 
 # TFX Trainer will call this function.
 def _get_strategy(device: Device) -> Tuple[tf.distribute.Strategy, Device]:
@@ -883,7 +905,9 @@ def _get_serve_tf_examples_fn(model, tf_transform_output):
 # tfx.components.FnArgs
 def run_fn(fn_args):
   """Train the model based on given args.
-
+  
+  expects hyperparameters or cutom_config, but not both
+  
   fn_args = fn_args_utils.get_common_fn_args(input_dict, exec_properties,
     working_dir)
     where exec_properties are the PARAMETERS from the Tuner Spec
@@ -974,61 +998,98 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   
   if not fn_args.hyperparameters:
     raise ValueError('hyperparameters must be provided')
- 
+  
+  transform_graph = tft.TFTransformOutput(fn_args.transform_graph_path)
+  
+  if fn_args.hyperparameters:
+    hp = keras_tuner.HyperParameters.from_config(fn_args.hyperparameters)
+  else:
+    tmp_dataset = input_fn(fn_args.train_files, fn_args.data_accessor,
+                           transform_graph, DEFAULT_BATCH_SIZE)
+    
+    def extract_features(features, label):
+      return features
+    
+    x = tmp_dataset.map(extract_features)
+    hp = get_default_hyperparameters(fn_args.custom_config, x.element_spec)
+  
+  logging.info('HyperParameters for training: %s' % hp.get_config())
+  
+  d = hp.get("device")
+  if d == "GPU":
+    device = Device.GPU
+  elif d == "TPU":
+    device = Device.TPU
+  else:
+    device = Device.CPU
+  strategy, device = _get_strategy(device)
+  
+  logging.info(f"device={device}, distribution strategy={strategy}")
+  
+  BATCH_SIZE_PER_REPLICA = hp.get("BATCH_SIZE")
+  NUM_EPOCHS = hp.get("NUM_EPOCHS")
+  
+  n_replicas = strategy.num_replicas_in_sync
+  GLOBAL_BATCH_SIZE = BATCH_SIZE_PER_REPLICA * n_replicas
+  
+  # virtual epochs:
+  TRAIN_STEPS_PER_EPOCH = math.ceil(hp.get("num_train") / GLOBAL_BATCH_SIZE)
+  EVAL_STEPS_PER_EPOCH = math.ceil(hp.get("num_eval") / GLOBAL_BATCH_SIZE)
+  
   tf_transform_output = tft.TFTransformOutput(fn_args.transform_output)
   
   train_dataset = input_fn(
     fn_args.train_files,
     fn_args.data_accessor,
     tf_transform_output,
-    TRAIN_BATCH_SIZE)
+    GLOBAL_BATCH_SIZE)
   
   eval_dataset = input_fn(
     fn_args.eval_files,
     fn_args.data_accessor,
     tf_transform_output,
-    EVAL_BATCH_SIZE)
+    GLOBAL_BATCH_SIZE)
     
-  hp = keras_tuner.HyperParameters.from_config(fn_args.hyperparameters)
-  
-  logging.info('HyperParameters for training: %s' % hp.get_config())
-  
-  if fn_args.custom_config and "device" in fn_args.custom_config:
-    d = fn_args.custom_config["device"]
-    if d == "GPU":
-      device = Device.GPU
-    elif d == "TPU":
-      device = Device.TPU
-    else:
-      device = Device.CPU
-  else:
-    device = Device.CPU
-  strategy, device = _get_strategy(device)
-  
-  #TODO: calc batch sizes
-  n_replicas = strategy.num_replicas_in_sync
-  #global batch_size is the global batch size
-  
-  with strategy.scope():
-    model = _make_2tower_keras_model(hp)
-    # model = _make_2tower_keras_model(hp, tf_transform_output)
-  
+  #the model is built and compiled in strategy scope:
+  model = _make_2tower_keras_model(hp)
+  # model = _make_2tower_keras_model(hp, tf_transform_output)
+
   # Write logs to path
   tensorboard_callback = tf.keras.callbacks.TensorBoard(
     log_dir=fn_args.model_run_dir, update_freq='epoch')
   
   stop_early = tf.keras.callbacks.EarlyStopping(
-    monitor=f'val_loss', patience=3)
+    monitor=f'val_loss', min_delta=1E-3, patience=3)
   
+  """
+  checkpoint_dir = os.path.join(fn_args.serving_model_dir, 'checkpoint')
+  filepath = os.path.join(
+    checkpoint_dir, 'best_model_{epoch:02d}-{val_loss:.2f}'  # Using val_loss is common
+  )
+  tf.io.gfile.makedirs(checkpoint_dir)
+  callback = tf.keras.callbacks.ModelCheckpoint(
+    filepath=filepath, monitor='val_loss', verbose=1, mode='min', save_best_only=True,
+    save_weights_only=False, save_freq='epoch')
+  """
   history = model.fit(
     train_dataset,
-    steps_per_epoch=fn_args.train_steps,
+    steps_per_epoch=TRAIN_STEPS_PER_EPOCH,
     validation_data=eval_dataset,
-    validation_steps=fn_args.eval_steps,
-    callbacks=[tensorboard_callback, stop_early])
+    validation_steps=EVAL_STEPS_PER_EPOCH,
+    epochs=NUM_EPOCHS,
+    callbacks=[tensorboard_callback, stop_early], verbose=1)
+  
+  print(f'fit history={history}')
   
   #TODO: consider adding the vocabularies as assets:
   #    see https://www.tensorflow.org/api_docs/python/tf/saved_model/Asset
+  
+  """
+  latest_checkpoint = tf.train.latest_checkpoint(checkpoint_dir)
+  if latest_checkpoint:
+    model.load_weights(latest_checkpoint)
+    print(f"Loaded best weights from {latest_checkpoint}")
+  """
   
   input_element_spec = train_dataset.element_spec[0]
   
@@ -1062,11 +1123,12 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   
   return model
 
-
 # TFX Tuner will call this function.
 def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
   """Build the tuner using the KerasTuner API.
 
+  expects hyperparameters or cutom_config, but not both
+  
   fn_args = fn_args_utils.get_common_fn_args(input_dict, exec_properties,
     working_dir)
     where exec_properties are the PARAMETERS from the Tuner Spec
@@ -1117,34 +1179,53 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
   
   transform_graph = tft.TFTransformOutput(fn_args.transform_graph_path)
   
+  if fn_args.hyperparameters:
+    hp = keras_tuner.HyperParameters.from_config(fn_args.hyperparameters)
+  else:
+    tmp_dataset = input_fn(fn_args.train_files,fn_args.data_accessor,
+      transform_graph, DEFAULT_BATCH_SIZE)
+    def extract_features(features, label):
+      return features
+    x = tmp_dataset.map(extract_features)
+    hp = get_default_hyperparameters(fn_args.custom_config, x.element_spec)
+    
+  d = hp.get("device")
+  if d == "GPU":
+    device = Device.GPU
+  elif d == "TPU":
+    device = Device.TPU
+  else:
+    device = Device.CPU
+  strategy, device = _get_strategy(device)
+  
+  BATCH_SIZE_PER_REPLICA = hp.get("BATCH_SIZE")
+  NUM_EPOCHS = hp.get("NUM_EPOCHS")
+  
+  n_replicas = strategy.num_replicas_in_sync
+  GLOBAL_BATCH_SIZE = BATCH_SIZE_PER_REPLICA * n_replicas
+ 
+  # virtual epochs:
+  TRAIN_STEPS_PER_EPOCH = math.ceil(hp.get("num_train") / GLOBAL_BATCH_SIZE)
+  EVAL_STEPS_PER_EPOCH = math.ceil(hp.get("num_eval") / GLOBAL_BATCH_SIZE)
+  
   train_dataset = input_fn(
     fn_args.train_files,
     fn_args.data_accessor,
     transform_graph,
-    TRAIN_BATCH_SIZE)
+    GLOBAL_BATCH_SIZE)
   
   eval_dataset = input_fn(
     fn_args.eval_files,
     fn_args.data_accessor,
     transform_graph,
-    EVAL_BATCH_SIZE)
+    GLOBAL_BATCH_SIZE)
   
-  #extract the TensorSpecs for input_signature for serving_default for features without label:
-  def extract_features(features, label):
-    return features
-  x = train_dataset.map(extract_features)
-  
-  if fn_args.hyperparameters:
-    hp = keras_tuner.HyperParameters.from_config(fn_args.hyperparameters)
-  else:
-    hp = get_default_hyperparameters(fn_args.custom_config, x.element_spec)
-    
   # the objective must be must be a name that appears in the logs
   # returned by the model.fit() method during training.
   #val_logs has keys 'val_loss' and 'val_compile_metrics'
   tuner = keras_tuner.RandomSearch(
     _make_2tower_keras_model,
-    max_trials=MAX_TUNE_TRIALS,
+    max_trials=hp.get("MAX_TUNE_TRIALS"),
     hyperparameters=hp,
     allow_new_entries=False,
     objective=keras_tuner.Objective(f'val_loss', 'min'),
@@ -1157,6 +1238,6 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
     fit_kwargs={
       'x': train_dataset,
       'validation_data': eval_dataset,
-      'steps_per_epoch': fn_args.train_steps,
-      'validation_steps': fn_args.eval_steps
+      'steps_per_epoch': TRAIN_STEPS_PER_EPOCH,
+      'validation_steps': EVAL_STEPS_PER_EPOCH
     })

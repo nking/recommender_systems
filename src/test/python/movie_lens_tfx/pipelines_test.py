@@ -27,6 +27,7 @@ class PipelinesTest(tf.test.TestCase):
     super().setUp()
     self.infiles_dict_ser, self.output_config_ser, self.split_names = \
       get_test_data()
+    self.num_examples = 1000
     self.user_id_max = 6040
     self.movie_id_max = 3952
     self.n_genres = N_GENRES
@@ -71,11 +72,11 @@ class PipelinesTest(tf.test.TestCase):
     serving_model_dir = os.path.join(PIPELINE_ROOT, 'serving_model')
 
     pipeline_factory = PipelineComponentsFactory(
+      num_examples=self.num_examples,
       infiles_dict_ser=self.infiles_dict_ser, output_config_ser=self.output_config_ser,
       transform_dir=tr_dir, user_id_max=self.user_id_max, movie_id_max=self.movie_id_max,
       n_genres=self.n_genres, n_age_groups=self.n_age_groups, min_eval_size=self.MIN_EVAL_SIZE,
-      serving_model_dir=serving_model_dir,
-    )
+      batch_size=32, num_epochs=2, device="CPU", serving_model_dir=serving_model_dir)
     
     beam_pipeline_args = [
       '--direct_running_mode=multi_processing',
