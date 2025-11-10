@@ -98,6 +98,7 @@ class PipelinesTest(tf.test.TestCase):
     )
     
     tfx.orchestration.LocalDagRunner().run(my_pipeline)
+    logging.debug("BASELINE pipeline finished")
     
     artifact_types = store.get_artifact_types()
     logging.debug(f"MLMD store artifact_types={artifact_types}")
@@ -116,6 +117,7 @@ class PipelinesTest(tf.test.TestCase):
     )
     
     tfx.orchestration.LocalDagRunner().run(my_pipeline)
+    logging.debug("PRODUCTION pipeline finished")
     
     # Use built-in conditional features of KFP, Airflow, etc. to enable conditional logic in the workflow.
     # evaluate models and if passed,

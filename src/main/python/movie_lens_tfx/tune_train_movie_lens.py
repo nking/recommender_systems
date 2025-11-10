@@ -1081,7 +1081,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
     epochs=NUM_EPOCHS,
     callbacks=[tensorboard_callback, stop_early], verbose=1)
   
-  print(f'fit history={history}')
+  print(f'fit history.history={history.history}')
   
   #TODO: consider adding the vocabularies as assets:
   #    see https://www.tensorflow.org/api_docs/python/tf/saved_model/Asset
@@ -1139,12 +1139,13 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       '''
       raw_feature_spec = tf_transform_output.raw_feature_spec()
       raw_feature_spec.pop(LABEL_KEY)
+      print(f'default_serving: LABEL_KEY={LABEL_KEY}, raw_feature_spec={raw_feature_spec}')
       
       raw_features = tf.io.parse_example(serialized_tf_example, raw_feature_spec)
       
       transformed_features = model.tft_layer(raw_features)
       outputs = model(inputs=transformed_features)
-      
+      print(f'default_serving: have outputs')
       return {'outputs': outputs}
     
     @tf.function(input_signature=[tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')])
@@ -1179,7 +1180,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       examples from MovieLensExampleGen
       '''
       raw_feature_spec = tf_transform_output.raw_feature_spec()
-      print('transform_features_fn spec = {transformed_features}')
+      print('transform_features_fn spec = {raw_feature_spec}')
       raw_features = tf.io.parse_example(serialized_tf_example, raw_feature_spec)
       transformed_features = model.tft_layer(raw_features)
       logging.info('eval_transformed_features = %s',transformed_features)
