@@ -31,6 +31,7 @@ logging.set_stderrthreshold(logging.INFO)
 
 DEFAULT_BATCH_SIZE = 64
 DEFAULT_NUM_EPOCHS = 20
+DEFAULT_NUM_EXAMPLES = 100000
 
 LOSS_FN = keras.losses.MeanSquaredError() #name=mean_squared_error
 METRIC_FN = keras.metrics.RootMeanSquaredError()
@@ -75,6 +76,7 @@ def input_fn(file_pattern: List[str],
     tfxio.TensorFlowDatasetOptions(batch_size=batch_size, label_key=LABEL_KEY),
     tf_transform_output.transformed_metadata.schema).repeat().prefetch(
     tf.data.AUTOTUNE)
+
 
 def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   # TODO: consider change to read from the transformed schema
@@ -602,9 +604,9 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       #tf.print('U,V SHAPES: ', user_vector.shape, movie_vector.shape)
       s = self.dot_layer([user_vector, movie_vector])
       s = self.sigmoid_layer(s)
-      #tf.print('CALL', self.name, ' shape=', s.shape)
+      tf.print('CALL', self.name, ' shape=', s.shape, ' type=', type(s))
       return s
-    
+      
     @tf.function(input_signature=[input_dataset_element_spec])
     def serve_query_model(self, inputs):
       """A dedicated function to trace and serve the trained Query Model."""
@@ -828,7 +830,6 @@ def get_default_hyperparameters(custom_config, input_element_spec) -> keras_tune
   # ahmos for "age", "hr_wk", "month", "occupation", "gender"
   hp.Fixed("feature_acronym", custom_config.get("feature_acronym", "h"))
   hp.Fixed("incl_genres", custom_config["incl_genres"])
-  hp.Fixed('num_epochs', value=10)
   hp.Fixed('BATCH_SIZE', custom_config.get("BATCH_SIZE", DEFAULT_BATCH_SIZE))
   hp.Fixed('NUM_EPOCHS', custom_config.get("NUM_EPOCHS", DEFAULT_NUM_EPOCHS))
   hp.Fixed("use_bias_corr", value=custom_config["use_bias_corr"])
@@ -840,8 +841,9 @@ def get_default_hyperparameters(custom_config, input_element_spec) -> keras_tune
   hp.Fixed('device', custom_config.get("device", 'CPU'))
   hp.Fixed('MAX_TUNE_TRIALS', custom_config.get("MAX_TUNE_TRIALS", MAX_TUNE_TRIALS_DEFAULT))
   hp.Fixed('input_dataset_element_spec_ser', (base64.b64encode(pickle.dumps(input_element_spec))).decode('utf-8'))
-  num_train = int(custom_config.get("num_examples")*0.8)
-  num_eval = int(custom_config.get("num_examples") * 0.1)
+  num_examples = custom_config.get("num_examples", DEFAULT_NUM_EXAMPLES)
+  num_train = int(num_examples * 0.8)
+  num_eval = int(num_examples * 0.1)
   hp.Fixed("num_train", num_train)
   hp.Fixed("num_eval", num_eval)
   
@@ -1105,11 +1107,85 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
     input_element_spec
   )
   
+  #from TFX codebase: https://github.com/tensorflow/tfx/blob/v1.16.0/tfx/examples/penguin/penguin_utils_base.py
+  def make_other_serving_signatures(model, tf_transform_output: tft.TFTransformOutput):
+    """Returns the serving signatures.
+
+    Args:
+      model: the model function to apply to the transformed features.
+      tf_transform_output: The transformation to apply to the serialized
+        tf.Example.
+
+    Returns:
+      The signatures to use for saving the mode. The 'serving_default' signature
+      will be a concrete function that takes a batch of unspecified length of
+      serialized tf.Example, parses them, transformes the features and
+      then applies the model. The 'transform_features' signature will parses the
+      example and transforms the features.
+    """
+    
+    # We need to track the layers in the model in order to save it.
+    model.tft_layer = tf_transform_output.transform_features_layer()
+    
+    @tf.function(input_signature=[tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')])
+    def serve_tf_examples_fn(serialized_tf_example):
+      '''Returns the serving signature for input being raw examples such as
+      inputs = tf.data.TFRecordDataset(examples_file_paths, compression_type="GZIP")
+      where examples_file_paths was written by MovieLensExampleGen
+      '''
+      raw_feature_spec = tf_transform_output.raw_feature_spec()
+      print('serve_tf_examples_fn spec = {transformed_features}')
+      raw_feature_spec.pop(LABEL_KEY)
+      
+      raw_features = tf.io.parse_example(serialized_tf_example, raw_feature_spec)
+      
+      transformed_features = model.tft_layer(raw_features)
+      logging.info('serve_transformed_features = %s',transformed_features)
+     
+      outputs = model(inputs=transformed_features)
+      
+      # TODO(b/154085620): Convert the predicted labels from the model using a
+      # reverse-lookup (opposite of transform.py).
+      return {'outputs': outputs}
+    
+    @tf.function(input_signature=[
+      tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')
+    ])
+    def transform_features_fn(serialized_tf_example):
+      '''Returns the transformed_features to be fed as input to evaluator.  inputs are the raw
+      examples from MovieLensExampleGen
+      '''
+      raw_feature_spec = tf_transform_output.raw_feature_spec()
+      print('transform_features_fn spec = {transformed_features}')
+      raw_features = tf.io.parse_example(serialized_tf_example, raw_feature_spec)
+      transformed_features = model.tft_layer(raw_features)
+      logging.info('eval_transformed_features = %s',transformed_features)
+      return transformed_features
+    
+    """
+    TODO: finish here.  would like to avoid the positional keyword inputs needed in unit testint
+    @tf.function(input_signature=[input_element_spec])
+    def serve_transformed_dict_fn(transformed_features):
+      print('serve_tf_examples_fn spec = {transformed_features}')
+      outputs = model(inputs=transformed_features)
+      return {'outputs': outputs}
+    """
+    
+    return {
+      'serving_default': serve_tf_examples_fn,
+      'transform_features': transform_features_fn
+    }
+  
   signatures = {
     'serving_default': call_sig,
     'serving_query': query_sig,
     'serving_candidate': candidate_sig,
   }
+  other_sigs = make_other_serving_signatures(model, tf_transform_output)
+  signatures["serving_raw_tf_example"] = other_sigs["serving_default"]
+  signatures["transform"] = other_sigs["transform_features"]
+  
+  #signatures['serving_str_ser_tf_examples'] = _get_tf_examples_serving_signature(model, tf_transform_output)
   
   tf.saved_model.save(model, fn_args.serving_model_dir, signatures=signatures)
   

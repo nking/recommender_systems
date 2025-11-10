@@ -49,6 +49,13 @@ pip -q install tfx==1.16.0
 pip -q install tensorflow-data-validation==1.16.0
 pip -q install pytest
 
+a good resource for looking at version compatability with TFX 1.16.0
+is https://github.com/tensorflow/tfx/blob/v1.16.0/test_constraints.txt
+
+for other versions of TFX, need to use a different tag than v1.16.0
+
+
+
 ============= 
 Miscellaneous project information:
 

@@ -67,7 +67,13 @@ class TuneTrainTest(tf.test.TestCase):
       'n_age_groups' : self.n_age_groups,
       'run_eagerly' : True,
       "use_bias_corr" : False,
-      'incl_genres':True,
+      'incl_genres':False,
+      'feature_acronym':"",
+      "NUM_EPOCHS" : 2,
+      "BATCH_SIZE" : 10,
+      "device":"CPU",
+      "MAX_TUNE_TRIALS" : 1,
+      "num_examples": 1000
     }
     
     tuner = tfx.components.Tuner(
@@ -248,11 +254,15 @@ class TuneTrainTest(tf.test.TestCase):
     
     # --- get the transformed test dataset to check that can run the model with expected input structure
     examples_list = store.get_artifacts_by_type("Examples")
-    #print(f"examples_list={examples_list}")
-    latest_examples_artifact = sorted(examples_list,
-      key=lambda x: x.create_time_since_epoch, reverse=True)[0]
-    # or use last_update_time_since_epoch
-    transfomed_examples_uri = latest_examples_artifact.uri
+    for artifact in examples_list:
+      if "transformed_examples" in artifact.uri:
+        transfomed_examples_uri = os.path.join(artifact.uri, "Split-test")
+        break
+    for artifact in examples_list:
+      if "MovieLensExampleGen" in artifact.uri:
+        raw_examples_uri = os.path.join(artifact.uri, "Split-test")
+        break
+    logging.debug(f"fraw_examples_uri={raw_examples_uri}")
     logging.debug(f"transfomed_examples_uri={transfomed_examples_uri}")
     
     latest_schema_artifact = sorted(store.get_artifacts_by_type("Schema"),
@@ -266,24 +276,23 @@ class TuneTrainTest(tf.test.TestCase):
     schema = tfx.utils.parse_pbtxt_file(schema_file_path, schema_pb2.Schema())
     feature_spec = schema_utils.schema_as_feature_spec(schema).feature_spec
     
-    dataset_uri = os.path.join(transfomed_examples_uri, "Split-test")
-    file_paths = [os.path.join(dataset_uri, name) for name in os.listdir(dataset_uri)]
-    test_ds_ser = tf.data.TFRecordDataset(file_paths, compression_type="GZIP")
+    file_paths = [os.path.join(transfomed_examples_uri, name) for name in os.listdir(transfomed_examples_uri)]
+    test_trans_ds_ser = tf.data.TFRecordDataset(file_paths, compression_type="GZIP")
+    file_paths = [os.path.join(raw_examples_uri, name) for name in os.listdir(raw_examples_uri)]
+    test_raw_ds_ser = tf.data.TFRecordDataset(file_paths, compression_type="GZIP")
     
     def parse_tf_example(example_proto, feature_spec):
       return tf.io.parse_single_example(example_proto, feature_spec)
-    
-    test_ds = test_ds_ser.map(lambda x: parse_tf_example(x, feature_spec))
+    test_trans_ds = test_trans_ds_ser.map(lambda x: parse_tf_example(x, feature_spec))
+    #test_trans_ds2 = tf.io.parse_example(test_trans_ds_ser, feature_spec) this fails
     
     #might need to remove 'rating' column
     def remove_rating(element):
       out = {k:v for k,v in element.items() if k != 'rating'}
       return out
     
-    x = test_ds.map(remove_rating)
+    x = test_trans_ds.map(remove_rating)
     
-    #ds = test_ds_ser #expected to work when saved with signatures=signatures
-    #ds = test_ds
     ds = x #expected to work when saved has no signatures configured.  default config
     
     #ds.batch(2)
@@ -293,26 +302,16 @@ class TuneTrainTest(tf.test.TestCase):
     infer = loaded_saved_model.signatures["serving_default"]
     query_emb = loaded_saved_model.signatures["serving_query"]
     candidate_emb = loaded_saved_model.signatures["serving_candidate"]
+    infer_t1 = loaded_saved_model.signatures["serving_raw_tf_example"]
+    infer_t2 = loaded_saved_model.signatures["transform"]
     
     logging.debug(f'test: infer.structured_outputs={infer.structured_outputs}')
-    #"""
-    predictions = []
+    
+    predictions2 = []
     query_embeddings = []
     candidate_embeddings = []
     for batch in ds:
-      #TODO: consider making a reflection method that takes arguments element_spec, input_dict,
-      # infer_method and creates the invocations like this:
-      
-      """predictions.append(
-        infer(inputs=batch['age'], inputs_1=batch['gender'],
-          inputs_2=batch['genres'],
-          inputs_3=batch['hr'], inputs_4=batch['hr_wk'],
-          inputs_5=batch['month'],
-          inputs_6=batch['movie_id'],
-          inputs_7=batch['occupation'],
-          inputs_8=batch['user_id'],
-          inputs_9=batch['weekday']))"""
-      predictions.append(
+      predictions2.append(
         infer(age=batch['age'], gender=batch['gender'],
           genres=batch['genres'],
           hr=batch['hr'],
@@ -348,13 +347,16 @@ class TuneTrainTest(tf.test.TestCase):
           weekday=batch['weekday'],
           yr=batch['yr']))
       
-    logging.debug(f'predictions = {predictions}')
     num_rows = ds.reduce(0, lambda x, _: x + 1).numpy()
     #print(f'num_rows={num_rows},  num_pred={len(predictions)}, card={ds.cardinality().numpy()}')
-    self.assertEqual(len(predictions), num_rows)
+    self.assertEqual(len(predictions2), num_rows)
     self.assertEqual(len(query_embeddings), num_rows)
     self.assertEqual(len(candidate_embeddings), num_rows)
-    #"""
+    
+    #TODO: how to use?
+    #predictions = test_raw_ds_ser.map(lambda x: infer_t1(x))
+    #predictions = infer_t1(test_raw_ds_ser)
+    
     #TODO: add use of fingerprint to show example of using it to verify model
     #fingerprint = tf.saved_model.experimental.read_fingerprint(saved_model_path)
     
