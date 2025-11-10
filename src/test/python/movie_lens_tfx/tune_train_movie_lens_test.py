@@ -279,7 +279,7 @@ class TuneTrainTest(tf.test.TestCase):
     file_paths = [os.path.join(transfomed_examples_uri, name) for name in os.listdir(transfomed_examples_uri)]
     test_trans_ds_ser = tf.data.TFRecordDataset(file_paths, compression_type="GZIP")
     file_paths = [os.path.join(raw_examples_uri, name) for name in os.listdir(raw_examples_uri)]
-    test_raw_ds_ser = tf.data.TFRecordDataset(file_paths, compression_type="GZIP")
+    test_raw_ds_ser = tf.data.TFRecordDataset(file_paths)
     
     def parse_tf_example(example_proto, feature_spec):
       return tf.io.parse_single_example(example_proto, feature_spec)
@@ -296,23 +296,24 @@ class TuneTrainTest(tf.test.TestCase):
     ds = x #expected to work when saved has no signatures configured.  default config
     
     #ds.batch(2)
-    
+   
     loaded_saved_model = tf.saved_model.load(model_uri)
     logging.debug(f'test: loaded SavedModel signatures: {loaded_saved_model.signatures}')
-    infer = loaded_saved_model.signatures["serving_default"]
-    query_emb = loaded_saved_model.signatures["serving_query"]
-    candidate_emb = loaded_saved_model.signatures["serving_candidate"]
-    infer_t1 = loaded_saved_model.signatures["serving_raw_tf_example"]
-    infer_t2 = loaded_saved_model.signatures["transform"]
-    
-    logging.debug(f'test: infer.structured_outputs={infer.structured_outputs}')
-    
-    predictions2 = []
+    infer_twotower = loaded_saved_model.signatures["serving_default"]
+    infer_query = loaded_saved_model.signatures["serving_query"]
+    infer_candidate = loaded_saved_model.signatures["serving_candidate"]
+    transform_raw = loaded_saved_model.signatures["transform_features"]
+    infer_twotower_transformed = loaded_saved_model.signatures["serving_twotower_transformed"]
+    infer_query_transformed = loaded_saved_model.signatures["serving_query_transformed"]
+    infer_canndidate_transformed = loaded_saved_model.signatures["serving_candidate_transformed"]
+
+    #test the signatures for tansformed data:
+    predictions = []
     query_embeddings = []
     candidate_embeddings = []
     for batch in ds:
-      predictions2.append(
-        infer(age=batch['age'], gender=batch['gender'],
+      predictions.append(
+        infer_twotower_transformed(age=batch['age'], gender=batch['gender'],
           genres=batch['genres'],
           hr=batch['hr'],
           hr_wk=batch['hr_wk'],
@@ -325,7 +326,7 @@ class TuneTrainTest(tf.test.TestCase):
           yr=batch['yr']))
       
       query_embeddings.append(
-        query_emb(age=batch['age'], gender=batch['gender'],
+        infer_query_transformed(age=batch['age'], gender=batch['gender'],
           genres=batch['genres'],
           hr=batch['hr'], hr_wk=batch['hr_wk'],
           month=batch['month'],
@@ -336,7 +337,7 @@ class TuneTrainTest(tf.test.TestCase):
           weekday=batch['weekday'],
           yr=batch['yr']))
       candidate_embeddings.append(
-        candidate_emb(age=batch['age'], gender=batch['gender'],
+        infer_canndidate_transformed(age=batch['age'], gender=batch['gender'],
           genres=batch['genres'],
           hr=batch['hr'], hr_wk=batch['hr_wk'],
           month=batch['month'],
@@ -348,14 +349,38 @@ class TuneTrainTest(tf.test.TestCase):
           yr=batch['yr']))
       
     num_rows = ds.reduce(0, lambda x, _: x + 1).numpy()
-    #print(f'num_rows={num_rows},  num_pred={len(predictions)}, card={ds.cardinality().numpy()}')
-    self.assertEqual(len(predictions2), num_rows)
+    self.assertEqual(len(predictions), num_rows)
     self.assertEqual(len(query_embeddings), num_rows)
     self.assertEqual(len(candidate_embeddings), num_rows)
     
-    #TODO: how to use?
-    #predictions = test_raw_ds_ser.map(lambda x: infer_t1(x))
-    #predictions = infer_t1(test_raw_ds_ser)
+    ## test the signatures for raw data
+    TT_INPUT_KEY = list(infer_twotower.structured_input_signature[1].keys())[0]
+    Q_INPUT_KEY = list(infer_query.structured_input_signature[1].keys())[0]
+    C_INPUT_KEY = list(infer_candidate.structured_input_signature[1].keys())[0]
+    TR_INPUT_KEY = list(transform_raw.structured_input_signature[1].keys())[0]
+    BATCH_SIZE = 1
+    batched_ds = test_raw_ds_ser.batch(BATCH_SIZE)
+    predictions = []
+    query_embeddings = []
+    candidate_embeddings = []
+    transformed = []
+    for serialized_batch in batched_ds:
+      tt_input_dict = {TT_INPUT_KEY: serialized_batch}
+      predictions.append(infer_twotower(**tt_input_dict)['outputs'])
+      q_input_dict = {Q_INPUT_KEY: serialized_batch}
+      query_embeddings.append(infer_query(**q_input_dict)['outputs'])
+      c_input_dict = {C_INPUT_KEY: serialized_batch}
+      candidate_embeddings.append(infer_candidate(**c_input_dict)['outputs'])
+      tr_input_dict = {TR_INPUT_KEY: serialized_batch}
+      transformed.append(transform_raw(**tr_input_dict))
+    
+    self.assertEqual(len(predictions), num_rows)
+    self.assertEqual(len(query_embeddings), num_rows)
+    self.assertEqual(len(candidate_embeddings), num_rows)
+    self.assertEqual(len(transformed), num_rows)
+    
+    print("Inference completed.")
+    
     
     #TODO: add use of fingerprint to show example of using it to verify model
     #fingerprint = tf.saved_model.experimental.read_fingerprint(saved_model_path)

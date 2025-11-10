@@ -170,7 +170,8 @@ class PipelineComponentsFactory():
     # perform quality validation of a candidate model (compared to a baseline).
     eval_config = tfma.EvalConfig(
       model_specs=[tfma.ModelSpec(
-        signature_name='serving_default', label_key='rating')],
+        signature_name='serving_default', label_key='rating'
+      )],
       slicing_specs=[
         tfma.SlicingSpec(),
         #tfma.SlicingSpec(feature_keys=['hr_wk'])

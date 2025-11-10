@@ -232,7 +232,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       if self.gender_embedding:
         results.append(self.gender_embedding(inputs['gender']))
       res = keras.layers.Concatenate()(results)
-      logging.debug(f'call {self.name} SHAPE ={res.shape}')
+      #logging.debug(f'call {self.name} SHAPE ={res.shape}')
       #tf.print('CALL', self.name, ' shape=', res.shape)
       return res
     
@@ -598,7 +598,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     @tf.function(input_signature=[input_dataset_element_spec])
     def call(self, inputs):
       """['user_id', 'gender', 'age_group', 'occupation','movie_id', 'rating']"""
-      logging.debug(f'call {self.name} inputs={inputs}\n')
+      #logging.debug(f'call {self.name} inputs={inputs}\n')
       user_vector = self.query_model(inputs)
       movie_vector = self.candidate_model(inputs)
       #tf.print('U,V SHAPES: ', user_vector.shape, movie_vector.shape)
@@ -1108,7 +1108,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   )
   
   #from TFX codebase: https://github.com/tensorflow/tfx/blob/v1.16.0/tfx/examples/penguin/penguin_utils_base.py
-  def make_other_serving_signatures(model, tf_transform_output: tft.TFTransformOutput):
+  def _make_raw_serving_signatures(model, tf_transform_output: tft.TFTransformOutput):
     """Returns the serving signatures.
 
     Args:
@@ -1120,7 +1120,11 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       The signatures to use for saving the mode. The 'serving_default' signature
       will be a concrete function that takes a batch of unspecified length of
       serialized tf.Example, parses them, transformes the features and
-      then applies the model. The 'transform_features' signature will parses the
+      then applies the model.
+      Similarly, "serving_query" and "serving_candidate" signature take batches of
+      unspecified length of serialized tf.Example, parse them, transformes them,
+      then applies the embedding models.
+      The 'transform_features' signature parses the
       example and transforms the features.
     """
     
@@ -1130,22 +1134,41 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
     @tf.function(input_signature=[tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')])
     def serve_tf_examples_fn(serialized_tf_example):
       '''Returns the serving signature for input being raw examples such as
-      inputs = tf.data.TFRecordDataset(examples_file_paths, compression_type="GZIP")
+      inputs = tf.data.TFRecordDataset(examples_file_paths)
       where examples_file_paths was written by MovieLensExampleGen
       '''
       raw_feature_spec = tf_transform_output.raw_feature_spec()
-      print('serve_tf_examples_fn spec = {transformed_features}')
       raw_feature_spec.pop(LABEL_KEY)
       
       raw_features = tf.io.parse_example(serialized_tf_example, raw_feature_spec)
       
       transformed_features = model.tft_layer(raw_features)
-      logging.info('serve_transformed_features = %s',transformed_features)
-     
       outputs = model(inputs=transformed_features)
       
-      # TODO(b/154085620): Convert the predicted labels from the model using a
-      # reverse-lookup (opposite of transform.py).
+      return {'outputs': outputs}
+    
+    @tf.function(input_signature=[tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')])
+    def serve_query_tf_examples_fn(serialized_tf_example):
+      '''
+      Returns the serving signature query embeddings for input being raw examples, not yet transformed to features.
+      '''
+      raw_feature_spec = tf_transform_output.raw_feature_spec()
+      raw_feature_spec.pop(LABEL_KEY)
+      raw_features = tf.io.parse_example(serialized_tf_example, raw_feature_spec)
+      transformed_features = model.tft_layer(raw_features)
+      outputs = model.query_model(inputs=transformed_features)
+      return {'outputs': outputs}
+    
+    @tf.function(input_signature=[tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')])
+    def serve_candidate_tf_examples_fn(serialized_tf_example):
+      '''
+      Returns the serving signature candidate embeddings for input being raw examples, not yet transformed to features.
+      '''
+      raw_feature_spec = tf_transform_output.raw_feature_spec()
+      raw_feature_spec.pop(LABEL_KEY)
+      raw_features = tf.io.parse_example(serialized_tf_example, raw_feature_spec)
+      transformed_features = model.tft_layer(raw_features)
+      outputs = model.candidate_model(inputs=transformed_features)
       return {'outputs': outputs}
     
     @tf.function(input_signature=[
@@ -1162,28 +1185,23 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       logging.info('eval_transformed_features = %s',transformed_features)
       return transformed_features
     
-    """
-    TODO: finish here.  would like to avoid the positional keyword inputs needed in unit testint
-    @tf.function(input_signature=[input_element_spec])
-    def serve_transformed_dict_fn(transformed_features):
-      print('serve_tf_examples_fn spec = {transformed_features}')
-      outputs = model(inputs=transformed_features)
-      return {'outputs': outputs}
-    """
-    
     return {
       'serving_default': serve_tf_examples_fn,
-      'transform_features': transform_features_fn
+      'transform_features': transform_features_fn,
+      'serving_candidate': serve_candidate_tf_examples_fn,
+      'serving_query': serve_query_tf_examples_fn
     }
   
   signatures = {
-    'serving_default': call_sig,
-    'serving_query': query_sig,
-    'serving_candidate': candidate_sig,
+    'serving_twotower_transformed': call_sig,
+    'serving_query_transformed': query_sig,
+    'serving_candidate_transformed': candidate_sig,
   }
-  other_sigs = make_other_serving_signatures(model, tf_transform_output)
-  signatures["serving_raw_tf_example"] = other_sigs["serving_default"]
-  signatures["transform"] = other_sigs["transform_features"]
+  other_sigs = _make_raw_serving_signatures(model, tf_transform_output)
+  signatures["transform_features"] = other_sigs["transform_features"]
+  signatures["serving_default"] = other_sigs["serving_default"]
+  signatures["serving_query"] = other_sigs["serving_query"]
+  signatures["serving_candidate"] = other_sigs["serving_candidate"]
   
   #signatures['serving_str_ser_tf_examples'] = _get_tf_examples_serving_signature(model, tf_transform_output)
   

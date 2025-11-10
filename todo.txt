@@ -1,6 +1,3 @@
-- for the newly added signature for inputs=raw_tf_examples,
-  edit Evaluator as needed for baseline examples input
-
 - future: consider use of ZCTAs and geohashing for 'zipcodes'
 
 - future:
