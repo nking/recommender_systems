@@ -143,7 +143,7 @@ class PipelineComponentsFactory():
       # model_blessing=Channel(type=ModelBlessing)
     ).with_id('latest_model_resolver'))
     # 'latest_blessed_model_resolver')
-   
+    
     tuner = tfx.components.Tuner(
       module_file=os.path.join(self.transform_dir, 'tune_train_movie_lens.py'),
       examples=ratings_transform.outputs['transformed_examples'],
@@ -198,8 +198,9 @@ class PipelineComponentsFactory():
             tfma.MetricConfig(class_name='MeanAbsoluteError',
               # rating scale 0:5 is 0.:1.0 so error of 1 in a rating is 0.20. fail for error of 2 in a rating = 0.4
               threshold=tfma.MetricThreshold(
-                value_threshold=tfma.GenericValueThreshold(
-                  lower_bound={'value': 0.4}
+                value_threshold=tfma.GenericChangeThreshold(
+                  direction=tfma.MetricDirection.LOWER_IS_BETTER,
+                  absolute={'value': 0.4}
                 ))),
             #tfma.MetricConfig(class_name='MeanSquaredError'),
           ]
