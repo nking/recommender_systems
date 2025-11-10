@@ -295,8 +295,6 @@ class TuneTrainTest(tf.test.TestCase):
     
     ds = x #expected to work when saved has no signatures configured.  default config
     
-    #ds.batch(2)
-   
     loaded_saved_model = tf.saved_model.load(model_uri)
     logging.debug(f'test: loaded SavedModel signatures: {loaded_saved_model.signatures}')
     infer_twotower = loaded_saved_model.signatures["serving_default"]

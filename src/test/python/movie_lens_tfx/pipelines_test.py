@@ -10,6 +10,8 @@ import tensorflow_transform as tft
 
 from ml_metadata.proto import metadata_store_pb2
 from ml_metadata.metadata_store import metadata_store
+from tensorflow_transform.tf_metadata import schema_utils
+
 from movie_lens_tfx.tune_train_movie_lens import *
 
 from helper import *
@@ -151,6 +153,140 @@ class PipelinesTest(tf.test.TestCase):
     
     #uri: "recommender_systems/bin/test1/1/TestPipelines/Pusher/pushed_model/17"
     #type PushedModel
+    
+    #===================================================
+    #validate extraction and use of saved_model signatures
+    latest_schema_artifact = sorted(store.get_artifacts_by_type("Schema"),
+      key=lambda x: x.last_update_time_since_epoch, reverse=True)[0]
+    # or use last_update_time_since_epoch
+    schema_uri = latest_schema_artifact.uri
+    schema_uri = schema_uri.replace("pre_transform_schema", "post_transform_schema")
+    logging.debug(f"schema_uri={schema_uri}")
+    schema_file_path = [os.path.join(schema_uri, name) for name in os.listdir(schema_uri)][0]
+    
+    schema = tfx.utils.parse_pbtxt_file(schema_file_path, schema_pb2.Schema())
+    feature_spec = schema_utils.schema_as_feature_spec(schema).feature_spec
+    
+    examples_list = store.get_artifacts_by_type("Examples")
+    for artifact in examples_list:
+      if "transformed_examples" in artifact.uri:
+        transfomed_examples_uri = os.path.join(artifact.uri, "Split-test")
+        break
+    for artifact in examples_list:
+      if "MovieLensExampleGen" in artifact.uri:
+        raw_examples_uri = os.path.join(artifact.uri, "Split-test")
+        break
+    file_paths = [os.path.join(transfomed_examples_uri, name) for name
+                  in os.listdir(transfomed_examples_uri)]
+    test_trans_ds_ser = tf.data.TFRecordDataset(file_paths,
+                                                compression_type="GZIP")
+    file_paths = [os.path.join(raw_examples_uri, name) for name in
+                  os.listdir(raw_examples_uri)]
+    test_raw_ds_ser = tf.data.TFRecordDataset(file_paths,
+                                              compression_type="GZIP")
+    
+    def parse_tf_example(example_proto, feature_spec):
+      return tf.io.parse_single_example(example_proto, feature_spec)
+    
+    test_trans_ds = test_trans_ds_ser.map(
+      lambda x: parse_tf_example(x, feature_spec))
+    
+    # test_trans_ds2 = tf.io.parse_example(test_trans_ds_ser, feature_spec) this fails
+    
+    # might need to remove 'rating' column
+    def remove_rating(element):
+      out = {k: v for k, v in element.items() if k != 'rating'}
+      return out
+    
+    x = test_trans_ds.map(remove_rating)
+    
+    ds = x  # expected to work when saved has no signatures configured.  default config
+    
+    model_artifact = sorted(store.get_artifacts_by_type("Model"),
+           key=lambda x: x.last_update_time_since_epoch, reverse=True)[0]
+    model_uri = os.path.join(model_artifact.uri, "Format-Serving")
+    loaded_saved_model = tf.saved_model.load(model_uri)
+    logging.debug(f'test: loaded SavedModel signatures: {loaded_saved_model.signatures}')
+    infer_twotower = loaded_saved_model.signatures["serving_default"]
+    infer_query = loaded_saved_model.signatures["serving_query"]
+    infer_candidate = loaded_saved_model.signatures["serving_candidate"]
+    transform_raw = loaded_saved_model.signatures["transform_features"]
+    infer_twotower_transformed = loaded_saved_model.signatures["serving_twotower_transformed"]
+    infer_query_transformed = loaded_saved_model.signatures["serving_query_transformed"]
+    infer_canndidate_transformed = loaded_saved_model.signatures["serving_candidate_transformed"]
+
+    #test the signatures for tansformed data:
+    predictions = []
+    query_embeddings = []
+    candidate_embeddings = []
+    for batch in ds:
+      predictions.append(
+        infer_twotower_transformed(age=batch['age'], gender=batch['gender'],
+          genres=batch['genres'],
+          hr=batch['hr'],
+          hr_wk=batch['hr_wk'],
+          month=batch['month'],
+          movie_id=batch['movie_id'],
+          occupation=batch['occupation'],
+          sec_into_yr=batch['sec_into_yr'],
+          user_id=batch['user_id'],
+          weekday=batch['weekday'],
+          yr=batch['yr']))
+      
+      query_embeddings.append(
+        infer_query_transformed(age=batch['age'], gender=batch['gender'],
+          genres=batch['genres'],
+          hr=batch['hr'], hr_wk=batch['hr_wk'],
+          month=batch['month'],
+          movie_id=batch['movie_id'],
+          occupation=batch['occupation'],
+          sec_into_yr=batch['sec_into_yr'],
+          user_id=batch['user_id'],
+          weekday=batch['weekday'],
+          yr=batch['yr']))
+      candidate_embeddings.append(
+        infer_canndidate_transformed(age=batch['age'], gender=batch['gender'],
+          genres=batch['genres'],
+          hr=batch['hr'], hr_wk=batch['hr_wk'],
+          month=batch['month'],
+          movie_id=batch['movie_id'],
+          occupation=batch['occupation'],
+          sec_into_yr=batch['sec_into_yr'],
+          user_id=batch['user_id'],
+          weekday=batch['weekday'],
+          yr=batch['yr']))
+      
+    num_rows = ds.reduce(0, lambda x, _: x + 1).numpy()
+    self.assertEqual(len(predictions), num_rows)
+    self.assertEqual(len(query_embeddings), num_rows)
+    self.assertEqual(len(candidate_embeddings), num_rows)
+    
+    ## test the signatures for raw data
+    TT_INPUT_KEY = list(infer_twotower.structured_input_signature[1].keys())[0]
+    Q_INPUT_KEY = list(infer_query.structured_input_signature[1].keys())[0]
+    C_INPUT_KEY = list(infer_candidate.structured_input_signature[1].keys())[0]
+    TR_INPUT_KEY = list(transform_raw.structured_input_signature[1].keys())[0]
+    BATCH_SIZE = 1
+    batched_ds = test_raw_ds_ser.batch(BATCH_SIZE)
+    predictions = []
+    query_embeddings = []
+    candidate_embeddings = []
+    transformed = []
+    for serialized_batch in batched_ds:
+      tt_input_dict = {TT_INPUT_KEY: serialized_batch}
+      predictions.append(infer_twotower(**tt_input_dict)['outputs'])
+      q_input_dict = {Q_INPUT_KEY: serialized_batch}
+      query_embeddings.append(infer_query(**q_input_dict)['outputs'])
+      c_input_dict = {C_INPUT_KEY: serialized_batch}
+      candidate_embeddings.append(infer_candidate(**c_input_dict)['outputs'])
+      tr_input_dict = {TR_INPUT_KEY: serialized_batch}
+      transformed.append(transform_raw(**tr_input_dict))
+    
+    self.assertEqual(len(predictions), num_rows)
+    self.assertEqual(len(query_embeddings), num_rows)
+    self.assertEqual(len(candidate_embeddings), num_rows)
+    self.assertEqual(len(transformed), num_rows)
+    #====================================================
     
     eval_list = store.get_artifacts_by_type("ModelEvaluation")
     print(f"model evaluation list={eval_list}")

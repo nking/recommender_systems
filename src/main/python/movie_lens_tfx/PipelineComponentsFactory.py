@@ -86,7 +86,7 @@ class PipelineComponentsFactory():
         statistics=statistics_gen.outputs['statistics'],
         schema=pre_transform_schema_importer.outputs['result'])
     else:
-     # Performs anomaly detection based on statistics and data schema.
+     # Performs anomaly detection based on statistics and data schema of raw tf examples
       pre_transform_example_validator = ExampleValidator(
         statistics=statistics_gen.outputs['statistics'],
         schema=schema_gen.outputs['schema'])
@@ -104,7 +104,7 @@ class PipelineComponentsFactory():
         )
       ).with_id('latest_examples_resolver')
       example_diff = tfx.components.ExampleDiff(
-        examples_test=example_gen.outputs['examples'],
+        examples_test=example_gen.outputs['output_examples'],
         examples_base=example_resolver.outputs['examples'],
       )
     
@@ -204,9 +204,9 @@ class PipelineComponentsFactory():
         )
       ])
     
-    # can be used to supplement pre- and post- transform evaluation
+    # see https://www.tensorflow.org/tfx/guide/evaluator
     evaluator = Evaluator(
-      examples=ratings_transform.outputs['transformed_examples'],
+      examples=example_gen.outputs['output_examples'],
       model=trainer.outputs['model'],
       baseline_model=model_resolver.outputs['model'],
       eval_config=eval_config)
