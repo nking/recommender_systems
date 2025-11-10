@@ -604,7 +604,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       #tf.print('U,V SHAPES: ', user_vector.shape, movie_vector.shape)
       s = self.dot_layer([user_vector, movie_vector])
       s = self.sigmoid_layer(s)
-      tf.print('CALL', self.name, ' shape=', s.shape, ' type=', type(s))
+      #tf.print('CALL', self.name, ' shape=', s.shape, ' type=', type(s))
       return s
       
     @tf.function(input_signature=[input_dataset_element_spec])
@@ -1134,7 +1134,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
     @tf.function(input_signature=[tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')])
     def serve_tf_examples_fn(serialized_tf_example):
       '''Returns the serving signature for input being raw examples such as
-      inputs = tf.data.TFRecordDataset(examples_file_paths)
+      inputs = tf.data.TFRecordDataset(examples_file_paths, compression_type="GZIP")
       where examples_file_paths was written by MovieLensExampleGen
       '''
       raw_feature_spec = tf_transform_output.raw_feature_spec()

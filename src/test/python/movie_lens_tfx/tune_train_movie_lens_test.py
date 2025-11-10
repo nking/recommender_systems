@@ -279,7 +279,7 @@ class TuneTrainTest(tf.test.TestCase):
     file_paths = [os.path.join(transfomed_examples_uri, name) for name in os.listdir(transfomed_examples_uri)]
     test_trans_ds_ser = tf.data.TFRecordDataset(file_paths, compression_type="GZIP")
     file_paths = [os.path.join(raw_examples_uri, name) for name in os.listdir(raw_examples_uri)]
-    test_raw_ds_ser = tf.data.TFRecordDataset(file_paths)
+    test_raw_ds_ser = tf.data.TFRecordDataset(file_paths, compression_type="GZIP")
     
     def parse_tf_example(example_proto, feature_spec):
       return tf.io.parse_single_example(example_proto, feature_spec)

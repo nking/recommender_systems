@@ -147,7 +147,7 @@ class TransformTest(tf.test.TestCase):
 
     #/kaggle/working/bin/transform_1/test_MovieLensExampleGen/TestPythonTransformPipeline/
     #   MovieLensExampleGen/output_examples/1/
-    #   Split-<train, eval, or test>/data_tfrecord-0000?-of-00004.tfrecord
+    #   Split-<train, eval, or test>/tfrecord-0000?-of-00004.gz
 
     #component outputs contains: https://www.tensorflow.org/tfx/api_docs/python/tfx/v1/components/Transform#example
     #transform_graph: Channel of type standard_artifacts.TransformGraph,

@@ -341,7 +341,7 @@ def get_split_uri(artifact_uri:str, split_name:str) -> str:
   return f'{artifact_uri}/{get_split_dir_name(split_name)}'
 
 def get_file_prefix_path(examples_uri:str, split_name:str) -> str:
-  DEFAULT_TF_RECORD_FILE_NAME = 'data_tfrecord'
+  DEFAULT_TF_RECORD_FILE_NAME = 'tfrecord'
   return f'{get_split_uri(examples_uri, split_name)}/{DEFAULT_TF_RECORD_FILE_NAME}'
 
 def get_output_files(component, channel_name, split_name) -> List[str]:

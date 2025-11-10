@@ -152,5 +152,5 @@ def MovieLensExampleGen(
       >> beam.Map(lambda x: x.SerializeToString()) \
       | f"write_to_tfrecord_{random.randint(0, 1000000000000)}" \
       >> beam.io.tfrecordio.WriteToTFRecord( \
-        file_path_prefix=prefix_path, file_name_suffix='.tfrecord')
+        file_path_prefix=prefix_path, file_name_suffix='.gz')
     logging.info('output_examples written as TFRecords')
