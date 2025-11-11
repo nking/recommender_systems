@@ -5,8 +5,8 @@ from tensorflow_transform.tf_metadata import schema_utils
 
 # from tfx.components.trainer import fn_args_utils
 # from tfx_bsl.tfxio import dataset_options
-logging.set_verbosity(logging.WARNING)
-logging.set_stderrthreshold(logging.WARNING)
+logging.set_verbosity(logging.DEBUG)
+logging.set_stderrthreshold(logging.DEBUG)
 
 ## fixed vocabularies, known ahead of time
 #genres = ["Action", "Adventure", "Animation", "Children", "Comedy",
@@ -30,13 +30,6 @@ num_occupations = 21
 # Tf.Transform considers these features as "raw"
 def _get_raw_feature_spec(schema):
   return schema_utils.schema_as_feature_spec(schema).feature_spec
-
-def create_static_table(var_list, var_dtype):
-  init = tf.lookup.KeyValueTensorInitializer(\
-      keys=tf.constant(var_list, dtype=var_dtype), \
-      values=tf.range(len(var_list), dtype=tf.int64),\
-      key_dtype=var_dtype, value_dtype=tf.int64)
-  return tf.lookup.StaticHashTable(init, default_value=-1)
 
 def _transform_timestamp(timestamp, outputs:dict):
   #diff due to leap sec is < 1 minute total since 1972
@@ -146,18 +139,29 @@ def preprocessing_fn(inputs):
       }
   """
   #tf.print(f"inputs={inputs}")
-
+  
+  # make efficient static graphs for the tables
+  with tf.init_scope():
+    def create_static_table(var_list, var_dtype):
+        init = tf.lookup.KeyValueTensorInitializer(
+          keys=tf.constant(var_list, dtype=var_dtype),
+          values=tf.range(len(var_list), dtype=tf.int64),
+          key_dtype=var_dtype, value_dtype=tf.int64)
+        # The table is created and initialized *eagerly* and only once here.
+        return tf.lookup.StaticHashTable(init, default_value=-1)
+    gender_table = create_static_table(genders, var_dtype=tf.string)
+    age_groups_table = create_static_table(age_groups, var_dtype=tf.int64)
+    genres_table = create_static_table(genres, var_dtype=tf.string)
+    
   outputs = {'user_id': tf.cast(inputs['user_id'], dtype=tf.float32),
              'movie_id': tf.cast(inputs['movie_id'], dtype=tf.float32)}
 
   outputs['rating'] = tf.divide(tf.cast(inputs['rating'], tf.float32), \
     tf.constant(5.0, dtype=tf.float32))
 
-  gender_table = create_static_table(genders, var_dtype=tf.string)
   outputs['gender'] = tf.cast(gender_table.lookup(inputs['gender']), dtype=tf.float32)
   #outputs['gender'] = tf.one_hot( outputs['gender'], depth=len(genders), dtype=tf.int64)
 
-  age_groups_table = create_static_table(age_groups, var_dtype=tf.int64)
   outputs['age'] = tf.cast(age_groups_table.lookup(inputs['age']), dtype=tf.float32)
   #outputs['age'] = tf.one_hot( outputs['age'], depth=len(age_groups), dtype=tf.int64)
   
@@ -165,7 +169,6 @@ def preprocessing_fn(inputs):
   #outputs['occupation'] = tf.one_hot(outputs['occupation'], depth=num_occupations, dtype=tf.int64)
 
   def transform_genres(input_genres):
-    genres_table = create_static_table(genres, var_dtype=tf.string)
     out = tf.strings.regex_replace(
       input=input_genres, pattern="Children's", rewrite="Children")
     out = tf.strings.split(out, "|")
