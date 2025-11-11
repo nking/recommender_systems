@@ -19,6 +19,7 @@ dependencies = [
     "tensorflow-data-validation==1.16.1",
     "tensorflow-metadata==1.16.1",
     "ml-metadata==1.16.0",
+    "python-snappy==0.7.3",
 ]
 readme = "README.md"
 license = "MIT"

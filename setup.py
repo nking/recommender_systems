@@ -17,6 +17,7 @@ setup(
     "tensorflow-data-validation==1.16.1",
     "tensorflow-metadata==1.16.1",
     "ml-metadata==1.16.0",
+    "python-snappy==0.7.3",
   ],
   classifiers=[ 'Natural Language :: English',
                'Programming Language :: Python :: 3.10 :: Only',
