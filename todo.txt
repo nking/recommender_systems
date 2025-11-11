@@ -1,3 +1,20 @@
+- consider adding to pipeline:
+  - transform_input_cache
+  - BulkInferrer
+- consider adding other model families to the
+  pipeline, that is, a wrapper to use Tuner on
+  each model family and then compare amond best of each.
+  - consider using SNAS to build a good model
+    - transformer layers, dot product layers, ...
+  - best practices for optimizing multi-tower NNs
+  - best practices for optimizing mixture of experts (MOE) NNs
+
+- consider adding 
+  NannyML OSS: Performance estimation - CBPE and DLE
+  would need to add another dataset, or partition by
+  timestamp into 2 the current dataset.
+  
+ 
 - future: consider use of ZCTAs and geohashing for 'zipcodes'
 
 - future:
