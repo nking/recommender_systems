@@ -151,10 +151,13 @@ class TuneTrainTest(tf.test.TestCase):
     #metadata_connection_config.sqlite.SetInParent()
     #metadata_connection = metadata.Metadata(metadata_connection_config)
     metadata_connection_config = metadata.sqlite_metadata_connection_config(METADATA_PATH)
-
+    
+    SETUP_FILE_PATH = os.path.join(get_project_dir(), 'setup.py')
+    
     beam_pipeline_args = [
       '--direct_running_mode=multi_processing',
-      '--direct_num_workers=0'
+      '--direct_num_workers=0',
+      f'--setup_file={SETUP_FILE_PATH}',
     ]
 
     #imple is tfx.v1.dsl.Pipeline  where tfx is aliased in import

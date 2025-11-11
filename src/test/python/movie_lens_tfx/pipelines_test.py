@@ -80,9 +80,12 @@ class PipelinesTest(tf.test.TestCase):
       n_genres=self.n_genres, n_age_groups=self.n_age_groups, min_eval_size=self.MIN_EVAL_SIZE,
       batch_size=32, num_epochs=2, device="CPU", serving_model_dir=serving_model_dir)
     
+    SETUP_FILE_PATH = os.path.join(get_project_dir(), 'setup.py')
+    
     beam_pipeline_args = [
       '--direct_running_mode=multi_processing',
-      '--direct_num_workers=0'
+      '--direct_num_workers=0',
+      f'--setup_file={SETUP_FILE_PATH}',
     ]
     
     baseline_components = pipeline_factory.build_components(PIPELINE_TYPE.BASELINE)
