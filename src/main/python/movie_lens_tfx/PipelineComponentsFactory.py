@@ -94,18 +94,20 @@ class PipelineComponentsFactory():
     example_resolver = None
     example_diff = None
     if run_example_diff:
+      include_split_pairs = [('train', 'train'), ('train', 'eval')]
+      #TODO: change as needed:
       example_resolver = tfx.dsl.Resolver(
         strategy_class=tfx.dsl.experimental.LatestArtifactStrategy,
         # Or SpanRangeStrategy
         config={},
-        examples=tfx.dsl.Channel(
-          type=tfx.types.standard_artifacts.Examples,
+        examples=tfx.dsl.Channel(type=tfx.types.standard_artifacts.Examples,
           producer_component_id=example_gen.id
         )
       ).with_id('latest_examples_resolver')
       example_diff = tfx.components.ExampleDiff(
         examples_test=example_gen.outputs['output_examples'],
         examples_base=example_resolver.outputs['examples'],
+        include_split_pairs=include_split_pairs
       )
     
     ratings_transform = tfx.components.Transform(
@@ -128,22 +130,6 @@ class PipelineComponentsFactory():
       components.extend([ratings_transform, parquet_task])
       return components
     
-    # resolver, if needing last trained model as baseline model, needs to be invoked before
-    # Tuner and Trainer.
-    # but if using last belssed model, it can be invoked after the Trainer
-    
-    # tfx.v1.dsl.experimental.LatestArtifactStrategy
-    # tfx.v1.dsl.experimental.LatestBlessedModelStrategy
-    # tfx.v1.dsl.experimental.SpanRangeStrategy
-    # Get the latest blessed model for model validation.
-    model_resolver = (resolver.Resolver(
-      # strategy_class=tfx.dsl.experimental.latest_blessed_model_resolver.LatestBlessedModelResolver,
-      strategy_class=tfx.dsl.experimental.LatestArtifactStrategy,
-      model=Channel(type=Model),
-      # model_blessing=Channel(type=ModelBlessing)
-    ).with_id('latest_model_resolver'))
-    # 'latest_blessed_model_resolver')
-    
     tuner = tfx.components.Tuner(
       module_file=os.path.join(self.transform_dir, 'tune_train_movie_lens.py'),
       examples=ratings_transform.outputs['transformed_examples'],
@@ -163,49 +149,88 @@ class PipelineComponentsFactory():
     )
   
     # for the current trained model to be blessed,
-    # - resolver must find a baseline model
+    # - resolver does not have to find a baseline model, but it does have to provide at least one value
+    #   threshold and no change thresholds.  none of the later because no baseline to compare to.
+    
     # - there must be at least 1 threshold defined
     
     # Uses TFMA to compute a evaluation statistics over features of a model and
     # perform quality validation of a candidate model (compared to a baseline).
-    eval_config = tfma.EvalConfig(
-      model_specs=[tfma.ModelSpec(
-        signature_name='serving_default',
-        label_key='rating',
-        preprocessing_function_names=['transform_features']
-      )],
-      slicing_specs=[
-        tfma.SlicingSpec(),
-        #tfma.SlicingSpec(feature_keys=['hr_wk'])
-      ],
-      metrics_specs=[
-        tfma.MetricsSpec(
-          # The metrics added here are in addition to those saved with the
-          # model (assuming either a keras model or EvalSavedModel is used).
-          # Any metrics added into the saved model (for example using
-          # model.compile(..., metrics=[...]), etc) will be computed
-          # automatically.
-          metrics=[
-            #start with simple to see blessing
-            tfma.MetricConfig(
-              class_name='ExampleCount',
-              # Requires at least min_eval_size examples to be present in the evaluation data.
-              # This is the simplest possible "blessing" check.
-              threshold=tfma.MetricThreshold(
-                value_threshold=tfma.GenericValueThreshold(
-                  lower_bound={'value': self.min_eval_size}
-                ))),
-            tfma.MetricConfig(class_name='MeanAbsoluteError',
-              # rating scale 0:5 is 0.:1.0 so error of 1 in a rating is 0.20. fail for error of 2 in a rating = 0.4
-              threshold=tfma.MetricThreshold(
-                value_threshold=tfma.GenericChangeThreshold(
-                  direction=tfma.MetricDirection.LOWER_IS_BETTER,
-                  absolute={'value': 0.4}
-                ))),
-            #tfma.MetricConfig(class_name='MeanSquaredError'),
-          ]
-        )
-      ])
+    if type == PIPELINE_TYPE.BASELINE:
+      eval_config = tfma.EvalConfig(
+        model_specs=[
+          tfma.ModelSpec(signature_name='serving_default', label_key='rating',
+            preprocessing_function_names=['transform_features']),
+        ],
+        slicing_specs=[
+          tfma.SlicingSpec(),
+          # tfma.SlicingSpec(feature_keys=['hr_wk'])
+        ],
+        metrics_specs=[
+          tfma.MetricsSpec(
+            # The metrics added here are in addition to those saved with the
+            # model (assuming either a keras model or EvalSavedModel is used).
+            # Any metrics added into the saved model (for example using
+            # model.compile(..., metrics=[...]), etc) will be computed
+            # automatically.
+            metrics=[
+              # start with simple to see blessing
+              tfma.MetricConfig(
+                class_name='ExampleCount',
+                # Requires at least min_eval_size examples to be present in the evaluation data.
+                # This is the simplest possible "blessing" check.
+                threshold=tfma.MetricThreshold(
+                  value_threshold=tfma.GenericValueThreshold(
+                    lower_bound={'value': self.min_eval_size}
+                  ))),
+            ]
+          )
+        ])
+    else:
+      eval_config = tfma.EvalConfig(
+        model_specs=[
+          tfma.ModelSpec(name='candidate', signature_name='serving_default', label_key='rating', preprocessing_function_names=['transform_features']),
+          tfma.ModelSpec(name='baseline', signature_name='serving_default', label_key='rating', preprocessing_function_names=['transform_features'], is_baseline=True)
+        ],
+        slicing_specs=[
+          tfma.SlicingSpec(),
+          #tfma.SlicingSpec(feature_keys=['hr_wk'])
+        ],
+        metrics_specs=[
+          tfma.MetricsSpec(
+            # The metrics added here are in addition to those saved with the
+            # model (assuming either a keras model or EvalSavedModel is used).
+            # Any metrics added into the saved model (for example using
+            # model.compile(..., metrics=[...]), etc) will be computed
+            # automatically.
+            metrics=[
+              #start with simple to see blessing
+              tfma.MetricConfig(
+                class_name='ExampleCount',
+                # Requires at least min_eval_size examples to be present in the evaluation data.
+                # This is the simplest possible "blessing" check.
+                threshold=tfma.MetricThreshold(
+                  value_threshold=tfma.GenericValueThreshold(
+                    lower_bound={'value': self.min_eval_size}
+                  ))),
+              tfma.MetricConfig(class_name='MeanAbsoluteError',
+                # rating scale 0:5 is 0.:1.0 so error of 1 in a rating is 0.20. fail for error of 2 in a rating = 0.4
+                threshold=tfma.MetricThreshold(
+                  change_threshold=tfma.GenericChangeThreshold(
+                    direction=tfma.MetricDirection.LOWER_IS_BETTER,
+                    absolute={'value': 0.4}
+                  ))),
+              #tfma.MetricConfig(class_name='MeanSquaredError'),
+            ]
+          )
+        ])
+  
+    #is resolver.REsolver the same as tfx.dsl.Resolver?
+    model_resolver = (tfx.dsl.Resolver(
+      strategy_class=tfx.dsl.experimental.LatestBlessedModelStrategy,
+      model=tfx.dsl.Channel(type=tfx.types.standard_artifacts.Model),
+      model_blessing=tfx.dsl.Channel(type=tfx.types.standard_artifacts.ModelBlessing))
+    .with_id('latest_blessed_model_resolver'))
     
     # see https://www.tensorflow.org/tfx/guide/evaluator
     evaluator = Evaluator(
@@ -245,12 +270,17 @@ class PipelineComponentsFactory():
     
     # Checks whether the model passed the validation steps and pushes the model
     # to a file destination if check passed.
-    pusher = Pusher(
-      model=trainer.outputs['model'],
-      model_blessing=evaluator.outputs['blessing'],
-      push_destination=pusher_pb2.PushDestination(
-        filesystem=pusher_pb2.PushDestination.Filesystem(
-          base_directory=self.serving_model_dir)))
+    pusher = None
+    with tfx.dsl.Cond(
+      evaluator.outputs['blessing'].future()[0].custom_property(
+        'blessed') == 1
+    ):
+      pusher = Pusher(
+        model=trainer.outputs['model'],
+        model_blessing=evaluator.outputs['blessing'],
+        push_destination=pusher_pb2.PushDestination(
+          filesystem=pusher_pb2.PushDestination.Filesystem(
+            base_directory=self.serving_model_dir)))
     
     components = [example_gen, statistics_gen, schema_gen]
     if pre_transform_schema_importer is not None:
@@ -259,4 +289,5 @@ class PipelineComponentsFactory():
     if example_resolver is not None:
       components.extend([example_resolver, example_diff])
     components.extend([ratings_transform, model_resolver, tuner, trainer,evaluator, pusher])
+    
     return components

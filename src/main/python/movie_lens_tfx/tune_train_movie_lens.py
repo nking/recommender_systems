@@ -622,6 +622,11 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       # logging.debug(f'build {self.name} input_shape={input_shape}\n')
       self.query_model.build(input_shape)
       self.candidate_model.build(input_shape)
+      s0 = self.query_model.compute_output_shape(input_shape)
+      s1 = self.candidate_model.compute_output_shape(input_shape)
+      self.dot_layer.build([s0, s1])
+      s2 = self.dot_layer.compute_output_shape([s0, s1])
+      self.sigmoid_layer.build(s2)
       self.built = True
     
     def compute_output_shape(self, input_shape):
@@ -787,9 +792,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         input_shapes[element] = (None, 1)
     
     model.build(input_shapes)
-  
-    optimizer = keras.optimizers.Adam(
-      learning_rate=hp.get('learning_rate'))
+    
+    optimizer = keras.optimizers.Adam(learning_rate=hp.get('learning_rate'))
     
     # LOSS:
     # can use Ordinal Logistic Regression for classification into ratings categories
