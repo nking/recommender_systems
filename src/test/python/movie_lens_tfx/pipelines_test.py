@@ -279,13 +279,15 @@ class PipelinesTest(tf.test.TestCase):
     transformed = []
     for serialized_batch in batched_ds:
       tt_input_dict = {TT_INPUT_KEY: serialized_batch}
-      predictions.append(infer_twotower(**tt_input_dict)['outputs'])
+      prediction = infer_twotower(**tt_input_dict)['outputs']
+      predictions.append(prediction.numpy())
       q_input_dict = {Q_INPUT_KEY: serialized_batch}
       query_embeddings.append(infer_query(**q_input_dict)['outputs'])
       c_input_dict = {C_INPUT_KEY: serialized_batch}
       candidate_embeddings.append(infer_candidate(**c_input_dict)['outputs'])
       tr_input_dict = {TR_INPUT_KEY: serialized_batch}
-      transformed.append(transform_raw(**tr_input_dict))
+      transformed_element = transform_raw(**tr_input_dict)
+      transformed.append(transformed_element)
     
     self.assertEqual(len(predictions), num_rows)
     self.assertEqual(len(query_embeddings), num_rows)
