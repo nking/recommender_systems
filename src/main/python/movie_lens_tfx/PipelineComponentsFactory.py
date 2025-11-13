@@ -58,6 +58,11 @@ class PipelineComponentsFactory():
       "num_examples":self.num_examples,
     }
     
+    #TODO: consider how to use tfx.dsl.Cond to check for existing output of example_gen for same inputs
+    #  and resolve those instead of repeating work.  similarly a conditional for existing output from
+    #  Transform if all other inputs are the same.
+    #TODO: consider best integration of Tuning other models and selection of best overall model.
+    
     if type == PIPELINE_TYPE.BASELINE:
       tuner_custom_config["feature_acronym"] = ""
       tuner_custom_config["include_genres"] = False
