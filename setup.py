@@ -19,6 +19,7 @@ setup(
     "ml-metadata==1.16.0",
     "python-snappy==0.7.3",
   ],
+  extra_requires = ["test": ["pytest", "nannyml>=0.13.1"]]
   classifiers=[ 'Natural Language :: English',
                'Programming Language :: Python :: 3.10 :: Only',
                'Development Status :: 1 - Development/Unstable'
