@@ -98,8 +98,6 @@ class NannyMLTests(unittest.TestCase):
     """
     estimate performance before the ground truth is collected.
     
-    
-    
     """
     df_test, true_analysis, predicted_analysis = self.infer_rating(
       self.ratings_test_ds_ser, incl_genres=False, batch_size=1000)
