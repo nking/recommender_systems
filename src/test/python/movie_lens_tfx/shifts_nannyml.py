@@ -94,7 +94,7 @@ class NannyMLTests(unittest.TestCase):
     df['timestamp']=df['timestamp'].astype(object)
     return df, np.array(true_ratings), np.array(predicted_ratings)
   
-  def test_covariate_shift_detection(self):
+  def test_model_perf_monitoring(self):
     """
     estimate performance before the ground truth is collected.
     
