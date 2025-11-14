@@ -1142,14 +1142,17 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       where examples_file_paths was written by MovieLensExampleGen
       '''
       raw_feature_spec = tf_transform_output.raw_feature_spec()
-      raw_feature_spec.pop(LABEL_KEY)
-      print(f'default_serving: LABEL_KEY={LABEL_KEY}, raw_feature_spec={raw_feature_spec}')
+      try:
+        raw_feature_spec.pop(LABEL_KEY)
+      except KeyError as e:
+        logging.error(f'ERROR: {e}')
+      logging.debug(f'default_serving: LABEL_KEY={LABEL_KEY}, raw_feature_spec={raw_feature_spec}')
       
       raw_features = tf.io.parse_example(serialized_tf_example, raw_feature_spec)
       
       transformed_features = model.tft_layer(raw_features)
       outputs = model(inputs=transformed_features)
-      print(f'default_serving: have outputs')
+      logging.debug(f'default_serving: have outputs')
       return {'outputs': outputs}
     
     @tf.function(input_signature=[tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')])
@@ -1158,7 +1161,10 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       Returns the serving signature query embeddings for input being raw examples, not yet transformed to features.
       '''
       raw_feature_spec = tf_transform_output.raw_feature_spec()
-      raw_feature_spec.pop(LABEL_KEY)
+      try:
+        raw_feature_spec.pop(LABEL_KEY)
+      except KeyError as e:
+        logging.error(f'ERROR: {e}')
       raw_features = tf.io.parse_example(serialized_tf_example, raw_feature_spec)
       transformed_features = model.tft_layer(raw_features)
       outputs = model.query_model(inputs=transformed_features)
@@ -1170,7 +1176,10 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       Returns the serving signature candidate embeddings for input being raw examples, not yet transformed to features.
       '''
       raw_feature_spec = tf_transform_output.raw_feature_spec()
-      raw_feature_spec.pop(LABEL_KEY)
+      try:
+        raw_feature_spec.pop(LABEL_KEY)
+      except KeyError as e:
+        logging.error(f'ERROR: {e}')
       raw_features = tf.io.parse_example(serialized_tf_example, raw_feature_spec)
       transformed_features = model.tft_layer(raw_features)
       outputs = model.candidate_model(inputs=transformed_features)

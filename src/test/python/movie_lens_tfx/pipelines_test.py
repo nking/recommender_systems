@@ -7,6 +7,7 @@ from tfx.orchestration import metadata
 #import trainer_movie_lens
 
 import tensorflow_transform as tft
+import random
 
 from ml_metadata.proto import metadata_store_pb2
 from ml_metadata.metadata_store import metadata_store
@@ -45,17 +46,19 @@ class PipelinesTest(tf.test.TestCase):
     # output_data_dir = os.path.join(os.environ.get('TEST_UNDECLARED_OUTPUTS_DIR',self.get_temp_dir()),self._testMethodName)
     output_data_dir = os.path.join(get_bin_dir(), self._testMethodName, test_num)
     PIPELINE_ROOT = os.path.join(output_data_dir, PIPELINE_NAME)
+    METADATA_PATH = os.path.join(PIPELINE_ROOT, 'tfx_metadata',
+                                 'metadata.db')
+    """
     # remove results from previous test runs:
     try:
       logging.debug(f"removing: {PIPELINE_ROOT}")
       shutil.rmtree(PIPELINE_ROOT)
     except OSError as e:
       pass
-    METADATA_PATH = os.path.join(PIPELINE_ROOT, 'tfx_metadata',
-                                 'metadata.db')
+    
     os.makedirs(os.path.join(PIPELINE_ROOT, 'tfx_metadata'),
                 exist_ok=True)
-    
+    """
     ENABLE_CACHE = True
     
     # metadata_connection_config = metadata_store_pb2.ConnectionConfig()
@@ -87,7 +90,7 @@ class PipelinesTest(tf.test.TestCase):
       '--direct_num_workers=0',
       f'--setup_file={SETUP_FILE_PATH}',
     ]
-    
+    """
     baseline_components = pipeline_factory.build_components(PIPELINE_TYPE.BASELINE)
     
     # create baseline model
@@ -310,19 +313,111 @@ class PipelinesTest(tf.test.TestCase):
     #print(f"eval_attr_dict={eval_attr_dict}")
     print(f"eval_metrics_dict={eval_metrics_dict}")
     
-    """for notebook:
-    tfma.view.render_slicing_metrics(eval_result)
+    ## ========================
+    #TODO: follow up on why the executor isn't able to run the serving_default inferrence as is done above
+    #   https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/components/bulk_inferrer/executor.py#L52
+    """
+    # to test batch inference, will use existing pipeline root and the trained model within.
+    # it's MLMD store.
     
-    # Render a plot to compare the candidate model vs. the baseline for a specific metric (e.g., Mean Absolute Error)
-    tfma.view.render_plot(
-      eval_result,
-      metric_name='MeanAbsoluteError',
-      slicing_column='house_type'  # Or any feature you sliced on
+    # make fake incoming rating data that will be missing ratings (entered as 0)
+    # by taking the user_ids from ratings_1000.dat and taking random movie_ids from the range of movies
+    # and filter out any already seen by user.
+    # then write to bin directory
+    # and create new infiles_dict_ser for those files
+    infiles_dict = deserialize(self.infiles_dict_ser)
+    ratings_uri = infiles_dict['ratings']['uri']
+    dataset = tf.data.TextLineDataset(ratings_uri)
+    
+    def create_fake_data(line_string):
+      # This entire function runs in standard Python
+      line = line_string.numpy().decode('utf-8')
+      fields = line.split('::')
+      fields[1] = str(random.randint(1, self.movie_id_max))
+      fields[2] = "0"
+      fields[3] = str(int(fields[3]) + 315360000) #adding 10 years
+      rejoined_string = "::".join(fields)
+      return tf.constant(rejoined_string)
+    
+    # Apply the Python function to the dataset
+    dataset2 = dataset.map(lambda line: tf.py_function(
+      func=create_fake_data, inp=[line], Tout=tf.string)
     )
     
-    ## Load the validation results if eval config included thresholds:
-    #validation_result = tfma.load_validation_result(output_path=output_path)
-    ## You can print the result to see which thresholds passed or failed
-    #print(validation_result)
-    """
+    output_file_path = os.path.join(get_bin_dir(), "ratings_to_infer.dat")
+    with open(output_file_path, 'w') as f:
+      for element in dataset2.as_numpy_iterator():
+        f.write(element.decode('utf-8') + '\n')
+        
+    #infiles_dict['ratings']['uri'] = output_file_path
+    
+    print(f'serving_model_dir={serving_model_dir}')
+    
+    artifact_list = store.get_artifacts_by_type("PushedModel")
+    print(f"model artifact list={artifact_list}")
+    artifact_list = sorted(artifact_list, key=lambda
+      x: x.create_time_since_epoch, reverse=True)
+    for artifact in artifact_list:
+      if "Pusher" in artifact.uri:
+        model_uri = artifact.uri
+        break
+    print(f'model_uri={model_uri}')
+    
+    pipeline_factory = PipelineComponentsFactory(
+      num_examples=self.num_examples,
+      infiles_dict_ser=serialize_to_string(infiles_dict),
+      output_config_ser=self.output_config_ser,
+      transform_dir=tr_dir, user_id_max=self.user_id_max,
+      movie_id_max=self.movie_id_max,
+      n_genres=self.n_genres, n_age_groups=self.n_age_groups,
+      min_eval_size=self.MIN_EVAL_SIZE,
+      batch_size=32, num_epochs=2, device="CPU",
+      serving_model_dir=model_uri)
+    
+    components = pipeline_factory.build_components( PIPELINE_TYPE.BATCH_INFERENCE)
+    
+    # create baseline model
+    my_pipeline = tfx.dsl.Pipeline(
+      pipeline_name=PIPELINE_NAME,
+      pipeline_root=PIPELINE_ROOT,
+      components=components,
+      enable_cache=ENABLE_CACHE,
+      metadata_connection_config=metadata_connection_config,
+      beam_pipeline_args=beam_pipeline_args,
+    )
+    print(f'begin batch inferrence')
+    tfx.orchestration.LocalDagRunner().run(my_pipeline)
+    print('end batch inferrence')
+    
+    #Component BatchInfer outputs contains:
+    # inference_result: Channel of type standard_artifacts.InferenceResult to store the inference results.
+    # output_examples: Channel of type standard_artifacts.Examples to store the output examples.
+    artifact_list = store.get_artifacts_by_type("InferenceResult")
+    print(f"model artifact list={artifact_list}")
+    latest_artifact = sorted(artifact_list, key=lambda
+      x: x.create_time_since_epoch, reverse=True)[0]
+    inference_result_uri = latest_artifact.uri
+    print(f'inference_result_uri={inference_result_uri}')
+    self.assertTrue(os.path.exists(inference_result_uri))
+    file_pattern = os.path.join(inference_result_uri, '*')
+    dataset = tf.data.TFRecordDataset(tf.io.gfile.glob(file_pattern))
+    
+    def parse_inference_record(serialized_example):
+      # You will need the feature specifications (a tf.train.Features message)
+      # based on the output signature of your model's serving function.
+      # This is a general placeholder:
+      feature_spec = {
+        'outputs': tf.io.FixedLenFeature([], tf.float32),
+        # ... other features output by the BulkInferer
+      }
+      return tf.io.parse_single_example(serialized_example, feature_spec)
+    
+    # Map the parsing function to the dataset
+    parsed_results = dataset.map(parse_inference_record)
+    self.assertIsNotNone(parsed_results)
+    i = 0
+    for x in parsed_results:
+      i += 1
+      print(x)
+    self.assertEqual(1000, i)
     

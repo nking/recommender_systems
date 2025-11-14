@@ -3,16 +3,15 @@ from typing import List
 
 from tfx.dsl.components.base import base_beam_component
 
-from tfx.components import StatisticsGen, SchemaGen, ExampleValidator, Evaluator, Pusher
+from tfx.components import StatisticsGen, SchemaGen, ExampleValidator, Evaluator, Pusher, InfraValidator
 import tensorflow_model_analysis as tfma
 
 import enum
 
 from tfx.dsl.components.common import resolver
-from tfx.proto import pusher_pb2, range_config_pb2
+from tfx.proto import pusher_pb2, range_config_pb2, infra_validator_pb2, bulk_inferrer_pb2
 from tfx.types import Channel
 from tfx.types.standard_artifacts import Model
-
 from movie_lens_tfx.ingest_pyfunc_component.ingest_movie_lens_component import *
 from movie_lens_tfx.misc import tfrecord_to_parquet
 
@@ -20,6 +19,7 @@ class PIPELINE_TYPE(enum.Enum):
   PREPROCESSING = "preprocessing_data"
   BASELINE = "baseline"
   PRODUCTION = "production"
+  BATCH_INFERENCE = "batch_inference"
 
 class PipelineComponentsFactory():
   def __init__(self, num_examples:int, infiles_dict_ser:str, output_config_ser:str, transform_dir:str,
@@ -43,6 +43,28 @@ class PipelineComponentsFactory():
     
   def build_components(self, type: PIPELINE_TYPE, run_example_diff:bool=False, pre_transform_schema_dir_path:str=None,
     post_transform_schema_dir_path:str=None) -> List[base_beam_component.BaseBeamComponent]:
+    
+    
+    if type == PIPELINE_TYPE.BATCH_INFERENCE:
+      if self.serving_model_dir is None:
+        raise ValueError(f"missing serving_model_dir.  location of Format-Serving directory is needed.")
+      example_gen = MovieLensExampleGen(
+        infiles_dict_ser=self.infiles_dict_ser,
+        output_config_ser=self.output_config_ser)
+      model_resolver = (tfx.dsl.Resolver(
+        strategy_class=tfx.dsl.experimental.LatestBlessedModelStrategy,
+        model=tfx.dsl.Channel(type=tfx.types.standard_artifacts.Model),
+        model_blessing=tfx.dsl.Channel(type=tfx.types.standard_artifacts.ModelBlessing))
+          .with_id('latest_blessed_model_resolver'))
+      bulk_inferrer = tfx.components.BulkInferrer(
+        examples=example_gen.outputs['output_examples'],
+        model = model_resolver.outputs['model'],
+        model_spec=tfx.proto.ModelSpec(
+          model_signature_name=['serving_default'],
+        )
+      )
+      return [example_gen, model_resolver, bulk_inferrer]
+    
     tuner_custom_config = {
       'user_id_max': self.user_id_max,
       'movie_id_max': self.movie_id_max,
@@ -230,7 +252,7 @@ class PipelineComponentsFactory():
           )
         ])
   
-    #is resolver.REsolver the same as tfx.dsl.Resolver?
+    #is resolver.Resolver the same as tfx.dsl.Resolver?
     model_resolver = (tfx.dsl.Resolver(
       strategy_class=tfx.dsl.experimental.LatestBlessedModelStrategy,
       model=tfx.dsl.Channel(type=tfx.types.standard_artifacts.Model),
@@ -245,25 +267,7 @@ class PipelineComponentsFactory():
       eval_config=eval_config)
     #outputs: evaluation, blessing
     # it creates an empty file called BLESSED or NOT_BLESSED in <pipeline_path>/Evaluator/blessing/9]<number>/
-    # TFMA: EvalResult?  ValidationResult?
-    
-    """
-    infra_validator = InfraValidator(
-      model=trainer.outputs['model'],
-      serving_spec=infra_validator_pb2.ServingSpec(
-        tensorflow_serving=infra_validator_pb2.TensorFlowServing(
-          tags=['latest']
-        ),
-        #kubernets, or localDocker https://www.tensorflow.org/tfx/api_docs/python/tfx/v1/proto/ServingSpec
-        kubernetes=infra_validator_pb2.KubernetesConfig()
-      ),
-      validation_spec=infra_validator_pb2.ValidationSpec(
-        max_loading_time_seconds=60,
-        num_examples=1000
-      )
-    )
-    """
-    
+   
     if type == PIPELINE_TYPE.BASELINE:
       #TODO: save schema.pbtxt to version control when have a working version
       components = [example_gen, statistics_gen, schema_gen]
@@ -280,9 +284,33 @@ class PipelineComponentsFactory():
       evaluator.outputs['blessing'].future()[0].custom_property(
         'blessed') == 1
     ):
+      """
+      infra_validator = InfraValidator(
+        model=trainer.outputs['model'],
+        serving_spec=infra_validator_pb2.ServingSpec(
+         low_serving=infra_validator_pb2.TensorFlowServing(
+            tags=['latest']
+          ),
+          #kubernet tensorfs, or localDocker https://www.tensorflow.org/tfx/api_docs/python/tfx/v1/proto/ServingSpec
+          kubernetes=infra_validator_pb2.KubernetesConfig()
+          #or LocalDockerConfig
+        ),
+        validation_spec=infra_validator_pb2.ValidationSpec(
+          max_loading_time_seconds=60,
+          num_examples=1000
+        ),
+        request_spec=tfx.proto.RequestSpec(
+          tensorflow_serving=tfx.proto.TensorFlowServingRequestSpec(
+            signature_names=['serving_default']
+          ),
+          num_examples=10
+        )
+      )
+      """
       pusher = Pusher(
         model=trainer.outputs['model'],
         model_blessing=evaluator.outputs['blessing'],
+        #infra_blessing=infra_validator.outputs['blessing'],
         push_destination=pusher_pb2.PushDestination(
           filesystem=pusher_pb2.PushDestination.Filesystem(
             base_directory=self.serving_model_dir)))
