@@ -61,4 +61,4 @@ Homepage = "https://www.kaggle.com/code/nicholeasuniquename/recommender-systems-
 Repository = "https://github.com/nking/recommender_systems.git"
 
 [project.optional-dependencies]
-test = ["pytest", "nannyml>=0.13.1"]
+test = ["pytest", "nannyml>=0.13.1", "polars>=1.35.2", "plotly>=6.4.0", "kaleido>=1.2.0"]
