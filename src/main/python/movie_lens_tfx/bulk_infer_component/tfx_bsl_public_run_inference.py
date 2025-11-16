@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Public API of batch inference."""
+#modified to use local tfx_bsl_run_inference.py which has modifications to use a saved_model
 
 from typing import Iterable, List, Optional, Tuple, TypeVar, Union
 

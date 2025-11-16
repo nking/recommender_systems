@@ -662,7 +662,7 @@ class _BaseSavedModelHandler(_BaseModelHandler):
   def _run_inference(self, examples: List[InputType],  # pytype: disable=signature-mismatch  # overriding-return-type-checks
                      serialized_examples: List[bytes],
                      model: Any) -> Mapping[Text, np.ndarray]:
-    #if has this method, use it
+    #NLK: addtions to alternatively run a saved_model
     if hasattr(model, "run"):
       result = model.run(
           self._io_tensor_spec.output_alias_tensor_names,

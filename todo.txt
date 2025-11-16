@@ -1,10 +1,9 @@
 - consider adding to pipeline:
   - transform_input_cache
-  - BulkInferrer
 
 - consider adding other model families to the
   pipeline, that is, a wrapper to use Tuner on
-  each model family and then compare amond best of each.
+  each model family and then compare among best of each.
   - consider using SNAS to build a good model
     - transformer layers, dot product layers,
       feature interaction layers, embedding layers, ...
@@ -12,7 +11,8 @@
   - best practices for optimizing mixture of experts (MOE) NNs
 
 - consider adding 
-  NannyML OSS: Performance estimation - CBPE and DLE
+  NannyML OSS: Performance estimation 
+  - CBPE (for classification) and DLE (regression)
 
 - see TODO throughout code
  

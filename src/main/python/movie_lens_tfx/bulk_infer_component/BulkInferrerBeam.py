@@ -264,7 +264,7 @@ def _MakeParseFn(
 
 #NLK: adding a load function for saved_model
 def _load_override_fn(model_path, tags):
-  print(f'invoking _load_override_fn')
+  logging.debug(f'invoking _load_override_fn')
   #Callable[[str, Sequence[str]], Any]
   return tf.saved_model.load(model_path)
   
@@ -290,20 +290,20 @@ def _RunInference(
   """Runs model inference on given examples data."""
   inferences = None
   try:
-    #modification for tf_Example as serialized string
+    #NLK: modification for tf_Example as serialized string, not parsed
     if inference_endpoint.saved_model_spec is not None:
-      print(f'run inference with seriazed tf_example')
+      logging.debug(f'run inference with serialized tf_example')
       inferences = (pipeline | 'RunInference' >> run_inference.RunInference(
           inference_spec_type=inference_endpoint,
           load_override_fn=_load_override_fn))
   except Exception as e:
     pass
   if inferences is None:
-    print(f'run default inference PTransforms')
+    logging.debug(f'run default inference PTransforms')
     inferences = (pipeline | 'ParseExamples' >> beam.Map(_MakeParseFn(payload_format))
       | 'RunInference2' >> run_inference.RunInference(
       inference_spec_type=inference_endpoint, load_override_fn=_load_override_fn))
-  inferences | "print_inferences" >> beam.Map(lambda _: print(f"INFERENCE:{inferences.result()}"))
+  #inferences | "print_inferences" >> beam.Map(lambda _: print(f"INFERENCE:{inferences.result()}"))
   return inferences
 
 
