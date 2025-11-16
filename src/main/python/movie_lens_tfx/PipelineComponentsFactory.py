@@ -1,17 +1,11 @@
-import os
-from typing import List
-
 from tfx.dsl.components.base import base_beam_component
 
-from tfx.components import StatisticsGen, SchemaGen, ExampleValidator, Evaluator, Pusher, InfraValidator
+from tfx.components import StatisticsGen, SchemaGen, ExampleValidator, Evaluator, Pusher
 import tensorflow_model_analysis as tfma
 
 import enum
 
-from tfx.dsl.components.common import resolver
-from tfx.proto import pusher_pb2, range_config_pb2, infra_validator_pb2, bulk_inferrer_pb2
-from tfx.types import Channel
-from tfx.types.standard_artifacts import Model
+from tfx.proto import pusher_pb2
 from movie_lens_tfx.ingest_pyfunc_component.ingest_movie_lens_component import *
 from movie_lens_tfx.misc import tfrecord_to_parquet
 
@@ -44,7 +38,6 @@ class PipelineComponentsFactory():
   def build_components(self, type: PIPELINE_TYPE, run_example_diff:bool=False, pre_transform_schema_dir_path:str=None,
     post_transform_schema_dir_path:str=None) -> List[base_beam_component.BaseBeamComponent]:
     
-    
     if type == PIPELINE_TYPE.BATCH_INFERENCE:
       if self.serving_model_dir is None:
         raise ValueError(f"missing serving_model_dir.  location of Format-Serving directory is needed.")
@@ -56,11 +49,38 @@ class PipelineComponentsFactory():
         model=tfx.dsl.Channel(type=tfx.types.standard_artifacts.Model),
         model_blessing=tfx.dsl.Channel(type=tfx.types.standard_artifacts.ModelBlessing))
           .with_id('latest_blessed_model_resolver'))
+      """
+      #BulkInferrer might work with keras3 but not keras2??  the rest of tfx 1.16.0 requires model.saved_model.save(serving_model_dir)
+      # possibly works with modles saved as tf.keras.models.save_model(model, save_model_dir_multiply, signatures=signature)
+      # but that is not compatible with tfx 1.16.0 which needs tf.saved_model.save
+      # I checked out the source code and ran penguin example test
+      # tfx/tfx/examples/penguin/penguin_pipeline_local_e2e_test.py which failed similarly
+      # added an issue for it:  https://github.com/tensorflow/tfx/issues/7782
+      ##
+      ## tf.compat.v1.saved_model.tag_constants
+      ## GPU	'gpu'
+      ## SERVING	'serve'
+      ## TPU	'tpu'
+      ## TRAINING	'train'
       bulk_inferrer = tfx.components.BulkInferrer(
         examples=example_gen.outputs['output_examples'],
         model = model_resolver.outputs['model'],
+        #model_spec type is bulk_inferrer_pb2.ModelSpec
         model_spec=tfx.proto.ModelSpec(
           model_signature_name=['serving_default'],
+          tag=tf.saved_model.SERVING
+        )
+      )
+      return [example_gen, model_resolver, bulk_inferrer]
+      """
+      from movie_lens_tfx.bulk_infer_component.BulkInferrerBeam import BulkInferrerBeam
+      bulk_inferrer = BulkInferrerBeam(
+        examples=example_gen.outputs['output_examples'],
+        model=model_resolver.outputs['model'],
+        # model_spec type is bulk_inferrer_pb2.ModelSpec
+        model_spec=tfx.proto.ModelSpec(
+          model_signature_name=['serving_default'],
+          tag=[tf.saved_model.SERVING]
         )
       )
       return [example_gen, model_resolver, bulk_inferrer]

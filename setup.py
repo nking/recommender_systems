@@ -6,7 +6,8 @@ setup(
   packages=find_packages(where="src/main/python",
     include=['movie_lens_tfx', 'movie_lens_tfx.misc',
             'movie_lens_tfx.utils', 'movie_lens_tfx.ingest_component',
-            'movie_lens_tfx.ingest_pyfunc_component', 'movie_lens_tfx']),
+            'movie_lens_tfx.ingest_pyfunc_component',
+             'movie_lens_tfx.bulk_infer_component', 'movie_lens_tfx']),
   package_dir={'': 'src/main/python'},
   install_requires = [
     "pyarrow==10.0.1",

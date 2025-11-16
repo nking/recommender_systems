@@ -280,32 +280,3 @@ class IngestMovieLensComponent(base_beam_component.BaseBeamComponent):
     #super().__init__(spec=spec)
     super(IngestMovieLensComponent, self).__init__(spec=spec)
 
-'''
-#https://www.tensorflow.org/tfx/tutorials/tfx/recommenders#create_inspect_examples_utility
-def inspect_examples(component, channel_name='examples', split_name='train', num_examples=1):
-  # Get the URI of the output artifact, which is a directory
-  full_split_name = 'Split-{}'.format(split_name)
-
-  print(\
-    'channel_name: {}, split_name: {} (\"{}\"), num_examples: {}\n'.format(\
-    channel_name, split_name, full_split_name, num_examples))
-
-  train_uri = os.path.join(\
-    component.outputs[channel_name].get()[0].uri, full_split_name)
-
-  # Get the list of files in this directory (all compressed TFRecord files)
-  tfrecord_filenames = [os.path.join(train_uri, name) for name in os.listdir(train_uri)]
-
-  # Create a `TFRecordDataset` to read these files
-  dataset = tf.data.TFRecordDataset(tfrecord_filenames, compression_type="GZIP")
-
-  # Iterate over the records and print them
-  for tfrecord in dataset.take(num_examples):
-    serialized_example = tfrecord.numpy()
-    example = tf.train.Example()
-    example.ParseFromString(serialized_example)
-    pp.pprint(example)
-
-inspect_examples(ratings_example_gen, channel_name='output_examples')
-
-'''

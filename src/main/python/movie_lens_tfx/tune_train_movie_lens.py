@@ -8,6 +8,7 @@ import pickle
 from typing import List, Tuple, Dict
 import tensorflow as tf
 import tensorflow.keras as keras
+#import tf_keras as keras ## this fails
 import enum
 import os
 import math
@@ -585,11 +586,11 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       
       if self.use_bias_corr:
         self.item_prob_layer = keras.layers.Lambda(
-          lambda x: tf.keras.ops.log(
-            tf.keras.ops.clip(1. / x, 1e-6, 1.0)))
+          lambda x: keras.math.log(
+            keras.clip_by_value(1. / x, 1e-6, 1.0)))
         self.softmax_layer = keras.layers.Softmax()
         self.log_layer = keras.layers.Lambda(
-          lambda x: tf.keras.ops.log(x))
+          lambda x: keras.math.log(x))
         self.mult_layer = keras.layers.Multiply()
         # self.final_loss_bc_layer = keras.losses.Loss(name=None, reduction="mean", dtype=None)
         self.final_loss_bc_layer = keras.layers.Lambda(
@@ -809,10 +810,10 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     
   model.summary(print_fn=logging.info)
   
-  is_tf_keras_model = isinstance(model, tf.keras.Model)
+  is_tf_dot_keras_model = isinstance(model, tf.keras.Model)
   is_keras_model = isinstance(model, keras.Model)
   is_keras_models_Model = isinstance(model, keras.models.Model)
-  logging.debug(f"is_tf_keras_model: {is_tf_keras_model}, "
+  logging.debug(f"is_tf_dot_keras_model: {is_tf_dot_keras_model}, "
     f"is_keras_model: {is_keras_model}, is_keras_models_Model={is_keras_models_Model}")
   if not isinstance(model, keras.models.Model):
     logging.debug(f'this is the fail at tuner.py line 167')
@@ -1061,10 +1062,10 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   # model = _make_2tower_keras_model(hp, tf_transform_output)
 
   # Write logs to path
-  tensorboard_callback = tf.keras.callbacks.TensorBoard(
+  tensorboard_callback = keras.callbacks.TensorBoard(
     log_dir=fn_args.model_run_dir, update_freq='epoch')
   
-  stop_early = tf.keras.callbacks.EarlyStopping(
+  stop_early = keras.callbacks.EarlyStopping(
     monitor=f'val_loss', min_delta=1E-4, patience=3)
   
   """
@@ -1217,7 +1218,22 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   signatures["serving_query"] = other_sigs["serving_query"]
   signatures["serving_candidate"] = other_sigs["serving_candidate"]
   
-  #signatures['serving_str_ser_tf_examples'] = _get_tf_examples_serving_signature(model, tf_transform_output)
+  """
+  #this isn't necessary.  BulkInferrer still has the same problems finding saved model variables
+  import numpy as np
+  serialized_batch = tf.constant(np.array(
+    [b'\n\xa2\x01\n\x1d\n\x06genres\x12\x13\n\x11\n\x0fAction|Thriller\n\x0f\n\x06gender\x12\x05\n\x03\n\x01M\n\x0c\n\x03age\x12\x05\x1a\x03\n\x01-\n\x0f\n\x06rating\x12\x05\x1a\x03\n\x01\x04\n\x12\n\x08movie_id\x12\x06\x1a\x04\n\x02\x8c\x08\n\x16\n\ttimestamp\x12\t\x1a\x07\n\x05\x8a\xac\xbe\xd2\x03\n\x13\n\noccupation\x12\x05\x1a\x03\n\x01\x07\n\x10\n\x07user_id\x12\x05\x1a\x03\n\x01\x04',
+     b'\n\xa9\x01\n\x0c\n\x03age\x12\x05\x1a\x03\n\x01-\n\x16\n\ttimestamp\x12\t\x1a\x07\n\x05\xf4\xab\xbe\xd2\x03\n$\n\x06genres\x12\x1a\n\x18\n\x16Action|Sci-Fi|Thriller\n\x0f\n\x06rating\x12\x05\x1a\x03\n\x01\x05\n\x0f\n\x06gender\x12\x05\n\x03\n\x01M\n\x13\n\noccupation\x12\x05\x1a\x03\n\x01\x07\n\x10\n\x07user_id\x12\x05\x1a\x03\n\x01\x04\n\x12\n\x08movie_id\x12\x06\x1a\x04\n\x02\xd8\t']))
+  try:
+    # Call the serving function with dummy data forces the graph to trace and initialize all variables
+    # within the context of the signature.  NLK: The fit function creates trace only for training, not serving.
+    print("Forcing model tracing with dummy data...")
+    INPUT_KEY = "serialized_tf_example"# list(signatures["serving_default"].structured_input_signature[1].keys())[0]
+    _ = signatures["serving_default"](**{INPUT_KEY: serialized_batch})
+    print(f"Tracing complete. Variables should be initialized.  outputs={_}")
+  except Exception as e:
+    print(f"Warning: Failed to trace with dummy data. Error: {e}")
+  """
   
   tf.saved_model.save(model, fn_args.serving_model_dir, signatures=signatures)
   

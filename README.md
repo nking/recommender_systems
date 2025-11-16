@@ -12,6 +12,9 @@ to create a virtual environment to install the TFX compatible
 libraries, can use conda or virtualenv.
 (1) for conda, 
   see: https://www.kaggle.com/code/nicholeasuniquename/a-virtual-environment-w-earlier-version-of-python
+  conda create -q --name tfx_py310 python=3.10 -y
+  conda activate tfx_py310
+
 (2) for virtualenv
   python3 -m pip install --user virtualenv
   python3 -m virtualenv -p python3.10 /path/to/envs/python_310_tfx
@@ -41,6 +44,10 @@ the more complete host library:
 
 Then, the activated virtual environment needs these packages:
 
+the dependencies can be installed most easily with:
+   pip install --editable .
+
+or here are the manual steps:
 pip -q install pyarrow==10.0.1
 pip -q install apache-beam==2.59.0
 pip -q install tensorflow==2.16.1
@@ -53,8 +60,6 @@ a good resource for looking at version compatability with TFX 1.16.0
 is https://github.com/tensorflow/tfx/blob/v1.16.0/test_constraints.txt
 
 for other versions of TFX, need to use a different tag than v1.16.0
-
-
 
 ============= 
 Miscellaneous project information:
