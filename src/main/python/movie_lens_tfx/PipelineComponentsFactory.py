@@ -38,12 +38,18 @@ class PipelineComponentsFactory():
   def build_components(self, type: PIPELINE_TYPE, run_example_diff:bool=False, pre_transform_schema_dir_path:str=None,
     post_transform_schema_dir_path:str=None) -> List[base_beam_component.BaseBeamComponent]:
     
+    #NOTE: can add .with_id('...') onto end of any component, and that will be the name of the directory under the PIPELINE_ROOT
+    # used instea dof the compoonent name
+    
+    example_gen = MovieLensExampleGen(
+      infiles_dict_ser=self.infiles_dict_ser,
+      output_config_ser=self.output_config_ser)
+    
+    print(f'type={type}')
     if type == PIPELINE_TYPE.BATCH_INFERENCE:
       if self.serving_model_dir is None:
         raise ValueError(f"missing serving_model_dir.  location of Format-Serving directory is needed.")
-      example_gen = MovieLensExampleGen(
-        infiles_dict_ser=self.infiles_dict_ser,
-        output_config_ser=self.output_config_ser)
+      
       model_resolver = (tfx.dsl.Resolver(
         strategy_class=tfx.dsl.experimental.LatestBlessedModelStrategy,
         model=tfx.dsl.Channel(type=tfx.types.standard_artifacts.Model),
@@ -112,10 +118,6 @@ class PipelineComponentsFactory():
         logging.error("for BASELINE, cannot select run_example_diff=True, so setting that to False now")
         run_example_diff = False
       
-    example_gen = (MovieLensExampleGen(
-      infiles_dict_ser=self.infiles_dict_ser,
-      output_config_ser=self.output_config_ser))
-    
     statistics_gen = StatisticsGen(
       examples=example_gen.outputs['output_examples'])
     
@@ -156,6 +158,8 @@ class PipelineComponentsFactory():
         examples_base=example_resolver.outputs['examples'],
         include_split_pairs=include_split_pairs
       )
+    
+    print(f"module_file={os.path.join(self.transform_dir, 'transform_movie_lens.py')}")
     
     ratings_transform = tfx.components.Transform(
       examples=example_gen.outputs['output_examples'],

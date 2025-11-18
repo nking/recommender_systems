@@ -187,12 +187,10 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       # print(f'compute_output_shape {self.name} input_shape={input_shape}\n')
       # This is invoked after build by QueryModel.
       # return (None, self.embed_out_dim)
-      _shape = self.user_embedding.compute_output_shape(
-        input_shape['user_id'])
+      _shape = self.user_embedding.compute_output_shape(input_shape['user_id'])
       total_length = _shape[-1]
       if self.age_embedding:
-        _shape = self.age_embedding.compute_output_shape(
-          input_shape['age'])
+        _shape = self.age_embedding.compute_output_shape(input_shape['age'])
         total_length += _shape[-1]
       if self.hr_wk_embedding:
         _shape = self.hr_wk_embedding.compute_output_shape(
@@ -272,7 +270,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       ], name="movie_emb")
       
       if self.incl_genres:
-        # expand toembed_out_dim for concatenation
+        # expand to embed_out_dim for concatenation
         self.genres_embedding = keras.Sequential([
           keras.layers.Dense(self.embed_out_dim),
           keras.layers.Flatten(data_format='channels_last'),
@@ -727,7 +725,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     
     def test_step(self, data):
       x, y = data
-      y_pred = self(x) #self.predict or self.evaluate?
+      y_pred = self(x, training=False) #self.predict or self.evaluate?
       loss = self.compute_loss(y=y, y_pred=y_pred)
       for metric in self.metrics:
         if metric.name == "loss":
@@ -748,8 +746,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
                      "layer_sizes": self.layer_sizes,
                      "use_bias_corr": self.use_bias_corr,
                      "feature_acronym": self.feature_acronym,
-                     "reg": keras.utils.serialize_keras_object(
-                       self.reg),
+                     "reg": keras.utils.serialize_keras_object(self.reg),
                      "incl_genres": self.incl_genres
                      })
       return config

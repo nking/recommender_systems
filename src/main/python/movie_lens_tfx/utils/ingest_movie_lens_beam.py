@@ -72,6 +72,7 @@ class MergeByKey(beam.PTransform):
     self.debug_tag = debug_tag
 
   def expand(self, l_pc):
+    #TODO: follow up on improvements like using .with_resource_hints
     l_keyed = l_pc | f'kv_l_{random.randint(0,1000000000)}' \
       >> beam.Map(lambda x: (x[self.l_key_col], x))
     r_keyed = self.r_pc | f'kv_r_{random.randint(0,1000000000)}' \

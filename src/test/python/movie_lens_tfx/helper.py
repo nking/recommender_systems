@@ -4,15 +4,13 @@ from movie_lens_tfx.utils.movie_lens_utils import *
 
 def get_kaggle() -> bool:
   cwd = os.getcwd()
-  if "recommender_systems" in cwd:
-    kaggle = False
-  else:
+  if "kaggle" in cwd:
     kaggle = True
+  else:
+    kaggle = False
   return kaggle
 
 def get_project_dir() -> str:
-  if get_kaggle():
-    return "/kaggle/working"
   cwd = os.getcwd()
   head = cwd
   proj_dir = ""
@@ -40,31 +38,17 @@ def get_test_data(use_small=True) -> Tuple[str, str, list[str]]:
   :return: Tuple of infiles_dict serialized to string,
      output_config serialized to string, and list of split names
   """
-
-  kaggle = get_kaggle()
-  print(f"CWD={os.getcwd()}, kaggle={kaggle}")
-
-  if kaggle:
-    prefix = '/kaggle/working/ml-1m/'
-    if use_small:
-      ratings_uri = os.path.join(prefix, "ratings_1000.dat")
-      users_uri = os.path.join(prefix, "users_100.dat")
-    else:
-      ratings_uri = os.path.join(prefix,"ratings.dat")
-      users_uri = os.path.join(prefix, "users.dat")
-    movies_uri = os.path.join(prefix, "movies.dat")
+  proj_dir = get_project_dir()
+  prefix_main = os.path.join(proj_dir, "src/main/resources/ml-1m/")
+  prefix = os.path.join(proj_dir, "src/test/resources/ml-1m/")
+  if use_small:
+    ratings_uri = os.path.join(prefix, "ratings_1000.dat")
+    users_uri = os.path.join(prefix, "users_100.dat")
   else:
-    proj_dir = get_project_dir()
-    prefix_main = os.path.join(proj_dir, "src/main/resources/ml-1m/")
-    prefix = os.path.join(proj_dir, "src/test/resources/ml-1m/")
-    if use_small:
-      ratings_uri = os.path.join(prefix, "ratings_1000.dat")
-      users_uri = os.path.join(prefix, "users_100.dat")
-    else:
-      ratings_uri = os.path.join(prefix_main,"ratings.dat")
-      users_uri = os.path.join(prefix_main, "users.dat")
-    movies_uri = os.path.join(prefix_main, "movies.dat")
-    add_to_sys(proj_dir)
+    ratings_uri = os.path.join(prefix_main,"ratings.dat")
+    users_uri = os.path.join(prefix_main, "users.dat")
+  movies_uri = os.path.join(prefix_main, "movies.dat")
+  add_to_sys(proj_dir)
 
   ratings_col_names = ["user_id", "movie_id", "rating", "timestamp"]
   ratings_col_types = [int, int, int, int]  # for some files, ratings are floats

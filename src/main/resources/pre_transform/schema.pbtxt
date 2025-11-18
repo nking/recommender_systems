@@ -1,7 +1,6 @@
 feature {
-  name: "gender"
+  name: "genres"
   type: BYTES
-  domain: "gender"
   presence {
     min_fraction: 1.0
     min_count: 1
@@ -13,8 +12,9 @@ feature {
   }
 }
 feature {
-  name: "genres"
+  name: "gender"
   type: BYTES
+  domain: "gender"
   presence {
     min_fraction: 1.0
     min_count: 1
