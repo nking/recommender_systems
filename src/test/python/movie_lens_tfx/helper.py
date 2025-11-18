@@ -45,7 +45,7 @@ def get_test_data(use_small=True) -> Tuple[str, str, list[str]]:
     ratings_uri = os.path.join(prefix, "ratings_1000.dat")
     users_uri = os.path.join(prefix, "users_100.dat")
   else:
-    ratings_uri = os.path.join(prefix_main,"ratings.dat")
+    ratings_uri = os.path.join(prefix_main,"ratings_timestamp_sorted_part_1.dat")
     users_uri = os.path.join(prefix_main, "users.dat")
   movies_uri = os.path.join(prefix_main, "movies.dat")
   add_to_sys(proj_dir)
