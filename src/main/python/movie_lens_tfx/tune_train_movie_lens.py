@@ -27,8 +27,8 @@ from tfx_bsl.public import tfxio
 
 from absl import logging
 
-logging.set_verbosity(logging.INFO)
-logging.set_stderrthreshold(logging.INFO)
+logging.set_verbosity(logging.WARNING)
+logging.set_stderrthreshold(logging.WARNING)
 
 DEFAULT_BATCH_SIZE = 64
 DEFAULT_NUM_EPOCHS = 20

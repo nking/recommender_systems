@@ -12,8 +12,8 @@ from tfx.utils import name_utils
 from movie_lens_tfx.ingest_component.ingest_movie_lens_custom_component import *
 from helper import *
 
-logging.set_verbosity(logging.INFO)
-logging.set_stderrthreshold(logging.INFO)
+logging.set_verbosity(logging.WARNING)
+logging.set_stderrthreshold(logging.WARNING)
 
 class CSVExampleGenTest(tf.test.TestCase):
 

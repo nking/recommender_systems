@@ -8,8 +8,8 @@ from tfx.types.system_executions import Process
 
 import os
 from absl import logging
-logging.set_verbosity(logging.INFO)
-logging.set_stderrthreshold(logging.INFO)
+logging.set_verbosity(logging.WARNING)
+logging.set_stderrthreshold(logging.WARNING)
 
 class DictOutput(TypedDict):
   num_train: int

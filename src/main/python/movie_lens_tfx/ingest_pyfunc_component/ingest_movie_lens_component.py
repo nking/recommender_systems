@@ -13,8 +13,8 @@ from tfx import v1 as tfx
 import tensorflow as tf
 
 tf.get_logger().propagate = False
-logging.set_verbosity(logging.INFO)
-logging.set_stderrthreshold(logging.INFO)
+logging.set_verbosity(logging.WARNING)
+logging.set_stderrthreshold(logging.WARNING)
 pp = pprint.PrettyPrinter()
 
 logging.debug(f"TensorFlow version: {tf.__version__}")

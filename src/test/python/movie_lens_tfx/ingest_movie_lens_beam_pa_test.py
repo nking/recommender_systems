@@ -6,8 +6,8 @@ from helper import *
 from movie_lens_tfx.misc.ingest_movie_lens_beam_pa import *
 
 tf.get_logger().propagate = False
-logging.set_verbosity(logging.INFO)
-logging.set_stderrthreshold(logging.INFO)
+logging.set_verbosity(logging.WARNING)
+logging.set_stderrthreshold(logging.WARNING)
 
 class IngestMovieLensBeamPATest(tf.test.TestCase):
 

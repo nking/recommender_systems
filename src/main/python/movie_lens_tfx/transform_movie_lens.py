@@ -5,8 +5,8 @@ from tensorflow_transform.tf_metadata import schema_utils
 
 # from tfx.components.trainer import fn_args_utils
 # from tfx_bsl.tfxio import dataset_options
-logging.set_verbosity(logging.DEBUG)
-logging.set_stderrthreshold(logging.DEBUG)
+logging.set_verbosity(logging.WARNING)
+logging.set_stderrthreshold(logging.WARNING)
 
 ## fixed vocabularies, known ahead of time
 #genres = ["Action", "Adventure", "Animation", "Children", "Comedy",

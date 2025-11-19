@@ -18,8 +18,8 @@ from helper import *
 
 tf.get_logger().propagate = False
 from absl import logging
-logging.set_verbosity(logging.INFO)
-logging.set_stderrthreshold(logging.INFO)
+logging.set_verbosity(logging.WARNING)
+logging.set_stderrthreshold(logging.WARNING)
 
 class TuneTrainTest(tf.test.TestCase):
 

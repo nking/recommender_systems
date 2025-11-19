@@ -15,8 +15,8 @@ from helper import *
 from absl import logging
 
 tf.get_logger().propagate = False
-logging.set_verbosity(logging.INFO)
-logging.set_stderrthreshold(logging.INFO)
+logging.set_verbosity(logging.WARNING)
+logging.set_stderrthreshold(logging.WARNING)
 #log_dir = os.path.join(os.getcwd(), "../../../../bin")
 
 class TransformTest(tf.test.TestCase):
