@@ -1,5 +1,6 @@
 import apache_beam as beam
 from apache_beam.io import parquetio
+from apache_beam.io.filesystems import FileSystems
 
 """
 offers an IngestAndJoin which reads Parquet files into pyarrow tables,
@@ -49,8 +50,7 @@ class ReadCSVToRecords(beam.PTransform):
         skip = 0
       pa_schema_list = create_pa_schema(self.infiles_dict[key])
       pc[key] = (pcoll | f"r{random.randint(0,10000000000)}"
-        >> beam.io.ReadFromText(
-        self.infiles_dict[key]['uri'], skip_header_lines=skip,
+        >> beam.io.ReadFromText(self.infiles_dict[key]['uri'], skip_header_lines=skip,
         coder=CustomUTF8Coder())
         | f'parse_{key}_{time.time_ns()}'
         >> beam.Map(self.line_to_record, self.infiles_dict[key],
@@ -81,7 +81,18 @@ class WriteParquet(beam.PTransform):
     logging.debug(f'file_path_prefix={self.file_path_prefix}')
     pa_schema_list = create_pa_schema(self.infile_dict)
     pa_schema = pa.schema(pa_schema_list)
-    logging.debug(f'pa_schema={pa_schema}')
+    logging.debug(f'pa_schema=\n{pa_schema}')
+    print(f'pa_schema={pa_schema}')
+    
+    """
+    sampled_data = pcoll | f'Sample Elements_{random.randint(0, 1000000000)}' >> beam.combiners.Sample.FixedSizeGlobally(5)
+    (
+      sampled_data
+      | f'Flatten List_{random.randint(0, 1000000000)}' >> beam.FlatMap(lambda x: x)
+      | f'Print Rows_{random.randint(0, 1000000000)}' >> beam.Map(print)
+    )
+    """
+    
     pcoll | (f'write_to_parquet_{time.time_ns()}'
       >> parquetio.WriteToParquet(
       file_path_prefix=self.file_path_prefix,
@@ -109,114 +120,32 @@ class WriteJoinedRatingsParquet(beam.PTransform):
     super().__init__()
     self.file_path_prefix = file_path_prefix
     self.column_name_type_list = column_name_type_list
-
-  def expand(self, pcoll=None):
     pa_schema_list = create_pa_schema_from_list(self.column_name_type_list)
-    pa_schema = pa.schema(pa_schema_list)
-    pcoll | (f'write_to_parquet_{time.time_ns()}'
-      >> parquetio.WriteToParquet(
-      file_path_prefix=self.file_path_prefix,
-      schema=pa_schema, file_name_suffix='.parquet'))
-
-class LeftJoinFn(beam.DoFn):
-  """
-  left join of left PCollection rows with right PCollection row.
-
-  if there is  more than one row in the right, a ValueError is thrown.
-
-  :return returns merged rows
-  """
-  def __init__(self, right_filter_cols,
-    l_key_col : str, r_key_col : str, debug_tag:str=""):
-    super().__init__()
-    self.right_filter_cols = right_filter_cols
-    self.debug_tag = debug_tag
-    self.l_key_col = l_key_col
-    self.r_key_col = r_key_col
-
-  #TODO: consider also implementing def process_batch
-  def process(self, kv):
-    key, grouped_elements = kv
-    # grouped_elements is a dictionary with keys 'left' and 'right'
-    # both are lists of lists.
-
-    if len(grouped_elements['right']) != 1:
-      raise ValueError(f"{self.debug_tag}: in join, right list length != 1: key={key}, grouped_elements={grouped_elements}")
-
-    right_table = grouped_elements['right'][0]
-
-    logging.debug("LeftJoin")
-
-    #does nothing if this is a right join with no left element
-    output_rows = []
-    for left_table in grouped_elements['left']:
-      # join grouped_elements['left'] and grouped_elements['right'][0]
-      for left_row in left_table.to_pylist():
-        for right_row in right_table.to_pylist():
-          if left_row[self.l_key_col] == right_row[self.r_key_col]:
-            for d in self.right_filter_cols:
-              del right_row[d]
-            output_rows.append({**left_row, **right_row})
-
-    logging.debug(f"LeftJoin yield {len(output_rows)}")
-
-    if output_rows:
-      yield pa.Table.from_pylist(output_rows)
-
-class MergeByKey(beam.PTransform):
-  """
-  the PTransform operates on 1 PCollection, but we can add the other
-  as a side input by giving it to the constructor.
-
-  Merge the left and right PCollections on the given key columns,
-  and exclude filter_cols of the right PCollection from entering
-  the output left joined rows.
-
-  The left PCollection is the main PCollection piped to the PTransform
-  while the right PCollection is given as side input to the
-  constructor, along with the other parameters"""
-  def __init__(self, r_pc : beam.PCollection,
-    l_key_col : str, r_key_col : str,
-    filter_cols : List[str], debug_tag : str = ""):
-    super().__init__()
-    self.r_pc = r_pc
-    self.l_key_col = l_key_col
-    self.r_key_col = r_key_col
-    self.filter_cols = filter_cols
-    self.debug_tag = debug_tag
-
-  def expand(self, l_pc):
-
-    logging.debug("MergeByKey")
-    l_keyed = (l_pc | beam.FlatMap(
-        lambda table: [(row[self.l_key_col], table)
-          for row in table.to_pylist()])
-        )
-
-    r_keyed = (self.r_pc | beam.FlatMap(
-        lambda table: [(row[self.r_key_col], table)
-          for row in table.to_pylist()])
-        )
-
-    logging.debug("MergeByKey: keyed")
-
-    # multiple lefts on one line, and one in right's list:
-    grouped_data = ({'left': l_keyed, 'right': r_keyed}
-      | f'group_by_key_{random.randint(0,1000000000)}'
-      >> beam.CoGroupByKey())
-
-    logging.debug("MergeByKey: grouped_data")
-
-    try:
-      joined_data = (grouped_data
-        | f'left_join_values_{random.randint(0,1000000000)}'
-        >> beam.ParDo(LeftJoinFn(self.filter_cols,
-           self.l_key_col, self.r_key_col, debug_tag=self.debug_tag)))
-    except Exception as ex:
-      logging.error(f"ERROR for {self.debug_tag}: l_key_col={self.l_key_col}, r_key_col={self.r_key_col}")
-      raise ex
-
-    return joined_data
+    self.pa_schema = pa.schema(pa_schema_list)
+  
+  def line_to_record(self, line):
+    if len(self.column_name_type_list) != len(line):
+      raise ValueError(f"line length = {len(line)} and column_name_type_list length = {len(self.column_name_type_list)}")
+    out = {}
+    for i, item in enumerate(line):
+      key = self.column_name_type_list[i][0]
+      type = self.column_name_type_list[i][1]
+      if type == int:
+        out[key] = int(item)
+      elif type == float:
+        out[key] = float(item)
+      else:
+        out[key] = item
+    return out
+  
+  def expand(self, pcoll=None):
+    
+    pcollrecord = pcoll | (f'format_to_records_{random.randint(0, 1000000000)}'
+      >> beam.Map(self.line_to_record))
+    
+    pcollrecord | (f'write_to_parquet_{time.time_ns()}'
+      >> parquetio.WriteToParquet(file_path_prefix=self.file_path_prefix,
+      schema=self.pa_schema, file_name_suffix='.parquet'))
 
 #TODO: change the use of uris here and in the parquet writes
 class ReadFiles(beam.PTransform):
@@ -249,64 +178,3 @@ class ReadFiles(beam.PTransform):
 
       logging.debug(f"read {key} parquet file")
     return pc
-
-class IngestAndJoin(beam.PTransform):
-  """
-  reads in the 3 expected files from the uris given in infiles_dict, and then
-  left joins on ratings with user information and movie genres to
-  make a PCollection.  The PCollection has an associated schema in it.
-
-  :param infiles_dict
-    a dictionary of file information for each of the 3 files, that is
-    the ratings file, movies file, and users file in parquet format.
-    the dictionary is made by using movie_lens_utils.create_infile_dict
-    for each file, then movie_lens_utils.create_infiles_dict.
-  :return: a tuple of PCollection of ratings with joined information from users and movies where each tuple is for a
-     partition specified in partition list.  The PCollection has an associated schema
-  """
-  def __init__(self, infiles_dict):
-    super().__init__()
-    self.infiles_dict = infiles_dict
-
-  def expand(self, pcoll=None):
-    err = infiles_dict_formedness_error(self.infiles_dict)
-    if err:
-      raise ValueError(err)
-
-    tables_dict = pcoll | f"read_{random.randint(0, 1000000000000)}" \
-      >> ReadFiles(self.infiles_dict)
-
-    # ratings: user_id,movie_id,rating,timestamp
-    # movie_id,title,genre
-    # user_id::gender::age::occupation::zipcode
-       # user_id,movie_id,rating,timestamp,gender,age,occupation,zipcode
-    ratings_1 = (tables_dict['ratings'] |
-      f"left_join_ratings_users_{random.randint(0,1000000000)}"
-      >> MergeByKey(tables_dict['users'],
-      'user_id', 'user_id',
-      filter_cols=['zipcode', 'user_id'], debug_tag="R-U"))
-
-    # user_id,movie_id,rating,timestamp,gender,age,occupation,zipcode,genres
-    ratings = (ratings_1 |
-      f"left_join_ratings_users_movies_{random.randint(0,1000000000)}"
-      >> MergeByKey(tables_dict['movies'],
-      'movie_id', 'movie_id',
-      filter_cols=['title', 'movie_id'],
-      debug_tag="R-M"))
-
-    schemas = create_namedtuple_schemas(self.infiles_dict)
-    #format, compatible with apache_beam.coders.registry.
-    # list of tuples of column_name, column_type
-    columns = schemas['ratings'].copy()
-    #append users, skipping infiles_dict['users']['cols']['zipcode']
-    for _name, _type in schemas['users']:
-      if _name != 'zipcode' and _name != 'user_id':
-        columns.append((_name, _type))
-    # append movies, skipping title
-    for _name, _type in schemas['movies']:
-      if _name != 'title' and _name != 'movie_id':
-        columns.append((_name, _type))
-
-    logging.debug(f"columns={columns}")
-
-    return ratings, columns
