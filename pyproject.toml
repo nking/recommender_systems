@@ -13,6 +13,7 @@ requires-python = ">=3.10.0,<3.11.0"
 dependencies = [
     "pyarrow==10.0.1",
     "python-snappy==0.7.3",
+    "numpy==1.26.4",
     "apache-beam==2.59.0",
     "tensorflow==2.16.1",
     "tensorflow-transform==1.16.0",
@@ -20,6 +21,7 @@ dependencies = [
     "tensorflow-data-validation==1.16.1",
     "tensorflow-metadata==1.16.1",
     "ml-metadata==1.16.0",
+    "pandas==1.5.3"
 ]
 readme = "README.md"
 license = "MIT"
@@ -62,4 +64,4 @@ Repository = "https://github.com/nking/recommender_systems.git"
 
 [project.optional-dependencies]
 test = ["pytest", "nannyml>=0.13.1", "polars>=1.35.2", "plotly>=6.4.0", "kaleido>=1.2.0"]
-eda = ["dcor", "pytz", "pyspark==3.2.4"]
+eda = ["dcor", "pytz", "pyspark==3.2.4", "scipy"]
