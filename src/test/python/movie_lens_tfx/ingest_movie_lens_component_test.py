@@ -138,6 +138,7 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
     self.assertGreaterEqual(artifact_count, execution_count)
 
     artifact_uri = artifacts[0].uri
+    joined_count = 0
     for split_name in self.split_names:
       dir_path = f'{artifact_uri}/{get_split_dir_name(split_name)}'
       file_paths = [os.path.join(dir_path, name) for name in os.listdir(dir_path)]
@@ -185,7 +186,14 @@ class IngestMovieLensComponentTest(tf.test.TestCase):
           logging.debug(example)
       except Exception as e:
         self.fail(e)
+      try:
+        for tfrecord in dataset:
+          joined_count += 1
+      except Exception as e:
+        self.fail(e)
 
+    #print(f"joined_count={joined_count}")
+    self.assertEqual(joined_count, 1000)
     #=============== verify statistics_gen results ==============
 
     logging.debug(f"statistics_gen.id={statistics_gen.id}") #StatisticsGen
