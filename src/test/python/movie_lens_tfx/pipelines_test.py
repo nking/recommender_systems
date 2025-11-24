@@ -44,7 +44,7 @@ class PipelinesTest(tf.test.TestCase):
     self.MIN_EVAL_SIZE = 50 #make this larger for production pipeline
     self.name = 'test run of pipelines'
 
-  def _est_main_model(self):
+  def test_main_model(self):
     
     run_pipeline_before_bulk_infer = True
     run_bulk_infer = True
@@ -501,7 +501,7 @@ class PipelinesTest(tf.test.TestCase):
     tr_dir = os.path.join(get_project_dir(), "src/main/python/movie_lens_tfx")
     
     serving_model_dir = os.path.join(PIPELINE_ROOT, 'serving_model')
-    output_parquet_path = os.path.join(PIPELINE_ROOT, 'transformed_examples')
+    output_parquet_path = os.path.join(PIPELINE_ROOT, 'transformed_parquet_examples')
     os.makedirs(output_parquet_path, exist_ok=True)
     team_lead = "Nichole King"
     import subprocess
@@ -549,7 +549,7 @@ class PipelinesTest(tf.test.TestCase):
     artifacts = store.get_artifacts()
     logging.debug(f"MLMD store artifacts={artifacts}")
     
-    components = pipeline_factory.build_components(PIPELINE_TYPE.PRODUCTION)
+    components = pipeline_factory.build_components_metadata_model(PIPELINE_TYPE.PRODUCTION)
     # simulate experimentation of one model family
     my_pipeline = tfx.dsl.Pipeline(
       pipeline_name=PIPELINE_NAME,
