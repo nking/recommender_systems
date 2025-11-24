@@ -5,7 +5,7 @@ import pickle
 # and related files
 # they have co Copyright 2020 Google LLC. All Rights Reserved.
 # Licensed under the Apache License, Version 2.0 (the "License");
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Text, Any
 import tensorflow as tf
 import tensorflow.keras as keras
 #import tf_keras as keras ## this fails
@@ -15,6 +15,7 @@ import math
 import json
 import keras_tuner
 import tensorflow_transform as tft
+from tfx.types.standard_artifacts import Model
 from tensorflow_metadata.proto.v0 import statistics_pb2
 #tuner needs this:
 from tfx.components.trainer.fn_args_utils import FnArgs
@@ -560,6 +561,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       self.candidate_model = CandidateModel(n_movies=n_movies,
                                             n_genres=n_genres,
                                             layer_sizes=layer_sizes,
+                                            embed_out_dim=embed_out_dim,
                                             reg=reg,
                                             drop_rate=drop_rate,
                                             incl_genres=incl_genres,
@@ -848,6 +850,13 @@ def get_default_hyperparameters(custom_config, input_element_spec) -> keras_tune
   num_eval = int(num_examples * 0.1)
   hp.Fixed("num_train", num_train)
   hp.Fixed("num_eval", num_eval)
+  hp.Fixed('version', custom_config.get("version", "1.0.0"))
+  if "model_name" in custom_config:
+    hp.Fixed('model_name', custom_config["model_name"])
+  if "team_lead" in custom_config:
+    hp.Fixed('team_lead', custom_config["model_name"])
+  if "git_hash" in custom_config:
+    hp.Fixed('git_hash', custom_config["model_name"])
   
   return hp
 
