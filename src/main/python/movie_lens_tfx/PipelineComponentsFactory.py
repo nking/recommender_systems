@@ -460,11 +460,11 @@ class PipelineComponentsFactory():
       "device": self.device,
       "num_examples": self.num_examples,
       "version": self.version,
-      "model_name": MODEL_NAME.USER_MOVIE.value,
+      "model_name": MODEL_NAME.MOVIE_METADATA.value,
     }
     push_config = {
       "version": self.version,
-      "model_name": MODEL_NAME.USER_MOVIE.value,
+      "model_name": MODEL_NAME.MOVIE_METADATA.value,
     }
     if self.team_lead:
       tuner_custom_config['team_lead'] = self.team_lead
