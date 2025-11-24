@@ -2,7 +2,7 @@ from tfx.dsl.components.base import base_beam_component
 
 from tfx.components import StatisticsGen, SchemaGen, ExampleValidator, Evaluator, Pusher
 import tensorflow_model_analysis as tfma
-
+from movie_lens_tfx.bulk_infer_component.BulkInferrerBeam import BulkInferrerBeam
 import enum
 
 from tfx.proto import pusher_pb2
@@ -14,12 +14,42 @@ class PIPELINE_TYPE(enum.Enum):
   BASELINE = "baseline"
   PRODUCTION = "production"
   BATCH_INFERENCE = "batch_inference"
+  
+class MODEL_NAME(enum.Enum):
+  USER_MOVIE = "two_tower_dnn"
+  MOVIE_METADATA = "movie_metadata"
 
 class PipelineComponentsFactory():
   def __init__(self, num_examples:int, infiles_dict_ser:str, output_config_ser:str, transform_dir:str,
     user_id_max: int, movie_id_max:int, n_genres:int, n_age_groups:int,
     min_eval_size:int=100, batch_size:int=64, num_epochs:int=20, device:str="CPU",
-    serving_model_dir:str=None, output_parquet_path:str=None):
+    serving_model_dir:str=None,
+    output_parquet_path:str=None, version:str="1.0.0", git_hash:str=None, team_lead:str=None,):
+    """
+    A factory to build components for a few different workflows.
+    NOTE: for best results, the pipeline for the movie metadata model should be different from the pipeline for the user-movie model
+    because there are resolver components using latest pipeline results tnad those resolvers do not currently have a property
+    to help distinguish between model artifact properties, branches etc.
+    
+    Args:
+      num_examples: int, number of examples to use
+      infiles_dict_ser: str, path to input dictionary file
+      output_config_ser: str, path to output dictionary file
+      transform_dir: str, path to directory containing TFRecord files
+      user_id_max: int, maximum user ID
+      movie_id_max: int, maximum movie ID
+      n_genres: int, number of genres
+      n_age_groups: int, number of age groups
+      min_eval_size: int, minimum number of examples
+      batch_size: int, number of examples per batch
+      num_epochs: int, number of epochs
+      device: str, device name
+      serving_model_dir: str, path to serving model
+      output_parquet_path: str, path to output parquet directory for transformed examples
+      version: str, version name, e.g. string of major.mino.patch
+      git_hash: str, git commit hash
+      team_lead: str, team lead
+    """
     self.num_examples = num_examples
     self.infiles_dict_ser = infiles_dict_ser
     self.output_config_ser = output_config_ser
@@ -34,9 +64,15 @@ class PipelineComponentsFactory():
     self.serving_model_dir = serving_model_dir
     self.output_parquet_path = output_parquet_path
     self.device = device
+    self.version = version
+    self.git_hash = git_hash
+    self.team_lead = team_lead
     
   def build_components(self, type: PIPELINE_TYPE, run_example_diff:bool=False, pre_transform_schema_dir_path:str=None,
     post_transform_schema_dir_path:str=None) -> List[base_beam_component.BaseBeamComponent]:
+    """
+    build components for the main model, the Two-Tower DNN model
+    """
     
     #NOTE: can add .with_id('...') onto end of any component, and that will be the name of the directory under the PIPELINE_ROOT
     # used instea dof the compoonent name
@@ -79,7 +115,6 @@ class PipelineComponentsFactory():
       )
       return [example_gen, model_resolver, bulk_inferrer]
       """
-      from movie_lens_tfx.bulk_infer_component.BulkInferrerBeam import BulkInferrerBeam
       bulk_inferrer = BulkInferrerBeam(
         examples=example_gen.outputs['output_examples'],
         model=model_resolver.outputs['model'],
@@ -104,7 +139,19 @@ class PipelineComponentsFactory():
       "NUM_EPOCHS":self.num_epochs,
       "device":self.device,
       "num_examples":self.num_examples,
+      "version" : self.version,
+      "model_name" : MODEL_NAME.USER_MOVIE.value,
     }
+    push_config = {
+      "version": self.version,
+      "model_name": MODEL_NAME.USER_MOVIE.value,
+    }
+    if self.team_lead:
+      tuner_custom_config['team_lead'] = self.team_lead
+      push_config['team_lead'] = self.team_lead
+    if self.git_hash:
+      tuner_custom_config['git_hash'] = self.git_hash
+      push_config['git_hash'] = self.git_hash
     
     #TODO: consider how to use tfx.dsl.Cond to check for existing output of example_gen for same inputs
     #  and resolve those instead of repeating work.  similarly a conditional for existing output from
@@ -190,6 +237,23 @@ class PipelineComponentsFactory():
       custom_config=tuner_custom_config,
     )
     
+    #custom_config become part of the properties of the component execution records and are searchable in MLMD.
+    # e.g.
+    # SELECT
+    #     e.id,
+    #     e.type_name
+    # FROM
+    #     Execution AS e,
+    #     Property AS p_name
+    # WHERE
+    #     e.type_name = 'tfx.components.trainer.executor.Executor'
+    # AND
+    #     e.id = p_name.execution_id
+    # AND
+    #     p_name.name = 'model_name'
+    # AND
+    #     p_name.string_value = MODEL_NAME.USER_MOVIE.value
+    
     # see https://github.com/tensorflow/tfx/blob/master/tfx/examples/penguin/penguin_pipeline_local.py
     # trainer = trainer_movie_lens.MovieLensTrainer(
     trainer = tfx.components.Trainer(
@@ -197,6 +261,7 @@ class PipelineComponentsFactory():
       examples=ratings_transform.outputs['transformed_examples'],
       transform_graph=ratings_transform.outputs['transform_graph'],
       hyperparameters=(tuner.outputs['best_hyperparameters']),
+      custom_config=tuner_custom_config,
     )
   
     # for the current trained model to be blessed,
@@ -277,7 +342,7 @@ class PipelineComponentsFactory():
         ])
   
     #is resolver.Resolver the same as tfx.dsl.Resolver?
-    model_resolver = (tfx.dsl.Resolver(
+    model_resolver = (tfx.dsl.Resolver( #model resolver
       strategy_class=tfx.dsl.experimental.LatestBlessedModelStrategy,
       model=tfx.dsl.Channel(type=tfx.types.standard_artifacts.Model),
       model_blessing=tfx.dsl.Channel(type=tfx.types.standard_artifacts.ModelBlessing))
@@ -337,7 +402,9 @@ class PipelineComponentsFactory():
         #infra_blessing=infra_validator.outputs['blessing'],
         push_destination=pusher_pb2.PushDestination(
           filesystem=pusher_pb2.PushDestination.Filesystem(
-            base_directory=self.serving_model_dir)))
+            base_directory=self.serving_model_dir)),
+        custom_config=push_config
+      )
     
     components = [example_gen, statistics_gen, schema_gen]
     if pre_transform_schema_importer is not None:
@@ -346,5 +413,250 @@ class PipelineComponentsFactory():
     if example_resolver is not None:
       components.extend([example_resolver, example_diff])
     components.extend([ratings_transform, model_resolver, tuner, trainer,evaluator, pusher])
+    
+    return components
+  
+  def build_components_metadata_model(self, type: PIPELINE_TYPE) -> \
+  List[base_beam_component.BaseBeamComponent]:
+    """
+    build components for the metadata model.  note that none of the example diff monitoring is done here because that would be redundant
+    to work done in the main pipeline.
+    """
+    
+    example_gen = MovieLensExampleGen(
+      infiles_dict_ser=self.infiles_dict_ser,
+      output_config_ser=self.output_config_ser)
+    
+    print(f'type={type}')
+    if type == PIPELINE_TYPE.BATCH_INFERENCE:
+      if self.serving_model_dir is None:
+        raise ValueError(
+          f"missing serving_model_dir.  location of Format-Serving directory is needed.")
+      
+      model_resolver = (tfx.dsl.Resolver(
+        strategy_class=tfx.dsl.experimental.LatestBlessedModelStrategy,
+        model=tfx.dsl.Channel(type=tfx.types.standard_artifacts.Model),
+        model_blessing=tfx.dsl.Channel(
+          type=tfx.types.standard_artifacts.ModelBlessing))
+                        .with_id('latest_blessed_model_resolver'))
+    
+      bulk_inferrer = BulkInferrerBeam(
+        examples=example_gen.outputs['output_examples'],
+        model=model_resolver.outputs['model'],
+        # model_spec type is bulk_inferrer_pb2.ModelSpec
+        model_spec=tfx.proto.ModelSpec(
+          model_signature_name=['serving_default'],
+          tag=[tf.saved_model.SERVING]
+        )
+      )
+      return [example_gen, model_resolver, bulk_inferrer]
+    
+    tuner_custom_config = {
+      'movie_id_max': self.movie_id_max,
+      'n_genres': self.n_genres,
+      'run_eagerly': False,
+      'BATCH_SIZE': self.batch_size,
+      "NUM_EPOCHS": self.num_epochs,
+      "device": self.device,
+      "num_examples": self.num_examples,
+      "version": self.version,
+      "model_name": MODEL_NAME.USER_MOVIE.value,
+    }
+    push_config = {
+      "version": self.version,
+      "model_name": MODEL_NAME.USER_MOVIE.value,
+    }
+    if self.team_lead:
+      tuner_custom_config['team_lead'] = self.team_lead
+      push_config['team_lead'] = self.team_lead
+    if self.git_hash:
+      tuner_custom_config['git_hash'] = self.git_hash
+      push_config['git_hash'] = self.git_hash
+    
+    statistics_gen = StatisticsGen(
+      examples=example_gen.outputs['output_examples'])
+    
+    schema_gen = SchemaGen(
+      statistics=statistics_gen.outputs['statistics'],
+      infer_feature_shape=True)
+      
+    print(
+      f"module_file={os.path.join(self.transform_dir, 'transform_movie_lens_metadata.py')}")
+    
+    ratings_transform = tfx.components.Transform(
+      examples=example_gen.outputs['output_examples'],
+      schema=schema_gen.outputs['schema'],
+      module_file=os.path.join(self.transform_dir,
+                               'transform_movie_lens_metadata.py'))
+    
+    if type == PIPELINE_TYPE.PREPROCESSING:
+      parquet_task = tfrecord_to_parquet.FromTFRecordToParquet(
+        transform_graph=ratings_transform.outputs['transform_graph'],
+        transformed_examples=ratings_transform.outputs[
+          'transformed_examples'],
+        output_file_path=self.output_parquet_path
+      )
+      components = [example_gen, statistics_gen, schema_gen]
+      components.extend([ratings_transform, parquet_task])
+      return components
+    
+    tuner = tfx.components.Tuner(
+      module_file=os.path.join(self.transform_dir, 'tune_train_movie_lens_metadata.py'),
+      examples=ratings_transform.outputs['transformed_examples'],
+      # schema is already in the transform graph
+      transform_graph=ratings_transform.outputs['transform_graph'],
+      # args: splits, num_steps.  splits defaults are assumed if none given
+      custom_config=tuner_custom_config,
+    )
+    
+    # see https://github.com/tensorflow/tfx/blob/master/tfx/examples/penguin/penguin_pipeline_local.py
+    # trainer = trainer_movie_lens.MovieLensTrainer(
+    trainer = tfx.components.Trainer(
+      module_file=os.path.join(self.transform_dir, 'tune_train_movie_lens_metadata.py'),
+      examples=ratings_transform.outputs['transformed_examples'],
+      transform_graph=ratings_transform.outputs['transform_graph'],
+      hyperparameters=(tuner.outputs['best_hyperparameters']),
+      custom_config=tuner_custom_config,
+    )
+    
+    # for the current trained model to be blessed,
+    # - resolver does not have to find a baseline model, but it does have to provide at least one value
+    #   threshold and no change thresholds.  none of the later because no baseline to compare to.
+    
+    # - there must be at least 1 threshold defined
+    
+    # Uses TFMA to compute a evaluation statistics over features of a model and
+    # perform quality validation of a candidate model (compared to a baseline).
+    if type == PIPELINE_TYPE.BASELINE:
+      eval_config = tfma.EvalConfig(
+        model_specs=[
+          tfma.ModelSpec(signature_name='serving_default',
+                         label_key='rating',
+                         preprocessing_function_names=[
+                           'transform_features']),
+        ],
+        slicing_specs=[
+          tfma.SlicingSpec(),
+          # tfma.SlicingSpec(feature_keys=['hr_wk'])
+        ],
+        metrics_specs=[
+          tfma.MetricsSpec(
+            # The metrics added here are in addition to those saved with the
+            # model (assuming either a keras model or EvalSavedModel is used).
+            # Any metrics added into the saved model (for example using
+            # model.compile(..., metrics=[...]), etc) will be computed
+            # automatically.
+            metrics=[
+              # start with simple to see blessing
+              tfma.MetricConfig(
+                class_name='ExampleCount',
+                # Requires at least min_eval_size examples to be present in the evaluation data.
+                # This is the simplest possible "blessing" check.
+                threshold=tfma.MetricThreshold(
+                  value_threshold=tfma.GenericValueThreshold(
+                    lower_bound={'value': self.min_eval_size}
+                  ))),
+            ]
+          )
+        ])
+    else:
+      eval_config = tfma.EvalConfig(
+        model_specs=[
+          tfma.ModelSpec(name='candidate',
+                         signature_name='serving_default',
+                         label_key='rating',
+                         preprocessing_function_names=[
+                           'transform_features']),
+          tfma.ModelSpec(name='baseline',
+                         signature_name='serving_default',
+                         label_key='rating',
+                         preprocessing_function_names=[
+                           'transform_features'], is_baseline=True)
+        ],
+        slicing_specs=[
+          tfma.SlicingSpec(),
+          # tfma.SlicingSpec(feature_keys=['hr_wk'])
+        ],
+        metrics_specs=[
+          tfma.MetricsSpec(
+            metrics=[
+              # start with simple to see blessing
+              tfma.MetricConfig(
+                class_name='ExampleCount',
+                # Requires at least min_eval_size examples to be present in the evaluation data.
+                # This is the simplest possible "blessing" check.
+                threshold=tfma.MetricThreshold(
+                  value_threshold=tfma.GenericValueThreshold(
+                    lower_bound={'value': self.min_eval_size}
+                  ))),
+            ]
+          )
+        ])
+    
+    # is resolver.Resolver the same as tfx.dsl.Resolver?
+    model_resolver = (tfx.dsl.Resolver(  # model resolver
+      strategy_class=tfx.dsl.experimental.LatestBlessedModelStrategy,
+      model=tfx.dsl.Channel(type=tfx.types.standard_artifacts.Model),
+      model_blessing=tfx.dsl.Channel(
+        type=tfx.types.standard_artifacts.ModelBlessing))
+                      .with_id('latest_blessed_model_resolver'))
+    
+    # see https://www.tensorflow.org/tfx/guide/evaluator
+    evaluator = Evaluator(
+      examples=example_gen.outputs['output_examples'],
+      model=trainer.outputs['model'],
+      baseline_model=model_resolver.outputs['model'],
+      eval_config=eval_config)
+    # outputs: evaluation, blessing
+    # it creates an empty file called BLESSED or NOT_BLESSED in <pipeline_path>/Evaluator/blessing/9]<number>/
+    
+    if type == PIPELINE_TYPE.BASELINE:
+      # TODO: save schema.pbtxt to version control when have a working version
+      components = [example_gen, statistics_gen, schema_gen]
+      components.extend([ratings_transform, tuner, trainer, model_resolver, evaluator])
+      return components
+    
+    # Checks whether the model passed the validation steps and pushes the model
+    # to a file destination if check passed.
+    pusher = None
+    with tfx.dsl.Cond(
+      evaluator.outputs['blessing'].future()[0].custom_property(
+        'blessed') == 1
+    ):
+      """
+      infra_validator = InfraValidator(
+        model=trainer.outputs['model'],
+        serving_spec=infra_validator_pb2.ServingSpec(
+         low_serving=infra_validator_pb2.TensorFlowServing(
+            tags=['latest']
+          ),
+          #kubernet tensorfs, or localDocker https://www.tensorflow.org/tfx/api_docs/python/tfx/v1/proto/ServingSpec
+          kubernetes=infra_validator_pb2.KubernetesConfig()
+          #or LocalDockerConfig
+        ),
+        validation_spec=infra_validator_pb2.ValidationSpec(
+          max_loading_time_seconds=60,
+          num_examples=1000
+        ),
+        request_spec=tfx.proto.RequestSpec(
+          tensorflow_serving=tfx.proto.TensorFlowServingRequestSpec(
+            signature_names=['serving_default']
+          ),
+          num_examples=10
+        )
+      )
+      """
+      pusher = Pusher(
+        model=trainer.outputs['model'],
+        model_blessing=evaluator.outputs['blessing'],
+        # infra_blessing=infra_validator.outputs['blessing'],
+        push_destination=pusher_pb2.PushDestination(
+          filesystem=pusher_pb2.PushDestination.Filesystem(
+            base_directory=self.serving_model_dir)),
+        custom_config=push_config
+      )
+    
+    components = [example_gen, statistics_gen, schema_gen]
+    components.extend([ratings_transform, model_resolver, tuner, trainer, evaluator, pusher])
     
     return components

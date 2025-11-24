@@ -11,8 +11,6 @@ import os
 import glob
 from typing import Text, Any, Dict
 
-#import trainer_movie_lens
-
 import tensorflow_transform as tft
 import random
 
@@ -46,7 +44,7 @@ class PipelinesTest(tf.test.TestCase):
     self.MIN_EVAL_SIZE = 50 #make this larger for production pipeline
     self.name = 'test run of pipelines'
 
-  def test1(self):
+  def _est_main_model(self):
     
     run_pipeline_before_bulk_infer = True
     run_bulk_infer = True
@@ -57,8 +55,7 @@ class PipelinesTest(tf.test.TestCase):
     # output_data_dir = os.path.join(os.environ.get('TEST_UNDECLARED_OUTPUTS_DIR',self.get_temp_dir()),self._testMethodName)
     output_data_dir = os.path.join(get_bin_dir(), self._testMethodName, test_num)
     PIPELINE_ROOT = os.path.join(output_data_dir, PIPELINE_NAME)
-    METADATA_PATH = os.path.join(PIPELINE_ROOT, 'tfx_metadata',
-                                 'metadata.db')
+    METADATA_PATH = os.path.join(PIPELINE_ROOT, 'tfx_metadata', 'metadata.db')
     
     if run_pipeline_before_bulk_infer:
       # remove results from previous test runs:
@@ -471,3 +468,97 @@ class PipelinesTest(tf.test.TestCase):
           f"Total inspected records across all files: {total_records_processed}")
         self.assertEqual(1000, total_records_processed)
       read_prediction_logs_from_directory(inference_result_uri)
+  
+  def test_metadata_model(self):
+    
+    test_num = "1"
+    
+    PIPELINE_NAME = 'TestMetadataPipelines'
+    # output_data_dir = os.path.join(os.environ.get('TEST_UNDECLARED_OUTPUTS_DIR',self.get_temp_dir()),self._testMethodName)
+    output_data_dir = os.path.join(get_bin_dir(), self._testMethodName, test_num)
+    PIPELINE_ROOT = os.path.join(output_data_dir, PIPELINE_NAME)
+    METADATA_PATH = os.path.join(PIPELINE_ROOT, 'tfx_metadata', 'metadata.db')
+    
+    # remove results from previous test runs:
+    try:
+      logging.debug(f"removing: {PIPELINE_ROOT}")
+      shutil.rmtree(PIPELINE_ROOT)
+    except OSError as e:
+      pass
+      
+    os.makedirs(os.path.join(PIPELINE_ROOT, 'tfx_metadata'), exist_ok=True)
+    
+    ENABLE_CACHE = True
+    
+    # metadata_connection_config = metadata_store_pb2.ConnectionConfig()
+    # metadata_connection_config.sqlite.SetInParent()
+    # metadata_connection = metadata.Metadata(metadata_connection_config)
+    metadata_connection_config = metadata.sqlite_metadata_connection_config(
+      METADATA_PATH)
+    
+    store = metadata_store.MetadataStore(metadata_connection_config)
+    
+    tr_dir = os.path.join(get_project_dir(), "src/main/python/movie_lens_tfx")
+    
+    serving_model_dir = os.path.join(PIPELINE_ROOT, 'serving_model')
+    output_parquet_path = os.path.join(PIPELINE_ROOT, 'transformed_examples')
+    os.makedirs(output_parquet_path, exist_ok=True)
+    team_lead = "Nichole King"
+    import subprocess
+    process = subprocess.Popen(['git', 'rev-parse', 'HEAD'], shell=False, stdout=subprocess.PIPE)
+    git_hash = process.communicate()[0].strip().decode()
+    
+    pipeline_factory = PipelineComponentsFactory(
+      num_examples=self.num_examples,
+      infiles_dict_ser=self.infiles_dict_ser,
+      output_config_ser=self.output_config_ser,
+      transform_dir=tr_dir, user_id_max=self.user_id_max,
+      movie_id_max=self.movie_id_max,
+      n_genres=self.n_genres, n_age_groups=self.n_age_groups,
+      min_eval_size=self.MIN_EVAL_SIZE,
+      batch_size=32, num_epochs=2, device="CPU",
+      serving_model_dir=serving_model_dir,
+      output_parquet_path=output_parquet_path, version= "1.0.0", git_hash=git_hash,
+      team_lead=team_lead)
+    
+    SETUP_FILE_PATH = os.path.join(get_project_dir(), 'setup.py')
+    
+    beam_pipeline_args = [
+      '--direct_running_mode=multi_processing',
+      '--direct_num_workers=0',
+      f'--setup_file={SETUP_FILE_PATH}',
+    ]
+    
+    baseline_components = pipeline_factory.build_components_metadata_model(PIPELINE_TYPE.BASELINE)
+    
+    # create baseline model
+    my_pipeline = tfx.dsl.Pipeline(
+      pipeline_name=PIPELINE_NAME,
+      pipeline_root=PIPELINE_ROOT,
+      components=baseline_components,
+      enable_cache=ENABLE_CACHE,
+      metadata_connection_config=metadata_connection_config,
+      beam_pipeline_args=beam_pipeline_args,
+    )
+    
+    tfx.orchestration.LocalDagRunner().run(my_pipeline)
+    logging.debug("BASELINE pipeline finished")
+    
+    artifact_types = store.get_artifact_types()
+    logging.debug(f"MLMD store artifact_types={artifact_types}")
+    artifacts = store.get_artifacts()
+    logging.debug(f"MLMD store artifacts={artifacts}")
+    
+    components = pipeline_factory.build_components(PIPELINE_TYPE.PRODUCTION)
+    # simulate experimentation of one model family
+    my_pipeline = tfx.dsl.Pipeline(
+      pipeline_name=PIPELINE_NAME,
+      pipeline_root=PIPELINE_ROOT,
+      components=components,
+      enable_cache=ENABLE_CACHE,
+      metadata_connection_config=metadata_connection_config,
+      beam_pipeline_args=beam_pipeline_args,
+    )
+    
+    tfx.orchestration.LocalDagRunner().run(my_pipeline)
+    logging.debug("PRODUCTION pipeline finished")
