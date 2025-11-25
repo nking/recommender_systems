@@ -854,9 +854,9 @@ def get_default_hyperparameters(custom_config, input_element_spec) -> keras_tune
   if "model_name" in custom_config:
     hp.Fixed('model_name', custom_config["model_name"])
   if "team_lead" in custom_config:
-    hp.Fixed('team_lead', custom_config["model_name"])
+    hp.Fixed('team_lead', custom_config["team_lead"])
   if "git_hash" in custom_config:
-    hp.Fixed('git_hash', custom_config["model_name"])
+    hp.Fixed('git_hash', custom_config["git_hash"])
   
   return hp
 
