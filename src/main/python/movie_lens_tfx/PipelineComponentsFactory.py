@@ -16,7 +16,7 @@ class PIPELINE_TYPE(enum.Enum):
   BATCH_INFERENCE = "batch_inference"
   
 class MODEL_NAME(enum.Enum):
-  USER_MOVIE = "two_tower_dnn"
+  USER_MOVIE = "user_movie"
   MOVIE_METADATA = "movie_metadata"
 
 class PipelineComponentsFactory():
