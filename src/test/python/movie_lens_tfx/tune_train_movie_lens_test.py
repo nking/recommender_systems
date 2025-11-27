@@ -265,19 +265,24 @@ class TuneTrainTest(tf.test.TestCase):
       if "MovieLensExampleGen" in artifact.uri:
         raw_examples_uri = os.path.join(artifact.uri, "Split-test")
         break
-    logging.debug(f"fraw_examples_uri={raw_examples_uri}")
+    print(f"raw_examples_uri={raw_examples_uri}")
     logging.debug(f"transfomed_examples_uri={transfomed_examples_uri}")
     
     latest_schema_artifact = sorted(store.get_artifacts_by_type("Schema"),
       key=lambda x: x.last_update_time_since_epoch, reverse=True)[0]
     # or use last_update_time_since_epoch
     schema_uri = latest_schema_artifact.uri
+    raw_schema_uri = f'{schema_uri}'
     schema_uri = schema_uri.replace("pre_transform_schema", "post_transform_schema")
     logging.debug(f"schema_uri={schema_uri}")
     schema_file_path = [os.path.join(schema_uri, name) for name in os.listdir(schema_uri)][0]
-    
+    raw_schema_file_path = [os.path.join(raw_schema_uri, name) for name in os.listdir(raw_schema_uri)][0]
+
     schema = tfx.utils.parse_pbtxt_file(schema_file_path, schema_pb2.Schema())
     feature_spec = schema_utils.schema_as_feature_spec(schema).feature_spec
+    
+    raw_schema = tfx.utils.parse_pbtxt_file(raw_schema_file_path, schema_pb2.Schema())
+    raw_feature_spec = schema_utils.schema_as_feature_spec(raw_schema).feature_spec
     
     file_paths = [os.path.join(transfomed_examples_uri, name) for name in os.listdir(transfomed_examples_uri)]
     test_trans_ds_ser = tf.data.TFRecordDataset(file_paths, compression_type="GZIP")
@@ -287,6 +292,8 @@ class TuneTrainTest(tf.test.TestCase):
     def parse_tf_example(example_proto, feature_spec):
       return tf.io.parse_single_example(example_proto, feature_spec)
     test_trans_ds = test_trans_ds_ser.map(lambda x: parse_tf_example(x, feature_spec))
+    test_raw_ds = test_raw_ds_ser.map(lambda x: parse_tf_example(x, raw_feature_spec))
+    print(f'test_raw_ds.element_spec={test_raw_ds.element_spec}')
     #test_trans_ds2 = tf.io.parse_example(test_trans_ds_ser, feature_spec) this fails
     
     #might need to remove 'rating' column
@@ -308,7 +315,7 @@ class TuneTrainTest(tf.test.TestCase):
     infer_query_transformed = loaded_saved_model.signatures["serving_query_transformed"]
     infer_canndidate_transformed = loaded_saved_model.signatures["serving_candidate_transformed"]
 
-    #test the signatures for tansformed data:
+    #test the signatures for transformed data:
     predictions = []
     query_embeddings = []
     candidate_embeddings = []
@@ -379,6 +386,22 @@ class TuneTrainTest(tf.test.TestCase):
     self.assertEqual(len(query_embeddings), num_rows)
     self.assertEqual(len(candidate_embeddings), num_rows)
     self.assertEqual(len(transformed), num_rows)
+    
+    def create_multihot_genres(n:int):
+      return np.array([np.random.randint(0, 2, size=n).tolist() for _ in range(n)])
+    
+    #test converting input dictionary of numpy arrays or tensors into serialized tf_examples for use with serving
+    fake_inputs_np = {
+      'age' :np.array([1, 2, 3]),
+      "gender" : np.array(["M", "F", "M"]),
+      "genres" : create_multihot_genres(3),
+      'movie_id' :np.array([10, 20, 30]),
+      'user_id': np.array([1, 2, 3]),
+      'occupation': np.array([1, 2, 3]),
+      'ratings': np.array([3,4,5]),
+      'timestamp': np.array([975768870, 975768871, 975768872]),
+    }
+    fake_inputs_dict_ser = convert_dict_inputs_to_tfexample_ser(fake_inputs_np)
     
     print("Inference completed.")
     

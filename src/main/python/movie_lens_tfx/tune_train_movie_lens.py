@@ -915,6 +915,74 @@ def _get_serve_tf_examples_fn(model, tf_transform_output):
   model.tft_layer = tf_transform_output.transform_features_layer()
 
 
+import tensorflow as tf
+from tensorflow_transform.tf_metadata import schema_utils
+from typing import Dict
+
+
+def convert_feature_spec_to_tensor_spec(raw_feature_spec: Dict) -> Dict[
+  str, tf.TensorSpec]:
+  """
+  Converts a raw_feature_spec() dictionary (containing Feature objects)
+  to a dictionary of tf.TensorSpec objects.
+    # Example Usage:
+  # raw_spec = tf_transform_output.raw_feature_spec()
+  # raw_tensor_spec = convert_feature_spec_to_tensor_spec(raw_spec)
+
+  """
+  tensor_spec = {}
+  
+  for name, feature in raw_feature_spec.items():
+    # Handle FixedLenFeature (most common)
+    if isinstance(feature, tf.io.FixedLenFeature):
+      if name == "genres":
+        if len(feature.shape) == 1:
+          _shape = (None, feature.shape[0])
+        elif len(feature.shape) == 2:
+          _shape = (None, feature.shape[0], feature.shape[1])
+        else:
+          raise ValueError(f"Feature shape {feature.shape} is not supported.")
+        tensor_spec[name] = tf.TensorSpec(
+          shape=_shape,
+          dtype=feature.dtype,
+          name=name
+        )
+      else:
+        tensor_spec[name] = tf.TensorSpec(
+          shape=(None, feature.shape[0]),
+          dtype=feature.dtype,
+          name=name
+        )
+    
+    # Handle VarLenFeature (uncommon for raw data, but needed if present)
+    elif isinstance(feature, tf.io.VarLenFeature):
+      # VarLen features are typically represented by a RaggedTensor
+      # or a sparse tensor after parsing. When requesting a TensorSpec
+      # for input, we usually define the shape as partially dynamic.
+      # However, for simple use cases, the shape of the resulting
+      # dense tensor is [None] or [None, ...].
+      tensor_spec[name] = tf.TensorSpec(
+        shape=[None],  # Unknown length
+        dtype=feature.dtype,
+        name=name
+      )
+    
+    # Handle SparseFeature (more complex and requires multiple TensorSpecs: indices, values, dense_shape)
+    # For simplicity, we can skip or raise an error for complex types here,
+    # but a full utility would handle them explicitly.
+    elif isinstance(feature, tf.io.SparseFeature):
+      # Sparse features are usually handled by the parsing function itself,
+      # which returns a SparseTensor (or RaggedTensor), not a single dense TensorSpec.
+      raise NotImplementedError(
+        f"Conversion for SparseFeature '{name}' is complex and not included.")
+    
+    else:
+      raise TypeError(
+        f"Unsupported feature type for '{name}': {type(feature)}")
+  
+  return tensor_spec
+
+
 # tfx.components.FnArgs
 def run_fn(fn_args):
   """Train the model based on given args.
@@ -1050,6 +1118,10 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   EVAL_STEPS_PER_EPOCH = math.ceil(hp.get("num_eval") / GLOBAL_BATCH_SIZE)
   
   tf_transform_output = tft.TFTransformOutput(fn_args.transform_output)
+  
+  input_signature_raw = convert_feature_spec_to_tensor_spec(tf_transform_output.raw_feature_spec())
+  
+  print(f"input_signature_raw={input_signature_raw}")
   
   train_dataset = input_fn(
     fn_args.train_files,
@@ -1200,17 +1272,31 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       examples from MovieLensExampleGen
       '''
       raw_feature_spec = tf_transform_output.raw_feature_spec()
-      print('transform_features_fn spec = {raw_feature_spec}')
+      logging.debug(f'transform_features_fn spec = {raw_feature_spec}')
       raw_features = tf.io.parse_example(serialized_tf_example, raw_feature_spec)
       transformed_features = model.tft_layer(raw_features)
       logging.info('eval_transformed_features = %s',transformed_features)
       return transformed_features
     
+    """
+    @tf.function(input_signature=[input_signature_raw])
+    def serve_query_inputs_fn(raw_features):
+      '''
+      given raw inputs of tensors, transforms the data and returns the outpus of query model on transformed data.
+      '''
+      #remove LABEL?
+      print(f'*raw_features={raw_features}')
+      transformed_features = model.tft_layer(raw_features)
+      print(f'*transformed_features={transformed_features}')
+      outputs = model.query_model(inputs=transformed_features)
+      return {'outputs': outputs}
+    """
+    
     return {
       'serving_default': serve_tf_examples_fn,
       'transform_features': transform_features_fn,
       'serving_candidate': serve_candidate_tf_examples_fn,
-      'serving_query': serve_query_tf_examples_fn
+      'serving_query': serve_query_tf_examples_fn,
     }
   
   signatures = {
@@ -1309,15 +1395,20 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
   
   transform_graph = tft.TFTransformOutput(fn_args.transform_graph_path)
   
+  #need to store the transforme element_spec into the hp because the model needs
+  # it and the build method can only take hp as argument.
+  # also, need to serialize it to be in a format that hp can accept
+  transformed_element_spec = convert_feature_spec_to_tensor_spec(transform_graph.transformed_feature_spec())
+  del transformed_element_spec[LABEL_KEY]
+  
   if fn_args.hyperparameters:
     hp = keras_tuner.HyperParameters.from_config(fn_args.hyperparameters)
+    try:
+      hp.get("input_dataset_element_spec_ser")
+    except Exception:
+      raise KeyError(f'hyper parameters must contain element input_dataset_element_spec_ser')
   else:
-    tmp_dataset = input_fn(fn_args.train_files,fn_args.data_accessor,
-      transform_graph, DEFAULT_BATCH_SIZE)
-    def extract_features(features, label):
-      return features
-    x = tmp_dataset.map(extract_features)
-    hp = get_default_hyperparameters(fn_args.custom_config, x.element_spec)
+    hp = get_default_hyperparameters(fn_args.custom_config, transformed_element_spec)
     
   d = hp.get("device")
   if d == "GPU":

@@ -1,4 +1,6 @@
 import unittest
+
+from helper import get_project_dir
 #from ... main.python.infile_dict_util import *
 #from ... main.python.infile_dict_util import _assert_dict_1
 from movie_lens_tfx.utils.movie_lens_utils import *
@@ -8,6 +10,8 @@ from tfx.proto import example_gen_pb2
 from absl import logging
 logging.set_verbosity(logging.WARNING)
 logging.set_stderrthreshold(logging.WARNING)
+
+n_genres = 18
 
 class TestInfileDictUtils(unittest.TestCase):
 
@@ -110,6 +114,6 @@ class TestInfileDictUtils(unittest.TestCase):
     deser = deserialize(infiles_dict_ser)
     self.assertEqual(infiles_dict, deser, \
       "infiles_dict and deser should be same")
- 
+
 if __name__ == '__main__':
     unittest.main()
