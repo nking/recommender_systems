@@ -11,6 +11,8 @@ from tensorflow_transform.tf_metadata import schema_utils
 from movie_lens_tfx.ingest_pyfunc_component.ingest_movie_lens_component import *
 #import trainer_movie_lens
 
+import numpy as np
+
 from ml_metadata.metadata_store import metadata_store
 from movie_lens_tfx.tune_train_movie_lens import *
 
@@ -314,7 +316,12 @@ class TuneTrainTest(tf.test.TestCase):
     infer_twotower_transformed = loaded_saved_model.signatures["serving_twotower_transformed"]
     infer_query_transformed = loaded_saved_model.signatures["serving_query_transformed"]
     infer_canndidate_transformed = loaded_saved_model.signatures["serving_candidate_transformed"]
-
+    infer_query_for_dict = loaded_saved_model.signatures["serving_query_dict"]
+    infer_candidate_for_dict = loaded_saved_model.signatures[
+      "serving_candidate_dict"]
+    infer_default_for_dict = loaded_saved_model.signatures[
+      "serving_default_dict"]
+    
     #test the signatures for transformed data:
     predictions = []
     query_embeddings = []
@@ -387,25 +394,69 @@ class TuneTrainTest(tf.test.TestCase):
     self.assertEqual(len(candidate_embeddings), num_rows)
     self.assertEqual(len(transformed), num_rows)
     
-    def create_multihot_genres(n:int):
-      return np.array([np.random.randint(0, 2, size=n).tolist() for _ in range(n)])
+    BATCH_SIZE = 2
+    batched_ds = test_raw_ds_ser.batch(BATCH_SIZE)
+    query_embeddings = []
+    for serialized_batch in batched_ds:
+      q_input_dict = {Q_INPUT_KEY: serialized_batch}
+      query_embeddings.append(infer_query(**q_input_dict)['outputs'])
+      break
+    self.assertTrue(len(query_embeddings) > 0)
+    
+    x = test_raw_ds.map(remove_rating)
+    x = x.batch(BATCH_SIZE)
+    for batch in x:
+      #input_dict = {NEW_Q_INPUT_KEY: batch}
+      #new_query_embeddings = infer_query_for_dict(**q_input_dict)['outputs']
+      new_query_embeddings = infer_query_for_dict(
+        age=batch['age'],
+        gender=batch['gender'],
+        genres=batch['genres'],
+        movie_id=batch['movie_id'],
+        occupation=batch['occupation'],
+        timestamp=batch['timestamp'],
+        user_id=batch['user_id'])
+      new_candidate_embeddings = infer_candidate_for_dict(
+        age=batch['age'],
+        gender=batch['gender'],
+        genres=batch['genres'],
+        movie_id=batch['movie_id'],
+        occupation=batch['occupation'],
+        timestamp=batch['timestamp'],
+        user_id=batch['user_id'])
+      new_rating_predictions = infer_default_for_dict(
+        age=batch['age'],
+        gender=batch['gender'],
+        genres=batch['genres'],
+        movie_id=batch['movie_id'],
+        occupation=batch['occupation'],
+        timestamp=batch['timestamp'],
+        user_id=batch['user_id'])
+      break
+      
     
     #test converting input dictionary of numpy arrays or tensors into serialized tf_examples for use with serving
     fake_inputs_np = {
-      'age' :np.array([1, 2, 3]),
-      "gender" : np.array(["M", "F", "M"]),
-      "genres" : create_multihot_genres(3),
-      'movie_id' :np.array([10, 20, 30]),
-      'user_id': np.array([1, 2, 3]),
-      'occupation': np.array([1, 2, 3]),
-      'ratings': np.array([3,4,5]),
-      'timestamp': np.array([975768870, 975768871, 975768872]),
-    }
+      'age': np.array([[45], [35]]),
+      'gender': np.array([[b'M'], [b'M']]),
+      'genres': np.array([[b'Action|Drama'], [b'Action|Drama']]),
+      'movie_id': np.array([[3418], [3418]]),
+      'occupation': np.array([[7], [1]]),
+      'rating': np.array([[4], [3]]),
+      'timestamp': np.array([[978294260], [978234810]]),
+      'user_id': np.array([[4], [7]])}
     fake_inputs_dict_ser = convert_dict_inputs_to_tfexample_ser(fake_inputs_np)
+    self.assertIsNotNone(fake_inputs_dict_ser)
     
     print("Inference completed.")
     
+    # raw_ds_row:
+    #   {'age': <tf.Tensor: shape=(1,), dtype=int64, numpy=array([45])>, 'gender': <tf.Tensor: shape=(1,), dtype=string, numpy=array([b'M'], dtype=object)>, 'genres': <tf.Tensor: shape=(1,), dtype=string, numpy=array([b'Action|Drama'], dtype=object)>, 'movie_id': <tf.Tensor: shape=(1,), dtype=int64, numpy=array([3418])>, 'occupation': <tf.Tensor: shape=(1,), dtype=int64, numpy=array([7])>, 'rating': <tf.Tensor: shape=(1,), dtype=int64, numpy=array([4])>, 'timestamp': <tf.Tensor: shape=(1,), dtype=int64, numpy=array([978294260])>, 'user_id': <tf.Tensor: shape=(1,), dtype=int64, numpy=array([4])>}
     
+    for x in test_raw_ds.batch(2):
+      tf_example = convert_dict_inputs_to_tfexample_ser(x)
+      break
+      
     #TODO: add use of fingerprint to show example of using it to verify model
     #fingerprint = tf.saved_model.experimental.read_fingerprint(saved_model_path)
     

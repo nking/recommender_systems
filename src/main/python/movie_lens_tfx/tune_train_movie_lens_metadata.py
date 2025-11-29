@@ -570,6 +570,67 @@ def _get_serve_tf_examples_fn(model, tf_transform_output):
   # the model assets are handled correctly when exporting.
   model.tft_layer = tf_transform_output.transform_features_layer()
 
+def convert_feature_spec_to_tensor_spec(raw_feature_spec: Dict) -> Dict[
+  str, tf.TensorSpec]:
+  """
+  Converts a raw_feature_spec() dictionary (containing Feature objects)
+  to a dictionary of tf.TensorSpec objects.
+    # Example Usage:
+  # raw_spec = tf_transform_output.raw_feature_spec()
+  # raw_tensor_spec = convert_feature_spec_to_tensor_spec(raw_spec)
+
+  """
+  tensor_spec = {}
+  
+  for name, feature in raw_feature_spec.items():
+    # Handle FixedLenFeature (most common)
+    if isinstance(feature, tf.io.FixedLenFeature):
+      if name == "genres":
+        if len(feature.shape) == 1:
+          _shape = (None, feature.shape[0])
+        elif len(feature.shape) == 2:
+          _shape = (None, feature.shape[0], feature.shape[1])
+        else:
+          raise ValueError(f"Feature shape {feature.shape} is not supported.")
+        tensor_spec[name] = tf.TensorSpec(
+          shape=_shape,
+          dtype=feature.dtype,
+          name=name
+        )
+      else:
+        tensor_spec[name] = tf.TensorSpec(
+          shape=(None, feature.shape[0]),
+          dtype=feature.dtype,
+          name=name
+        )
+    
+    # Handle VarLenFeature (uncommon for raw data, but needed if present)
+    elif isinstance(feature, tf.io.VarLenFeature):
+      # VarLen features are typically represented by a RaggedTensor
+      # or a sparse tensor after parsing. When requesting a TensorSpec
+      # for input, we usually define the shape as partially dynamic.
+      # However, for simple use cases, the shape of the resulting
+      # dense tensor is [None] or [None, ...].
+      tensor_spec[name] = tf.TensorSpec(
+        shape=[None],  # Unknown length
+        dtype=feature.dtype,
+        name=name
+      )
+    
+    # Handle SparseFeature (more complex and requires multiple TensorSpecs: indices, values, dense_shape)
+    # For simplicity, we can skip or raise an error for complex types here,
+    # but a full utility would handle them explicitly.
+    elif isinstance(feature, tf.io.SparseFeature):
+      # Sparse features are usually handled by the parsing function itself,
+      # which returns a SparseTensor (or RaggedTensor), not a single dense TensorSpec.
+      raise NotImplementedError(
+        f"Conversion for SparseFeature '{name}' is complex and not included.")
+    
+    else:
+      raise TypeError(
+        f"Unsupported feature type for '{name}': {type(feature)}")
+  
+  return tensor_spec
 
 # tfx.components.FnArgs
 def run_fn(fn_args):
@@ -667,6 +728,10 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   EVAL_STEPS_PER_EPOCH = math.ceil(hp.get("num_eval") / GLOBAL_BATCH_SIZE)
   
   tf_transform_output = tft.TFTransformOutput(fn_args.transform_output)
+  
+  input_signature_raw = convert_feature_spec_to_tensor_spec(tf_transform_output.raw_feature_spec())
+  del input_signature_raw[LABEL_KEY]
+  logging.debug(f"input_signature_raw={input_signature_raw}")
   
   train_dataset = input_fn(
     fn_args.train_files,
@@ -822,11 +887,38 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       logging.info('eval_transformed_features = %s',transformed_features)
       return transformed_features
     
+    @tf.function(input_signature=[input_signature_raw])
+    def serve_query_dict_fn(raw_features):
+      '''
+      given raw inputs dictionary of tensors, transforms the data and returns the outputs of query model on transformed data.
+      '''
+      transformed_features = model.tft_layer(raw_features)
+      outputs = model.query_model(inputs=transformed_features, training=False)
+      return {'outputs': outputs}
+    
+    @tf.function(input_signature=[input_signature_raw])
+    def serve_candidate_dict_fn(raw_features):
+      '''
+      given raw inputs dictionary of tensors, transforms the data and returns the outputs of candidate model on transformed data.
+      '''
+      transformed_features = model.tft_layer(raw_features)
+      outputs = model.candidate_model(inputs=transformed_features, training=False)
+      return {'outputs': outputs}
+    
+    @tf.function(input_signature=[input_signature_raw])
+    def serve_default_dict_fn(raw_features):
+      transformed_features = model.tft_layer(raw_features)
+      outputs = model(inputs=transformed_features, training=False)
+      return {'outputs': outputs}
+    
     return {
       'serving_default': serve_tf_examples_fn,
       'transform_features': transform_features_fn,
       'serving_candidate': serve_candidate_tf_examples_fn,
-      'serving_query': serve_query_tf_examples_fn
+      'serving_query': serve_query_tf_examples_fn,
+      "serving_default_dict": serve_default_dict_fn,
+      "serving_query_dict": serve_query_dict_fn,
+      "serving_candidate_dict": serve_candidate_dict_fn
     }
   
   signatures = {
@@ -839,6 +931,9 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   signatures["serving_default"] = other_sigs["serving_default"]
   signatures["serving_query"] = other_sigs["serving_query"]
   signatures["serving_candidate"] = other_sigs["serving_candidate"]
+  signatures["serving_default_dict"] = other_sigs["serving_default_dict"]
+  signatures["serving_query_dict"] = other_sigs["serving_query_dict"]
+  signatures["serving_candidate_dict"] = other_sigs["serving_candidate_dict"]
   
   """
   #this isn't necessary.  BulkInferrer still has the same problems finding saved model variables

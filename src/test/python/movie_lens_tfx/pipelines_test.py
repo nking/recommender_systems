@@ -562,3 +562,5 @@ class PipelinesTest(tf.test.TestCase):
     
     tfx.orchestration.LocalDagRunner().run(my_pipeline)
     logging.debug("PRODUCTION pipeline finished")
+    
+    #TODO: add unit tests of the metadata model

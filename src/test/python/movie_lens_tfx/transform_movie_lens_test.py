@@ -166,11 +166,3 @@ class TransformTest(tf.test.TestCase):
           artifact = store.get_artifacts_by_id([event.artifact_id])[0]
           if artifact.type_id == store.get_artifact_type('Examples').id:
             logging.debug(f"artifact={artifact}\nuri={artifact.uri}")
-    
-    import polars as pl
-    for split_name in ["train", "eval", "test"]:
-      in_file_pattern = os.path.join(output_parquet_path, f"Split-{split_name}*")
-      df = pl.read_parquet(in_file_pattern)
-      #df = pl.scan_parquet(in_file_pattern)
-      print(f"POLARS: {split_name}:\n{df.columns},\n{df.dtypes}\n{df.head()}\n{df.describe()}")
-   

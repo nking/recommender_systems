@@ -1,6 +1,14 @@
 - consider adding to pipeline:
   - transform_input_cache
 
+- reconsider better way to pass best parameters used
+  in final model to the Retrieval model (see other project).
+  e.g. the signature for the serving_query model needs
+  inputs that have all of the joined raw ratings input columns, 
+  but the only columns
+  it will use is user_id and age when feature_acronym="a".
+  similarly, the serving_candidate models needs movie_id and genres.
+
 - consider adding other model families to the
   pipeline, that is, a wrapper to use Tuner on
   each model family and then compare among best of each.
@@ -42,3 +50,6 @@
    -> problem is that currently, cannot pass that data as Channels
       to components that could use them like Tuner and Trainer
 
+- CI/CD
+  - a linter usable w/ terraform:
+    https://www.markcallen.com/tflint-static-analysis-for-terraform/
