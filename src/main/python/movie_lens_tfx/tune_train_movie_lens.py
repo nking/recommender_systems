@@ -398,7 +398,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     
     def call(self, inputs, **kwargs):
       # inputs should contain columns:
-      # print(f'call {self.name} type={type(inputs)}\n')
+      print(f'call {self.name} type={type(inputs)}, inputs={inputs}\n')
       feature_embedding = self.embedding_model(inputs, **kwargs)
       res = self.dense_layers(feature_embedding)
       #tf.print('CALL', self.name, ' shape=', res.shape)
@@ -1120,7 +1120,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   tf_transform_output = tft.TFTransformOutput(fn_args.transform_output)
   
   input_signature_raw = convert_feature_spec_to_tensor_spec(tf_transform_output.raw_feature_spec())
-  
+  del input_signature_raw[LABEL_KEY]
   print(f"input_signature_raw={input_signature_raw}")
   
   train_dataset = input_fn(
@@ -1230,7 +1230,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       raw_features = tf.io.parse_example(serialized_tf_example, raw_feature_spec)
       
       transformed_features = model.tft_layer(raw_features)
-      outputs = model(inputs=transformed_features)
+      outputs = model(inputs=transformed_features, training=False)
       logging.debug(f'default_serving: have outputs')
       return {'outputs': outputs}
     
@@ -1245,8 +1245,10 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       except KeyError as e:
         logging.error(f'ERROR: {e}')
       raw_features = tf.io.parse_example(serialized_tf_example, raw_feature_spec)
+      print(f'**raw_features={raw_features}')
       transformed_features = model.tft_layer(raw_features)
-      outputs = model.query_model(inputs=transformed_features)
+      print(f'**transformed_features={transformed_features}')
+      outputs = model.query_model(inputs=transformed_features, training=False)
       return {'outputs': outputs}
     
     @tf.function(input_signature=[tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')])
@@ -1261,7 +1263,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
         logging.error(f'ERROR: {e}')
       raw_features = tf.io.parse_example(serialized_tf_example, raw_feature_spec)
       transformed_features = model.tft_layer(raw_features)
-      outputs = model.candidate_model(inputs=transformed_features)
+      outputs = model.candidate_model(inputs=transformed_features, training=False)
       return {'outputs': outputs}
     
     @tf.function(input_signature=[
@@ -1278,25 +1280,25 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       logging.info('eval_transformed_features = %s',transformed_features)
       return transformed_features
     
-    """
     @tf.function(input_signature=[input_signature_raw])
-    def serve_query_inputs_fn(raw_features):
+    def serve_query_dict_fn(raw_features):
       '''
-      given raw inputs of tensors, transforms the data and returns the outpus of query model on transformed data.
+      given raw inputs of dictionary of tensors, transforms the data and returns the outputs of query model on transformed data.
       '''
       #remove LABEL?
+      print(f'input_signature_raw={input_signature_raw}')
       print(f'*raw_features={raw_features}')
       transformed_features = model.tft_layer(raw_features)
       print(f'*transformed_features={transformed_features}')
-      outputs = model.query_model(inputs=transformed_features)
+      outputs = model.query_model(inputs=transformed_features, training=False)
       return {'outputs': outputs}
-    """
     
     return {
       'serving_default': serve_tf_examples_fn,
       'transform_features': transform_features_fn,
       'serving_candidate': serve_candidate_tf_examples_fn,
       'serving_query': serve_query_tf_examples_fn,
+      "serving_query_dict" : serve_query_dict_fn
     }
   
   signatures = {
@@ -1309,6 +1311,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   signatures["serving_default"] = other_sigs["serving_default"]
   signatures["serving_query"] = other_sigs["serving_query"]
   signatures["serving_candidate"] = other_sigs["serving_candidate"]
+  signatures["serving_query_dict"] = other_sigs["serving_query_dict"]
   
   """
   #this isn't necessary.  BulkInferrer still has the same problems finding saved model variables
