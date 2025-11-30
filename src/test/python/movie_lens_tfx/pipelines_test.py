@@ -373,7 +373,7 @@ class PipelinesTest(tf.test.TestCase):
       
       output_config = example_gen_pb2.Output(
         split_config=example_gen_pb2.SplitConfig(
-          splits=[example_gen_pb2.SplitConfig.Split(name='all', hash_buckets=1)]
+          splits=[example_gen_pb2.SplitConfig.Split(name='train', hash_buckets=1)]
         )
       )
       output_config_ser = serialize_proto_to_string(output_config)
@@ -400,6 +400,7 @@ class PipelinesTest(tf.test.TestCase):
         metadata_connection_config=metadata_connection_config,
         beam_pipeline_args=beam_pipeline_args,
       )
+      
       print(f'begin batch inferrence')
       tfx.orchestration.LocalDagRunner().run(my_pipeline)
       print('end batch inferrence')
