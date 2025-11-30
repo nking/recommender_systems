@@ -4,6 +4,7 @@ import random
 import apache_beam as beam
 from apache_beam.io import parquetio
 import pyarrow as pa
+import json
 
 import tensorflow_transform as tft
 from tfx.dsl.component.experimental import annotations
@@ -63,6 +64,13 @@ def FromTFRecordToParquet(
     
     transformed_examples_uri = transformed_examples.uri
     
+    split_names =transformed_examples.split_names
+    if not split_names:
+      split_names = []
+    else:
+      split_names = json.loads(split_names)
+    print(f'FromTFRecordToParquet split_names = {split_names}')
+    
     class ParseTFExampleToDict(beam.DoFn):
       """
       parse each tf.example into a dictionary.  Note that any arrays with size > 1 are string serialized,
@@ -78,9 +86,9 @@ def FromTFRecordToParquet(
           else:
             output[k] = serialize_to_string(arr[0].tolist())
         yield output
-    
+        
     with beam_pipeline as pipeline:
-      for split_name in ["train", "eval", "test"]:
+      for split_name in split_names:
         in_file_path = os.path.join(transformed_examples_uri, f"Split-{split_name}")
         out_file_path = os.path.join(output_file_path, f"Split-{split_name}")
         os.makedirs(in_file_path, exist_ok=True)
