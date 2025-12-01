@@ -270,13 +270,16 @@ class TuneTrainTest(tf.test.TestCase):
     print(f"raw_examples_uri={raw_examples_uri}")
     logging.debug(f"transfomed_examples_uri={transfomed_examples_uri}")
     
-    latest_schema_artifact = sorted(store.get_artifacts_by_type("Schema"),
-      key=lambda x: x.last_update_time_since_epoch, reverse=True)[0]
-    # or use last_update_time_since_epoch
-    schema_uri = latest_schema_artifact.uri
-    raw_schema_uri = f'{schema_uri}'
-    schema_uri = schema_uri.replace("pre_transform_schema", "post_transform_schema")
-    logging.debug(f"schema_uri={schema_uri}")
+    latest_schema_artifact_list = sorted(store.get_artifacts_by_type("Schema"),
+      key=lambda x: x.last_update_time_since_epoch, reverse=True)
+    raw_schema_uri = None
+    schema_uri = None
+    for artifact in latest_schema_artifact_list:
+      if "pre_transform_schema" in artifact.uri and raw_schema_uri is None:
+        raw_schema_uri = artifact.uri
+      elif "post_transform_schema" in artifact.uri and schema_uri is None:
+        schema_uri = artifact.uri
+        
     schema_file_path = [os.path.join(schema_uri, name) for name in os.listdir(schema_uri)][0]
     raw_schema_file_path = [os.path.join(raw_schema_uri, name) for name in os.listdir(raw_schema_uri)][0]
 
