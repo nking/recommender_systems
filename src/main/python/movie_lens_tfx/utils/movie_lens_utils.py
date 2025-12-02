@@ -127,6 +127,8 @@ def create_example(row, column_name_type_list: List[Tuple[str, Any]]):
         raise ValueError(f"element_type={element_type}, but only float, int, and str classes are handled.")
       feature_map[name] = f
     except Exception as ex:
+      print(f'ERROR: row={row}, i={i}, value={value}, type of value={type(value)}\n'
+            f' element_type={element_type}, name={name}')
       logging.error(f"ERROR: {ex}\nrow={row}"
         f"\ni={i}\ncolumn_name_type_list={column_name_type_list}")
       raise ex
