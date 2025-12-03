@@ -64,6 +64,35 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
     
     self.output_bayesian_est_uri = os.path.join(get_bin_dir(),
       "ratings_bayesian_shrinkage")
+    
+    self.ratings_pivot_feature_spec = {
+      'movie_id': tf.io.FixedLenFeature(shape=[], dtype=tf.int64, default_value=None),
+      '1': tf.io.FixedLenFeature(shape=[], dtype=tf.int64, default_value=None),
+      '2': tf.io.FixedLenFeature(shape=[], dtype=tf.int64, default_value=None),
+      '3': tf.io.FixedLenFeature(shape=[], dtype=tf.int64, default_value=None),
+      '4': tf.io.FixedLenFeature(shape=[], dtype=tf.int64, default_value=None),
+      '5': tf.io.FixedLenFeature(shape=[], dtype=tf.int64, default_value=None),
+      }
+    #sorted={'movie_id': 7148, 'prediction_mm': 0.3811786472797394, '1': 16, '2': 2, '3': 1, '4': 1, '5': 1,
+    # 'total_votes': 21, 'movie_ratings_mean': 1.5238095238095237, 'weighted_rating': 2.4071537044115545}
+    self.bayesian_est_pivot_feature_spec = {
+      **self.ratings_pivot_feature_spec,
+      **{
+        'prediction_mm' : tf.io.FixedLenFeature(shape=[], dtype=float, default_value=None),
+        'total_votes': tf.io.FixedLenFeature(shape=[], dtype=tf.int64, default_value=None),
+        'movie_ratings_mean': tf.io.FixedLenFeature(shape=[], dtype=float, default_value=None),
+        'weighted_rating': tf.io.FixedLenFeature(shape=[], dtype=float, default_value=None),
+      }
+    }
+    self.joined_ratings_feature_spec = {
+      "user_id": tf.io.FixedLenFeature([], tf.int64),
+      "movie_id":tf.io.FixedLenFeature([], tf.int64),
+      "rating" : tf.io.FixedLenFeature([], tf.int64),
+      "timestamp": tf.io.FixedLenFeature([], tf.int64),
+      "gender" : tf.io.FixedLenFeature([], tf.string),
+      "age" : tf.io.FixedLenFeature([], tf.int64),
+      "occupation" : tf.io.FixedLenFeature([], tf.int64),
+      "genres" : tf.io.FixedLenFeature([], tf.string)}
   
   def test_0(self):
     pipeline0_handle = self._write_train_ratings_pivot_table()
@@ -73,7 +102,69 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
     if pipeline0_handle is not None:
       pipeline0_handle.wait_until_finish()
     pipeline3_handle = self._left_outer_join_predictions_and_pivot()
-    pipeline3_handle.wait_until_finish()
+    if pipeline3_handle is not None:
+      pipeline3_handle.wait_until_finish()
+    
+    #assert can load and read ouputs
+    """
+    self.output_uri0 = os.path.join(get_bin_dir(), "ratings_pivot")
+    self.output_uri1 = os.path.join(get_bin_dir(), "movie_emb_inp")
+    self.output_uri2 = os.path.join(get_bin_dir(), "user_emb_inp")
+    self.output_movie_mm_preds_uri = os.path.join(get_bin_dir(),
+       "metadata_model_predictions")
+    self.output_pivot_uri = os.path.join(get_bin_dir(), "ratings_and_predictions_pivot")
+    self.output_bayesian_est_uri = os.path.join(get_bin_dir(),
+      "ratings_bayesian_shrinkage")
+    """
+    def parse_tf_example(example_proto, feature_spec):
+      return tf.io.parse_single_example(example_proto, feature_spec)
+    
+    #===== check self.output_uri0 =====
+    import glob
+    file_paths = glob.glob(f'{self.output_uri0}/tfrecord*')
+    ds_ser = tf.data.TFRecordDataset(file_paths, compression_type="GZIP")
+    i = 0
+    for x in ds_ser.batch(2):
+      i+=1
+      break
+    self.assertTrue(i == 1)
+    ds = ds_ser.map(lambda x: parse_tf_example(x, self.ratings_pivot_feature_spec))
+    i = 0
+    for x in ds.batch(1):
+      i+=1
+      break
+    self.assertTrue(i == 1)
+    
+    for a_uri in [self.output_uri1, self.output_uri2]:
+      file_paths = glob.glob(f'{a_uri}/tfrecord*')
+      ds_ser = tf.data.TFRecordDataset(file_paths, compression_type="GZIP")
+      i = 0
+      for x in ds_ser.batch(2):
+        i+=1
+        break
+      self.assertTrue(i == 1)
+      ds = ds_ser.map(lambda x: parse_tf_example(x, self.joined_ratings_feature_spec))
+      i = 0
+      for x in ds.batch(1):
+        i+=1
+        break
+      self.assertTrue(i == 1)
+    
+    #===== bayesian estimate output
+    file_paths = glob.glob(f'{self.output_bayesian_est_uri}/tfrecord*')
+    ds_ser = tf.data.TFRecordDataset(file_paths, compression_type="GZIP")
+    i = 0
+    for x in ds_ser.batch(2):
+      i+=1
+      break
+    self.assertTrue(i == 1)
+    ds = ds_ser.map(lambda x: parse_tf_example(x, self.bayesian_est_pivot_feature_spec))
+    i = 0
+    for x in ds.batch(1):
+      i+=1
+      break
+    self.assertTrue(i == 1)
+    
     
   def _write_movie_tfrecords(self):
     """
@@ -376,20 +467,11 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
     
     #pc_preds | "print_pc_preds" >> beam.Map(lambda x: print(f'pc_preds={x}'))
     
-    feature_spec_pivot = {
-      'movie_id': tf.io.FixedLenFeature(shape=[], dtype=tf.int64, default_value=None),
-      '1': tf.io.FixedLenFeature(shape=[], dtype=tf.int64, default_value=None),
-      '2': tf.io.FixedLenFeature(shape=[], dtype=tf.int64, default_value=None),
-      '3': tf.io.FixedLenFeature(shape=[], dtype=tf.int64, default_value=None),
-      '4': tf.io.FixedLenFeature(shape=[], dtype=tf.int64, default_value=None),
-      '5': tf.io.FixedLenFeature(shape=[], dtype=tf.int64, default_value=None),
-      }
-    
     pc_pivot = (pipeline | f"read_pivot_{random.randint(0, 10000000000)}"
       >> beam.io.ReadFromTFRecord(file_pattern=f'{self.output_uri0}/tfrecords*',
       compression_type=beam.io.filesystem.CompressionTypes.GZIP)
       | f"parse_pivot_{random.randint(0, 10000000000)}"
-      >>  beam.ParDo(_ParseSerializedExamples(serialize_to_string(feature_spec_pivot)))
+      >>  beam.ParDo(_ParseSerializedExamples(serialize_to_string(self.ratings_pivot_feature_spec)))
       )
     
     #pc_pivot | "print_pc_pivot" >> beam.Map(lambda x: print(f'pc_pivot={x}'))
