@@ -1,6 +1,8 @@
 import os.path
 import shutil
 import numpy as np
+from apache_beam.transforms.combiners import Top
+from apache_beam.transforms.stats import ApproximateQuantiles
 
 """
 This writes various files that I need for the retrieval project.
@@ -59,6 +61,9 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
       'src/test/resources/serving_model/1763513411')
     
     self.output_pivot_uri = os.path.join(get_bin_dir(), "ratings_and_predictions_pivot")
+    
+    self.output_bayesian_est_uri = os.path.join(get_bin_dir(),
+      "ratings_bayesian_shrinkage")
   
   def test_0(self):
     pipeline0_handle = self._write_train_ratings_pivot_table()
@@ -281,6 +286,29 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
       'prediction_mm' : tf.train.Feature(float_list=tf.train.FloatList(value=emb))}
     return tf.train.Example(features=tf.train.Features(feature=feature_map))
   
+  def laplace_smooth(row:Dict[str, int], column_names:List[str]):
+    #row is like: {'movie_id': 7896, 'prediction_mm': 0.651496946811676, '1': 17, '2': 34, '3': 109, '4': 189, '5': 102}
+    # copy is needed because operation before this is still in progress and the new column causes an error in the create_example
+    # though each PTransform should create a new PCollection... not sure, but making a row copy stops the exception
+    row = row.copy()
+    for column_name in column_names:
+      row[column_name] += 1
+    return row
+  
+  def total_votes(row:Dict[str, int], columns_to_sum:List[str]):
+    # row is like: {'movie_id': 7896, 'prediction_mm': 0.651496946811676, '1': 17, '2': 34, '3': 109, '4': 189, '5': 102}
+    try:
+      row['total_votes'] = sum([row[key] for key in columns_to_sum])
+    except Exception as ex:
+      print(f"ERROR: row={row}, columns_to_sum={columns_to_sum}, ex={ex}")
+      raise ex
+    return row
+  
+  def movie_ratings_mean(row:Dict[str, int], columns_to_sum:List[str]):
+    sums = sum([row[key]*(float(key)) for key in columns_to_sum])
+    row['movie_ratings_mean'] = sums / row['total_votes']
+    return row
+  
   def create_pivot_example(row:Dict[str, int], inp_column_name_type_dict: Dict[str, Any]):
     feature_map = {}
     for key, value in row.items():
@@ -300,9 +328,9 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
             f"element_type={element_type}, but only float, int, and str classes are handled.")
         feature_map[key] = f
       except Exception as ex:
-        logging.error(
-          f'ERROR: row={row},\nkey-{key}, value={value}, type of value={type(value)}\n'
-          f' element_type={element_type}')
+        print(
+          f'ERROR: row={row},\nkey={key}, value={value}, type of value={type(value)}\n'
+          f' element_type={element_type}\nEXCEPTION={ex}')
         raise ex
     return tf.train.Example(features=tf.train.Features(feature=feature_map))
   
@@ -318,8 +346,9 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
     if not self.rewrite_all:
       pivot_exists = os.path.exists(self.output_pivot_uri) and bool(
         os.listdir(self.output_pivot_uri))
-      print(f'pivot with preds files exist: {pivot_exists}')
-      if pivot_exists:
+      shrinkage_ratings_exists = os.path.exists(self.output_bayesian_est_uri) and bool(os.listdir(self.output_bayesian_est_uri))
+      print(f'pivot with preds files exist: {pivot_exists, shrinkage_ratings_exists}')
+      if pivot_exists and shrinkage_ratings_exists:
         return None
       
     try:
@@ -402,9 +431,86 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
       >> beam.io.tfrecordio.WriteToTFRecord(
       file_path_prefix=f'{self.output_pivot_uri}/tfrecords', file_name_suffix='.gz'))
     
+    ## ========= create bayesian shrinkage weighted estimates for retrieval project =======
+    ## performing with beam instead of tf because of quantile and sorting operation.
+    vote_columns = ["1", "2", "3", "4", "5"]
+    
+    joined_pivot_data = (joined_pivot_data | f'laplace_smooth_{random.randint(0, 1000000000000)}'
+      >> beam.Map(WriteRetrievalInputTFRecords.laplace_smooth, vote_columns)
+      | f'total_votes_{random.randint(0, 1000000000000)}'
+      >> beam.Map(WriteRetrievalInputTFRecords.total_votes, vote_columns)
+      | f'movie_ratings_mean_{random.randint(0, 1000000000000)}'
+      >> beam.Map(WriteRetrievalInputTFRecords.movie_ratings_mean, vote_columns))
+    
+    #joined_pivot_data | "print_joined_pivot" >> beam.Map(lambda x: print(f'joined_pivot={x}'))
+    
+    #0.75 quantile
+    q_75 = (joined_pivot_data | f'ExtractVotes_{random.randint(0, 1000000000000)}'
+      >> beam.Map(lambda row: row['total_votes'])
+      | f'quantiles{random.randint(0, 1000000000000)}'
+      >> ApproximateQuantiles.Globally(num_quantiles=4)
+      | f'q_75_{random.randint(0, 1000000000000)}' >> beam.Map(lambda q_list: q_list[2]))
+    #3rd element is 0.75 quantile
+  
+    #q_75 | "print_q_75" >> beam.Map(lambda x: print(f'q_75={x}'))
+
+    joined_pivot_data = (joined_pivot_data | f'weighted_rating_{random.randint(0, 1000000000000)}'
+      >> beam.ParDo(WeightedRating("prediction_mm"), beam.pvalue.AsSingleton(q_75)))
+    
+    #joined_pivot_data | "print_joined_pivot" >> beam.Map(lambda x: print(f'joined_pivot={x}'))
+    # a row is like: joined_pivot={'movie_id': 2814, 'prediction_mm': 0.6365076899528503, '1': 28, '2': 89, '3': 186, '4': 299, '5': 140,
+    #    'total_votes': 742, 'movie_ratings_mean': 3.5849056603773586, 'weighted_rating': 0.5198041064569024}
+    
+    # sort descending by "weighted_rating"
+    #this is sorts all in-memory, returning the top-N requested.  Note that ApproximateQuantiles above assumed that too.
+    """
+    TODO: consider rewriting for distributed "external" sorting:
+    decide on n number of data windows, partitions, over the values in "weighted-rating".
+    for each partition, filter the PCollection for that window,
+    then use Top.of for that window and write results to a partition file with name representing
+    the ordered partition number.
+    when all partitions are processed, one can read the files in their partition order and concatenate
+    rows, then write out into tfrecords with same prefix if prefer a single same prefix to the file names.
+    """
+    N = 3883 #number of movies
+    def create_inverted_key(row):
+      return row['weighted_rating']
+    joined_pivot_data = (joined_pivot_data
+      | f'top_n_weighted_rating_{random.randint(0,1000000000)}'
+      >> Top.Of(N,key=create_inverted_key)
+      | f'unnest_{random.randint(0,1000000000)}'
+      >> beam.FlatMap(lambda x: x))
+    
+    #joined_pivot_data | "print_sorted_joined_pivot" >> beam.Map(lambda x: print(f'sorted={x}'))
+    
+    column_name_type_dict = column_name_type_dict.copy()
+    column_name_type_dict['total_votes'] = int
+    column_name_type_dict['movie_ratings_mean'] = float
+    column_name_type_dict['weighted_rating'] = float
+    
+    (joined_pivot_data | f'joined_pivot_2_ToTFExample_{random.randint(0, 1000000000000)}'
+      >> beam.Map(WriteRetrievalInputTFRecords.create_pivot_example,column_name_type_dict)
+      | f"Serialize_joined_2_pivot_{random.randint(0, 1000000000000)}"
+      >> beam.Map(lambda x: x.SerializeToString())
+      | f"write_joined_pivot_2_to_tfrecord_{random.randint(0, 1000000000000)}"
+      >> beam.io.tfrecordio.WriteToTFRecord(
+      file_path_prefix=f'{self.output_bayesian_est_uri}/tfrecords', file_name_suffix='.gz'))
+    
     result = pipeline.run()
     
     return result
+
+class WeightedRating(beam.DoFn):
+  def __init__(self, prior_rating_column_name:str):
+    super().__init__()
+    self.prior_rating_column_name = prior_rating_column_name
+    
+  def process(self, row, m):
+    v_plus_m = row["total_votes"] + m
+    row["weighted_rating"] = (
+      (row['total_votes'] / (v_plus_m * row['movie_ratings_mean']))
+      + (m / (v_plus_m * row[self.prior_rating_column_name])))
+    yield row
 
 class _CalcMetadataModelPredictions(beam.DoFn):
   def __init__(self, saved_model_path:str, schema_path:str):
