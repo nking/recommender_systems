@@ -1,12 +1,26 @@
-import os.path
+import os
 import shutil
 import numpy as np
 from apache_beam.transforms.combiners import Top
 from apache_beam.transforms.stats import ApproximateQuantiles
+import io
+import csv
 
 """
 This writes various files that I need for the retrieval project.
 It really should be refactored into components and unit tests...
+
+One of the output files holds the Bayesian shrikage estimates, for this snapshot in time.
+see below self.output_bayesian_est_uri.
+  bayesian shrinkage columns:
+    ['movie_id', '1', '2', '3', '4', '5', 'prediction_mm', 'total_votes', 'movie_ratings_mean', 'weighted_rating']
+   
+   - "5","4","total_votes", and "movie_ratings_mean" all give popular results.
+   - "prediction_mm" gives interesting results among the popular genre Drama,
+      but less watched movies.
+   - "weighted_rating" is strange as it returns movies that were loved but
+     by fewer people (which is what weighting by votes and the prior does).
+     Horror movies are all the top 10.
 """
 
 from apache_beam.options.pipeline_options import PipelineOptions
@@ -22,6 +36,9 @@ tf.get_logger().propagate = False
 from absl import logging
 logging.set_verbosity(logging.DEBUG)
 logging.set_stderrthreshold(logging.DEBUG)
+
+MAX_MOVIE_ID = 3952
+N_MOVIES = 3883
 
 #TODO: write a component for making the user and movie tfrecords needed for inputs to
 # the embeddings in the Retrieval project.  for now, hard-wiring the columns instead of using
@@ -104,18 +121,7 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
     pipeline3_handle = self._left_outer_join_predictions_and_pivot()
     if pipeline3_handle is not None:
       pipeline3_handle.wait_until_finish()
-    
-    #assert can load and read ouputs
-    """
-    self.output_uri0 = os.path.join(get_bin_dir(), "ratings_pivot")
-    self.output_uri1 = os.path.join(get_bin_dir(), "movie_emb_inp")
-    self.output_uri2 = os.path.join(get_bin_dir(), "user_emb_inp")
-    self.output_movie_mm_preds_uri = os.path.join(get_bin_dir(),
-       "metadata_model_predictions")
-    self.output_pivot_uri = os.path.join(get_bin_dir(), "ratings_and_predictions_pivot")
-    self.output_bayesian_est_uri = os.path.join(get_bin_dir(),
-      "ratings_bayesian_shrinkage")
-    """
+   
     def parse_tf_example(example_proto, feature_spec):
       return tf.io.parse_single_example(example_proto, feature_spec)
     
@@ -164,7 +170,34 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
       i+=1
       break
     self.assertTrue(i == 1)
+    #can a trfrecord be read for fewer elements?  yes
+    ds = ds_ser.map(lambda x: parse_tf_example(x, self.ratings_pivot_feature_spec))
+    i = 0
+    for x in ds.batch(1):
+      i+=1
+      break
+    self.assertTrue(i == 1)
     
+    #to look at the dataset with pandas:
+    #cols = ['1', '2', '3', '4', '5', 'movie_id', 'movie_ratings_mean', 'prediction_mm', 'total_votes', 'weighted_rating']
+    #df = pd.DataFrame(ds.as_numpy_iterator(), columns=cols)
+    
+    #predictions
+    """
+    file_paths = glob.glob(f'{self.output_movie_mm_preds_uri}/tfrecord*')
+    ds_ser = tf.data.TFRecordDataset(file_paths, compression_type="GZIP")
+    i = 0
+    for x in ds_ser.batch(2):
+      i+=1
+      break
+    self.assertTrue(i == 1)
+    ds = ds_ser.map(lambda x: parse_tf_example(x, self.bayesian_est_pivot_feature_spec))
+    i = 0
+    for x in ds.batch(1):
+      i+=1
+      break
+    self.assertTrue(i == 1)
+    """
     
   def _write_movie_tfrecords(self):
     """
@@ -210,6 +243,9 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
       beam.Map(lambda line: line.split("::"))
     
     #each row in pc is like: ['7', 'Sabrina (1995)', 'Comedy|Romance']
+    
+    #(pc | 'count_movie_dat' >> beam.combiners.Count.Globally()
+    #  | 'Print_movie_dat_count' >> beam.Map(lambda x: print(f"\nmovie.dat count={x}, expected={N_MOVIES}")))
 
     examples = (pc 
       | f'movie_ToTFExample_{random.randint(0, 1000000000000)}'
@@ -234,11 +270,14 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
       >> beam.ParDo(_CalcMetadataModelPredictions(
       saved_model_path = self.saved_model_path, schema_path=self.schema_path)))
     
-    #each row is a tuple like:
+    #each row is a tuple of (movie_id, prediction):
     # (parsed_features['movie_id'] is a tensor like: < tf.Tensor: shape=(1,), dtype = int64, numpy = array([7]),
-    # emb is tensor like: tf.Tensor: shape = (1, 32), dtype = float32, numpy = array([[ 0.08...)
+    # pred is tensor like: tf.Tensor: shape = (1, 32), dtype = float32, numpy = array([[ 0.08...)
     
     # write the movie_id, prediction to file to combine later with pivot of ratings
+    
+    #(movie_id_and_preds | f'movie_id_and_preds_{random.randint(0, 1000000000)}'
+    #  >> beam.Map(lambda x : print(f"x={x}")))
 
     #create to tfexamples (tffeatures)
     movie_id_and_preds_examples = (
@@ -370,11 +409,10 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
     # (parsed_features['movie_id'] is a tensor like: < tf.Tensor: shape=(1,), dtype = int64, numpy = array([7]),
     # emb is tensor like: tf.Tensor: shape = (1, 32), dtype = float32, numpy = array([[ 0.08...)
     m_id = row[0]
-    emb = row[1]
-    #print(f'm_id={m_id}; emb={emb}')
+    pred = row[1]
     feature_map = {
       'movie_id': tf.train.Feature(int64_list=tf.train.Int64List(value=[m_id])),
-      'prediction_mm' : tf.train.Feature(float_list=tf.train.FloatList(value=emb))}
+      'prediction_mm' : tf.train.Feature(float_list=tf.train.FloatList(value=[pred]))}
     return tf.train.Example(features=tf.train.Features(feature=feature_map))
   
   def laplace_smooth(row:Dict[str, int], column_names:List[str]):
@@ -464,7 +502,7 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
       | f"parse_movie_preds_{random.randint(0, 10000000000)}"
       >>  beam.ParDo(_ParseSerializedExamples(serialize_to_string(feature_spec_preds)))
       )
-    
+
     #pc_preds | "print_pc_preds" >> beam.Map(lambda x: print(f'pc_preds={x}'))
     
     pc_pivot = (pipeline | f"read_pivot_{random.randint(0, 10000000000)}"
@@ -500,6 +538,10 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
       logging.error(f"ERROR {ex}")
       raise ex
     
+    #(joined_pivot_data | 'Count_joined' >> beam.combiners.Count.Globally()
+    # | 'Print joined count' >> beam.Map(
+    #    lambda x: print(f"joined count={x}")))
+      
     #joined_pivot_data | "print_joined_pivot" >> beam.Map(lambda x: print(f'joined_pivot={x}'))
     
     column_name_type_dict = {'movie_id': int, 'prediction_mm': float, '1': int, '2': int,
@@ -512,7 +554,7 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
       | f"write_joined_pivot_to_tfrecord_{random.randint(0, 1000000000000)}"
       >> beam.io.tfrecordio.WriteToTFRecord(
       file_path_prefix=f'{self.output_pivot_uri}/tfrecords', file_name_suffix='.gz'))
-    
+  
     ## ========= create bayesian shrinkage weighted estimates for retrieval project =======
     ## performing with beam instead of tf because of quantile and sorting operation.
     vote_columns = ["1", "2", "3", "4", "5"]
@@ -538,7 +580,7 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
 
     joined_pivot_data = (joined_pivot_data | f'weighted_rating_{random.randint(0, 1000000000000)}'
       >> beam.ParDo(WeightedRating("prediction_mm"), beam.pvalue.AsSingleton(q_75)))
-    
+  
     #joined_pivot_data | "print_joined_pivot" >> beam.Map(lambda x: print(f'joined_pivot={x}'))
     # a row is like: joined_pivot={'movie_id': 2814, 'prediction_mm': 0.6365076899528503, '1': 28, '2': 89, '3': 186, '4': 299, '5': 140,
     #    'total_votes': 742, 'movie_ratings_mean': 3.5849056603773586, 'weighted_rating': 0.5198041064569024}
@@ -554,6 +596,7 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
     when all partitions are processed, one can read the files in their partition order and concatenate
     rows, then write out into tfrecords with same prefix if prefer a single same prefix to the file names.
     """
+    
     N = 3883 #number of movies
     def create_inverted_key(row):
       return row['weighted_rating']
@@ -641,14 +684,13 @@ class _LeftOuterJoinAndSumFn(beam.DoFn):
     left = left[0]
     
     right = grouped_elements['right']
-    row = left.copy()
-    row.update(self.empty_right)
+    row = {**left, **self.empty_right}
     
-    if len(right) == 0:
-      yield row
-    else:
+    if len(right) > 0:
       for right_row in right:
          for key, value in right_row.items():
+           if key == 'movie_id':
+             continue
            row[key] += value
     yield row
 
@@ -754,3 +796,23 @@ def create_example_with_fake_for_missing(row,
       raise ValueError(f"out_type={out_type}, but only float, int, and str classes are handled.")
     feature_map[out_name] = f
   return tf.train.Example(features=tf.train.Features(feature=feature_map))
+  
+def convert_tensor_to_scalar(row: Dict[str, tf.Tensor]) -> Dict[
+  str, Any]:
+  transformed_row = {}
+  for key, tensor in row.items():
+    try:
+      transformed_row[key] = tensor.numpy().item()
+    except Exception as e:
+      if tensor.shape.rank > 0:
+        transformed_row[key] = str(tensor.numpy().tolist())
+      else:
+        raise ValueError(f"Failed to convert key '{key}' from Tensor to scalar: {e}")
+  return transformed_row
+
+def dict_to_csv_string(row_dict: Dict[str, Any], column_order: List[str]) -> str:
+    values = [row_dict.get(col, '') for col in column_order]
+    output = io.StringIO()
+    writer = csv.writer(output, quoting=csv.QUOTE_MINIMAL)
+    writer.writerow(values)
+    return output.getvalue().strip()
