@@ -19,8 +19,8 @@ see below self.output_bayesian_est_uri.
    - "prediction_mm" gives interesting results among the popular genre Drama,
       but less watched movies.
    - "weighted_rating" is strange as it returns movies that were loved but
-     by fewer people (which is what weighting by votes and the prior does).
-     Horror movies are all the top 10.
+      by fewer people (which is what weighting by votes and the prior does).
+      Horror movies are all the top 10.
 """
 
 from apache_beam.options.pipeline_options import PipelineOptions
@@ -157,7 +157,7 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
       self.assertTrue(i == 1)
     
     #===== bayesian estimate output
-    file_paths = glob.glob(f'{self.output_bayesian_est_uri}/tfrecord*')
+    file_paths = glob.glob(f'{self.output_bayesian_est_uri}/*tfrecord*')
     ds_ser = tf.data.TFRecordDataset(file_paths, compression_type="GZIP")
     i = 0
     for x in ds_ser.batch(2):
@@ -598,14 +598,21 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
     """
     
     N = 3883 #number of movies
-    def create_inverted_key(row):
+    def create_inverted_key_weighted_rating(row):
       return row['weighted_rating']
+    def create_inverted_key_mean_ratings(row):
+      return row['movie_ratings_mean']
+    def create_inverted_key_mm_predictions(row):
+      return row['prediction_mm']
+    
+    ## ========= sort by movie_ratings_mean  and write out =========
+    
     joined_pivot_data = (joined_pivot_data
       | f'top_n_weighted_rating_{random.randint(0,1000000000)}'
-      >> Top.Of(N,key=create_inverted_key)
+      >> Top.Of(N,key=create_inverted_key_mean_ratings)
       | f'unnest_{random.randint(0,1000000000)}'
       >> beam.FlatMap(lambda x: x))
-    
+      
     #joined_pivot_data | "print_sorted_joined_pivot" >> beam.Map(lambda x: print(f'sorted={x}'))
     
     column_name_type_dict = column_name_type_dict.copy()
@@ -619,7 +626,41 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
       >> beam.Map(lambda x: x.SerializeToString())
       | f"write_joined_pivot_2_to_tfrecord_{random.randint(0, 1000000000000)}"
       >> beam.io.tfrecordio.WriteToTFRecord(
-      file_path_prefix=f'{self.output_bayesian_est_uri}/tfrecords', file_name_suffix='.gz'))
+      file_path_prefix=f'{self.output_bayesian_est_uri}/mean_ratings_tfrecords', file_name_suffix='.gz'))
+    
+    ## ========== sort by metadata model predictions  and write out ===============================
+    joined_pivot_data = (joined_pivot_data
+      | f'top_n_weighted_rating_{random.randint(0,1000000000)}'
+      >> Top.Of(N,key=create_inverted_key_mm_predictions)
+      | f'unnest_{random.randint(0,1000000000)}'
+      >> beam.FlatMap(lambda x: x))
+      
+    #joined_pivot_data | "print_sorted_joined_pivot" >> beam.Map(lambda x: print(f'sorted={x}'))
+    
+    (joined_pivot_data | f'joined_pivot_2_ToTFExample_{random.randint(0, 1000000000000)}'
+      >> beam.Map(WriteRetrievalInputTFRecords.create_pivot_example,column_name_type_dict)
+      | f"Serialize_joined_2_pivot_{random.randint(0, 1000000000000)}"
+      >> beam.Map(lambda x: x.SerializeToString())
+      | f"write_joined_pivot_2_to_tfrecord_{random.randint(0, 1000000000000)}"
+      >> beam.io.tfrecordio.WriteToTFRecord(
+      file_path_prefix=f'{self.output_bayesian_est_uri}/mm_predictions_tfrecords', file_name_suffix='.gz'))
+    
+    ## ========== sort by bayesian weighted mean  ===============================
+    joined_pivot_data = (joined_pivot_data
+      | f'top_n_weighted_rating_{random.randint(0,1000000000)}'
+      >> Top.Of(N,key=create_inverted_key_weighted_rating)
+      | f'unnest_{random.randint(0,1000000000)}'
+      >> beam.FlatMap(lambda x: x))
+      
+    #joined_pivot_data | "print_sorted_joined_pivot" >> beam.Map(lambda x: print(f'sorted={x}'))
+    
+    (joined_pivot_data | f'joined_pivot_2_ToTFExample_{random.randint(0, 1000000000000)}'
+      >> beam.Map(WriteRetrievalInputTFRecords.create_pivot_example,column_name_type_dict)
+      | f"Serialize_joined_2_pivot_{random.randint(0, 1000000000000)}"
+      >> beam.Map(lambda x: x.SerializeToString())
+      | f"write_joined_pivot_2_to_tfrecord_{random.randint(0, 1000000000000)}"
+      >> beam.io.tfrecordio.WriteToTFRecord(
+      file_path_prefix=f'{self.output_bayesian_est_uri}/weighted_rating_tfrecords', file_name_suffix='.gz'))
     
     result = pipeline.run()
     
