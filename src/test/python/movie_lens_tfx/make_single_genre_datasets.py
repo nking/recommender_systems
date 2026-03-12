@@ -74,22 +74,27 @@ df_movies_single = dfs['movies'].filter(
 df_movies_multiple = dfs['movies'].filter(
     pl.col("genres").str.contains("|", literal=True)
 )
-# find users who have rated a movie in df_movies_multiple
-df_users_mult = dfs['ratings'].filter(
-  pl.col("movie_id").is_in(df_movies_multiple['movie_id'].implode()),
-  pl.col("rating") > 4
-).select(pl.col("user_id")).to_series().unique().to_list()
-print(len(df_users_mult))
-# there are only 2 pure genre users for rating > 2 or 3
-# for rating > 4, there are 6040 - 5983 = 57 pure genre users
 
-#2025 out of 3883 movies
-print(f"# movies with only 1 genre = {df_movies_single['movie_id'].count()} out of {dfs['movies']['movie_id'].count()} movies")
+result = (
+    dfs['ratings'].filter(pl.col("rating") > 4)
+    .join(dfs['movies'].select(["movie_id", "genres"]), on="movie_id")
+    .group_by("user_id")
+    .agg([
+        # Count how many movie_ids in this group exist in the multiple_genres table
+        pl.col("movie_id").is_in(df_movies_multiple["movie_id"])
+          .sum().alias("n_multiple"),
+        # Count the number of unique genres seen for this user
+        pl.col("genres").n_unique().alias("n_unique_genres")
+    ])
+)
+#print(result)
+result_users = result.filter(pl.col("n_multiple") == 0,
+  pl.col("n_unique_genres") == 1)
+print(f'{result_users.count()}\n{result_users}')
 
-#310699 of the 1 million ratings are for those 2025 movies:
-
+#19 users
 df_users = dfs['users'].filter(
-    ~pl.col("user_id").is_in(df_users_mult)
+    pl.col("user_id").is_in(result_users['user_id'])
 )
 print(df_users['user_id'].count())
 #UserID::Gender::Age::Occupation::Zip-code
@@ -103,7 +108,6 @@ df_as_string.write_csv(os.path.join(get_bin_dir(), "users_single_genre.dat"),
 
 #writa a parquet file:
 df_users.write_parquet(os.path.join(get_bin_dir(),"users_single_genre.parquet"))
-
 
 """ one might want to compare the hypergeomtric distr eval to a model trained only with
 this data for something like best case statistics to compare and understand results.
