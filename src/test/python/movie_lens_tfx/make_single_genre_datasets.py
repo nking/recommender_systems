@@ -71,56 +71,27 @@ for key in file_paths:
 df_movies_single = dfs['movies'].filter(
     ~pl.col("genres").str.contains("|", literal=True)
 )
+df_movies_multiple = dfs['movies'].filter(
+    pl.col("genres").str.contains("|", literal=True)
+)
+# find users who have rated a movie in df_movies_multiple
+df_users_mult = dfs['ratings'].filter(
+  pl.col("movie_id").is_in(df_movies_multiple['movie_id'].implode()),
+  pl.col("rating") > 4
+).select(pl.col("user_id")).to_series().unique().to_list()
+print(len(df_users_mult))
+# there are only 2 pure genre users for rating > 2 or 3
+# for rating > 4, there are 6040 - 5983 = 57 pure genre users
 
 #2025 out of 3883 movies
 print(f"# movies with only 1 genre = {df_movies_single['movie_id'].count()} out of {dfs['movies']['movie_id'].count()} movies")
 
 #310699 of the 1 million ratings are for those 2025 movies:
-df_ratings = dfs['ratings'].filter(
-    pl.col("movie_id").is_in(df_movies_single['movie_id'].implode())
-)
-df_ratings = df_ratings.with_columns(pl.col('user_id').cast(pl.Int64))
-df_ratings = df_ratings.with_columns(pl.col('movie_id').cast(pl.Int64))
-df_ratings = df_ratings.join(
-    df_movies_single.select(["movie_id", "genres"]),
-    on="movie_id",
-    how="left"
-)
 
-# group ratings by users and filter to keep only users that have a single genre in their rated movies
-# Keep rows where the user has exactly 1 unique genre across all their ratings
-df_ratings_filtered = df_ratings.filter(
-    pl.col("genres").n_unique().over("user_id") == 1
-)
-'''
-same as
-df2 = df_ratings.group_by('user_id').agg(pl.col('genres'))
-df_ratings_filtered = df2.filter(
-    pl.col("genres").list.n_unique() == 1
-)
-'''
-# 160 users out of 6040
-print(f"#of users who only rated movies from "
-    f"1 genre={df_ratings_filtered['user_id'].unique().count()} "
-    f"out of {dfs['users']['user_id'].unique().count()} users")
-
-# Filter to keep rows where the user's total movie count is >= 3
-df_ratings_filtered = df_ratings_filtered.filter(
-    pl.len().over("user_id") >= 3
-)
-# 94
-print(f"#of user who rated 3 or more from those = "
-    f"{df_ratings_filtered['user_id'].unique().count()} "
-    f"out of {dfs['users']['user_id'].unique().count()} users")
-
-# these are the users to use for a hypergeometric probability distribution evaulation
-# writing the data in the same format as users.dat but calling it users_single_genre.dat
-
-# write to dat, parquet and tfrecords
-_users = df_ratings_filtered['user_id'].unique()
 df_users = dfs['users'].filter(
-    pl.col("user_id").is_in(_users.implode())
+    ~pl.col("user_id").is_in(df_users_mult)
 )
+print(df_users['user_id'].count())
 #UserID::Gender::Age::Occupation::Zip-code
 #1::F::1::10::48067
 #write .dat file:
@@ -179,5 +150,7 @@ be severely underdetermined problem:
   * movie embedding of 651 movies times embedding dimension of 6
   * each model having at least 1 fully connected layer and the same output embed dim of 8 or so
   => total number params = (94*3) + (3*8)+8  + (651*6) + (6*8) +8 = 4276
-  but only have 94 inputs
+  but only have 94 inputs.
+Adding regularization to the model can help reduce fitting the noise to make a
+simpler lower variance fit, but the result might still be overfit.
 """
