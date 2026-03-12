@@ -23,7 +23,9 @@ _infiles_dict = deserialize(_infiles_dict_ser)
 
 file_paths = {
   #'ratings': _infiles_dict['ratings']['uri'],
-  'ratings': os.path.join(get_project_dir(), "src/main/resources/ml-1m/ratings.dat"),
+  'ratings': os.path.join(get_project_dir(), "src/main/resources/ml-1m/",
+    #"ratings.dat"),
+    "ratings_timestamp_sorted_part_1.dat"),
   'users':_infiles_dict['users']['uri'],
   'movies':_infiles_dict['movies']['uri'],
 }
@@ -94,9 +96,10 @@ print(f'{result_users.count()}\n{result_users}')
 
 #19 users
 df_users = dfs['users'].filter(
-    pl.col("user_id").is_in(result_users['user_id'])
+    pl.col("user_id").is_in(result_users['user_id'].implode())
 )
 print(df_users['user_id'].count())
+print(df_users['user_id'].to_numpy().tolist())
 #UserID::Gender::Age::Occupation::Zip-code
 #1::F::1::10::48067
 #write .dat file:
