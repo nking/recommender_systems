@@ -121,8 +121,6 @@ for key in file_paths:
         new_columns=schema.names(),
         use_pyarrow=True)
 
-    dfs[key] = df
-
     if key=="movies":
         df = df.with_columns(
           pl.col("genres").str.replace("Children's", "Children")
@@ -204,7 +202,8 @@ for key in file_paths:
                 #        #size="total", size_max=15,
                 #        color_discrete_map = {feature: "blue", feature2: "green", feature3:"red"} )
                 #    fig.show(renderer='notebook')
-
+    dfs[key] = df
+    
 df_no_match = dfs['movies'].join(dfs['ratings'], on="movie_id", how="anti")
 print(f'{len(df_no_match)} movies were not rated')
 df_no_match = dfs['users'].join(dfs['ratings'], on="user_id", how="anti")

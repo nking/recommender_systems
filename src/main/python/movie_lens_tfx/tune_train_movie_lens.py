@@ -96,6 +96,18 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   input_dataset_element_spec = _input_dataset_element_spec
   
   @keras.utils.register_keras_serializable(package=package)
+  class CyclicalEncoding(keras.Layers.Layer):
+    def __init__(self, max_val, **kwargs):
+      super().__init__(**kwargs)
+      self.max_val = max_val
+    def call(self, inputs):
+      radians = 2 * math.pi * tf.cast(inputs, tf.float32) / self.max_val
+      return tf.concat([tf.sin(radians), tf.cos(radians)], axis=-1)
+    def get_config(self):
+      config = super(CyclicalEncoding, self).get_config()
+      config.update({"max_val": self.max_val})
+  
+  @keras.utils.register_keras_serializable(package=package)
   class UserModel(keras.Model):
     # for init from a load, arguments are present for the compositional instance members too
     def __init__(self, max_user_id: int, n_age_groups: int,
@@ -138,10 +150,12 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         ], name="age_emb")
       
       # numerical
+      # TODO: hour should be cyclical so cross with day of week should be cyclical too.
       self.hr_wk_embedding = None
       if self.feature_acronym.find("h") > -1:
         self.hr_wk_embedding = keras.Sequential([
           keras.layers.Embedding(24 * 7 + 1, embed_out_dim),
+          ##CyclicalEncoding(max_val=24*7) TODO replace embedding with this and test
           keras.layers.Flatten(data_format='channels_last'),
         ], name="hr_wk_emb")
       

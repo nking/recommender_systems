@@ -1,3 +1,19 @@
+- change the bi-encoder to use pretrained LLM for
+  the User and Movie properties that are not
+  user_id and movie_id.  use a prompt formatting
+  and version control for the inputs.
+  note that missing information from a query can 
+  use "unknown".  the rest of the mode remains
+  the same.  see google doc folder for models to
+  try.
+
+- low priority:
+  movie lens ratings scale actually starts at 1
+  so consider changing the transform to use
+  (rating-1)/4.  the current transform does no harm
+  and is consistently interpreted throught the code,
+  but should be corrected.  
+
 - consider adding to pipeline:
   - transform_input_cache
 
@@ -9,6 +25,7 @@
   it will use is user_id and age when feature_acronym="a".
   similarly, the serving_candidate models needs movie_id and genres.
 
+  restructure:
 - consider adding other model families to the
   pipeline, that is, a wrapper to use Tuner on
   each model family and then compare among best of each.
