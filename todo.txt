@@ -7,13 +7,6 @@
   the same.  see google doc folder for models to
   try.
 
-- low priority:
-  movie lens ratings scale actually starts at 1
-  so consider changing the transform to use
-  (rating-1)/4.  the current transform does no harm
-  and is consistently interpreted throught the code,
-  but should be corrected.  
-
 - consider adding to pipeline:
   - transform_input_cache
 
@@ -66,7 +59,6 @@
      ...
    -> problem is that currently, cannot pass that data as Channels
       to components that could use them like Tuner and Trainer
-
 - CI/CD
   - a linter usable w/ terraform:
     https://www.markcallen.com/tflint-static-analysis-for-terraform/
