@@ -539,10 +539,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   @keras.utils.register_keras_serializable(package=package)
   class TwoTowerDNN(keras.Model):
     """
-    a Two-Tower DNN model that accepts input containing: user, context, and item information along with
+    a Two-Tower (bi-encoder) DNN model that accepts input containing: user, context, and item information along with
     a label for training.
-
-    a sigmoid is used to provide logistic regression predictions of the rating.
 
     when use_bias_corr is true, the Yi et al. paper is followed to calculate the item sampling probability
     within a mini-batch which is then used to correct probabities and the batch loss sum.
@@ -583,7 +581,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       
       # elementwise multiplication:
       self.dot_layer = keras.layers.Dot(axes=1)
-      self.sigmoid_layer = keras.layers.Activation(keras.activations.sigmoid)
+      #self.sigmoid_layer = keras.layers.Activation(keras.activations.sigmoid)
       
       self.reg = reg
       
@@ -618,7 +616,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       movie_vector = self.candidate_model(inputs)
       #tf.print('U,V SHAPES: ', user_vector.shape, movie_vector.shape)
       s = self.dot_layer([user_vector, movie_vector])
-      s = self.sigmoid_layer(s)
+      #removing the sigmoid because the user and movie vectors are normalized
+      #s = self.sigmoid_layer(s)
       #tf.print('CALL', self.name, ' shape=', s.shape, ' type=', type(s))
       return s
       
@@ -641,7 +640,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       s1 = self.candidate_model.compute_output_shape(input_shape)
       self.dot_layer.build([s0, s1])
       s2 = self.dot_layer.compute_output_shape([s0, s1])
-      self.sigmoid_layer.build(s2)
+      #self.sigmoid_layer.build(s2)
       self.built = True
     
     def compute_output_shape(self, input_shape):
@@ -650,8 +649,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       s0 = self.query_model.compute_output_shape(input_shape)
       s1 = self.candidate_model.compute_output_shape(input_shape)
       s2 = self.dot_layer.compute_output_shape([s0, s1])
-      s3 = self.sigmoid_layer.compute_output_shape(s2)
-      _shape_3 = [i for i in s3]
+      #s3 = self.sigmoid_layer.compute_output_shape(s2)
+      _shape_3 = [i for i in s2]
       _shape_3[0] = None
       return _shape_3
       # return (None,)
