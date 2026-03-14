@@ -96,7 +96,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   input_dataset_element_spec = _input_dataset_element_spec
   
   @keras.utils.register_keras_serializable(package=package)
-  class CyclicalEncoding(keras.Layers.Layer):
+  class CyclicalEncoding(keras.layers.Layer):
     def __init__(self, max_val, **kwargs):
       super().__init__(**kwargs)
       self.max_val = max_val
