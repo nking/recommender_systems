@@ -7,6 +7,20 @@
   the same.  see google doc folder for models to
   try.
 
+- consider making a Factorization Machine model
+  pipeline with the model implemented from scratch
+  in Tensorflow/Keras2
+- consider implementing a Jax MLOps pipeline
+  with Jax, Grain (w/ ArrayRecord format), 
+  Flax/NNX, Optax, Orbax, XLA
+  and possibly Pallas and Qwix.
+  Orbax can write to Vertex AL Metadata (replacing MLMD).
+  Vertex AI pipelines using Kubeflow v2.
+  - serving Jax on Vertex AI uses vLLM or JetStream
+  - OCI artifacts to house the Grain and Flax logic)
+  - Vertex Model Registry and Model Evaluation are used
+    in the MLOps.
+
 - consider adding to pipeline:
   - transform_input_cache
 

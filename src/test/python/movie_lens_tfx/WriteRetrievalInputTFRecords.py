@@ -10,7 +10,7 @@ import csv
 This writes various files that I need for the retrieval project.
 It really should be refactored into components and unit tests...
 
-One of the output files holds the Bayesian shrikage estimates, for this snapshot in time.
+One of the output files holds the Bayesian shrinkage estimates, for this snapshot in time.
 see below self.output_bayesian_est_uri.
   bayesian shrinkage columns:
     ['movie_id', '1', '2', '3', '4', '5', 'prediction_mm', 'total_votes', 'movie_ratings_mean', 'weighted_rating']
@@ -75,7 +75,7 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
     self.schema_path = os.path.join(get_project_dir(),
       'src/main/resources/pre_transform/schema.pbtxt')
     self.saved_model_path = os.path.join(get_project_dir(),
-      'src/test/resources/serving_model/1763513411')
+      'src/test/resources/serving_model/1773459991')
     
     self.output_pivot_uri = os.path.join(get_bin_dir(), "ratings_and_predictions_pivot")
     
@@ -267,7 +267,7 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
     #calculate predictions from metadata model
     movie_id_and_preds = (examples_ser
       | f'predict_movies_{random.randint(0, 1000000000)}'
-      >> beam.ParDo(_CalcMetadataModelPredictions(
+      >> beam.ParDo(_CalcModelPredictions(
       saved_model_path = self.saved_model_path, schema_path=self.schema_path)))
     
     #each row is a tuple of (movie_id, prediction):
@@ -678,11 +678,11 @@ class WeightedRating(beam.DoFn):
       + (m / (v_plus_m * row[self.prior_rating_column_name])))
     yield row
 
-class _CalcMetadataModelPredictions(beam.DoFn):
+class _CalcModelPredictions(beam.DoFn):
   def __init__(self, saved_model_path:str, schema_path:str):
     self.saved_model_path = saved_model_path
     self.schema_path = schema_path
-    self.metadata_model = None #pickling error, so delay until setup
+    self.serving_default = None #pickling error, so delay until setup
     self.feature_spec = None
     self.INPUT_KEY = None
   
@@ -692,15 +692,15 @@ class _CalcMetadataModelPredictions(beam.DoFn):
     This is where you load heavy, non-serializable resources.
     """
     loaded_user_movie_model = tf.saved_model.load(self.saved_model_path)
-    self.metadata_model = loaded_user_movie_model.signatures["serving_default"]
+    self.serving_default = loaded_user_movie_model.signatures["serving_default"]
     raw_schema = tfx.utils.parse_pbtxt_file(self.schema_path, schema_pb2.Schema())
     self.feature_spec = schema_utils.schema_as_feature_spec(raw_schema).feature_spec
-    self.INPUT_KEY = list(self.metadata_model.structured_input_signature[1].keys())[0]
+    self.INPUT_KEY = list(self.serving_default.structured_input_signature[1].keys())[0]
 
   def process(self, example_ser):
     parsed_features = tf.io.parse_single_example(example_ser, self.feature_spec)
     #wrap example_ser in a list because it expects a batch of inputs
-    pred = self.metadata_model(**{self.INPUT_KEY: [example_ser]})['outputs']
+    pred = self.serving_default(**{self.INPUT_KEY: [example_ser]})['outputs']
     #parsed_features['movie_id'] is a tensor like: < tf.Tensor: shape=(1,), dtype = int64, numpy = array([7])
     #emb is tensor like: tf.Tensor: shape = (1, 32), dtype = float32, numpy = array([[ 0.08...
     m_id = int(parsed_features['movie_id'].numpy()[0])

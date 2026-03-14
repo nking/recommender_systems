@@ -18,6 +18,11 @@ tf.get_logger().propagate = False
 logging.set_verbosity(logging.WARNING)
 logging.set_stderrthreshold(logging.WARNING)
 
+'''
+results:
+10003/10003 ━━━━━━━━━━━━━━━━━━━━ 40s 4ms/step - mean_absolute_error: 0.1382 - root_mean_squared_error: 0.1741 - loss: 0.0252 - val_loss: 0.0303
+'''
+
 infiles_dict_ser, output_config_ser, split_names = get_test_data(use_small=False)
 user_id_max = 6040
 movie_id_max = 3952
