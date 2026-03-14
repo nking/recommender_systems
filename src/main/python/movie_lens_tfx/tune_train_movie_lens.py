@@ -154,8 +154,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       self.hr_wk_embedding = None
       if self.feature_acronym.find("h") > -1:
         self.hr_wk_embedding = keras.Sequential([
-          keras.layers.Embedding(24 * 7 + 1, embed_out_dim),
-          ##CyclicalEncoding(max_val=24*7) TODO replace embedding with this and test
+          #keras.layers.Embedding(24 * 7 + 1, embed_out_dim),
+          CyclicalEncoding(max_val=24*7),
           keras.layers.Flatten(data_format='channels_last'),
         ], name="hr_wk_emb")
       
