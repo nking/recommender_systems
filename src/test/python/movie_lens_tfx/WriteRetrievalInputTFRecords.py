@@ -5,7 +5,7 @@ from apache_beam.transforms.combiners import Top
 from apache_beam.transforms.stats import ApproximateQuantiles
 import io
 import csv
-
+from array_record_beam_sdk import arrayrecordio
 """
 This writes various files that I need for the retrieval project.
 It really should be refactored into components and unit tests...
@@ -264,6 +264,11 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
       >> beam.io.tfrecordio.WriteToTFRecord(file_path_prefix=f'{self.output_uri1}/tfrecords',
       file_name_suffix='.gz'))
     
+    #for the ranker project, write in array_record format
+    (examples_ser | f'write_movies_fmt_array_record{random.randint(0, 1000000000)}'
+      >> arrayrecordio.WriteToArrayRecord(
+      f'{self.output_uri1}/movie_embeddings.array_record', shard_name_template="-SSSSS-of-NNNNN"))
+    
     #calculate predictions from metadata model
     movie_id_and_preds = (examples_ser
       | f'predict_movies_{random.randint(0, 1000000000)}'
@@ -315,12 +320,18 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
       >> beam.Map(create_example_with_fake_for_missing,
       input_column_name_type_list2, output_column_name_type_list))
     
-    (examples2 | f"Serialize_{random.randint(0, 1000000000000)}"
-      >> beam.Map(lambda x: x.SerializeToString())
-      | f"write_to_tfrecord_{random.randint(0, 1000000000000)}"
+    examples2_ser = (examples2 | f"Serialize_{random.randint(0, 1000000000000)}"
+      >> beam.Map(lambda x: x.SerializeToString()))
+    
+    (examples2_ser | f"write_users_emb_to_tfrecord_{random.randint(0, 1000000000000)}"
       >> beam.io.tfrecordio.WriteToTFRecord(
         file_path_prefix=f'{self.output_uri2}/tfrecords', file_name_suffix='.gz'))
       
+    #for the ranker project, write in array_record format
+    (examples2_ser | f'write_user_emb_to_array_record{random.randint(0, 1000000000)}'
+        >> arrayrecordio.WriteToArrayRecord(f'{self.output_uri2}/user_embeddings.array_record',
+        shard_name_template="-SSSSS-of-NNNNN"))
+    
     result2 = pipeline2.run()
     
     return result1

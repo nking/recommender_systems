@@ -21,7 +21,9 @@ dependencies = [
     "tensorflow-data-validation==1.16.1",
     "tensorflow-metadata==1.16.1",
     "ml-metadata==1.16.0",
-    "pandas==1.5.3"
+    "pandas==1.5.3",
+    "array-record==0.5.0",
+    "array_record_beam_sdk==0.1.0"
 ]
 readme = "README.md"
 license = "MIT"
