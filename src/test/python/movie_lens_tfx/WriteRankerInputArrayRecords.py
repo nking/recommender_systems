@@ -7,6 +7,7 @@ import io
 import csv
 from array_record_beam_sdk import arrayrecordio
 import msgpack
+from array_record.python import array_record_module
 
 """
 This writes ratings file to array_record format for use by the Ranker project.
@@ -48,6 +49,11 @@ class WriteRankerInputArrayRecords(tf.test.TestCase):
             'src/main/resources/ml-1m/ratings_timestamp_sorted_part_1.dat')
         self.input_path1 = os.path.join(get_project_dir(),
             'src/main/resources/ml-1m/ratings_timestamp_sorted_part_2.dat')
+        
+        self.movie_csv_uri = os.path.join(get_project_dir(),
+            'src/main/resources/ml-1m/movies.dat')
+        self.movie_array_record_uri = os.path.join(get_bin_dir(),
+            'movie_ids.array_record')
         
         self.output_uri0 = os.path.join(get_bin_dir(), "ratings_part_1.array_record")
         self.output_uri1 = os.path.join(get_bin_dir(), "ratings_part_2.array_record")
@@ -97,6 +103,33 @@ class WriteRankerInputArrayRecords(tf.test.TestCase):
         
         pipeline0.run()
     
+    def test_write_movies_array_record(self):
+        
+        writer = None
+        try:
+            writer = array_record_module.ArrayRecordWriter(self.movie_array_record_uri, "group_size:1")
+            with open(self.movie_csv_uri, mode='r', encoding='iso-8859-1') as f:
+                for line in f:
+                    movie_id = int(line.strip().split("::")[0])
+                    writer.write(msgpack.packb(movie_id, use_bin_type=True))
+        except Exception as ex:
+            raise ex
+        finally:
+            if writer is not None:
+                writer.close()
+        
+        reader = None
+        try:
+            reader = array_record_module.ArrayRecordReader(self.movie_array_record_uri)
+            record: list = msgpack.unpackb(reader.read())
+            self.assertEqual(1, 1)
+        except Exception as ex:
+            raise ex
+        finally:
+            if reader is not None:
+                reader.close()
+        
+    
     def test_read_array_records(self):
         import os
         from array_record.python import array_record_module
@@ -105,10 +138,15 @@ class WriteRankerInputArrayRecords(tf.test.TestCase):
             "ratings_part_2.array_record-00000-of-00001"]:
             filepath = os.path.join(get_bin_dir(),filename)
             if os.path.exists(filepath):
-                reader = array_record_module.ArrayRecordReader(filepath)
-                # read with random access, just 1 record
-                record: list = msgpack.unpackb(reader.read())
-                self.assertEqual(4, len(record))
+                reader = None
+                try:
+                    reader = array_record_module.ArrayRecordReader(filepath)
+                    # read with random access, just 1 record
+                    record: list = msgpack.unpackb(reader.read())
+                    self.assertEqual(4, len(record))
+                finally:
+                    if reader is not None:
+                        reader.close()
                 """record: dict = msgpack.unpackb(reader.read())
                 self.assertTrue(record['user_id'] is not None)
                 self.assertTrue(record['movie_id'] is not None)
