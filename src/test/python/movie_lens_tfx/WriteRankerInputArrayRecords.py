@@ -56,6 +56,7 @@ class WriteRankerInputArrayRecords(tf.test.TestCase):
             'movie_ids.array_record')
         
         self.output_uri0 = os.path.join(get_bin_dir(), "ratings_part_1.array_record")
+        self.output_uri0_tiny = os.path.join(get_bin_dir(), "ratings_part_1_tiny.array_record")
         self.output_uri1 = os.path.join(get_bin_dir(), "ratings_part_2.array_record")
     
     def test_write_array_records(self):
@@ -66,7 +67,7 @@ class WriteRankerInputArrayRecords(tf.test.TestCase):
               beam.io.ReadFromText(self.input_path0, skip_header_lines=0,
                   coder=CustomUTF8Coder())
               | f'parse_ratings_raw_train' >> beam.Map(lambda line: line.split("::")))
-        
+              
         #serialized_train = (pc | "FormatToDict_train" >> beam.Map(lambda x: {
         #    "user_id": int(x[0]), "movie_id": int(x[1]),
         #    "rating": float(x[2]),"timestamp": int(x[3])})
@@ -80,6 +81,15 @@ class WriteRankerInputArrayRecords(tf.test.TestCase):
             >> arrayrecordio.WriteToArrayRecord(file_path_prefix=self.output_uri0,
             num_shards=1))
         
+        #writing a small file for development
+        (pc | 'Filter to tiny' >> beam.Filter(lambda x: random.random() < 0.00001)
+            | "FormatToList_train_tiny" >> beam.Map(lambda x: [
+            int(x[0]), int(x[1]), int(x[2]), int(x[3])])
+            | "SerializeWithMsgpack_train_tiny" >> beam.Map(msgpack.packb)
+            | f'write_array_record_train_tiny'
+            >> arrayrecordio.WriteToArrayRecord(file_path_prefix=self.output_uri0_tiny,
+            num_shards=1))
+
         pc2 = (pipeline0 | f"read_ratings_raw_test" >>
               beam.io.ReadFromText(self.input_path1,
                   skip_header_lines=0,
