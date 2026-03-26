@@ -25,7 +25,7 @@ file_paths = {
   #'ratings': _infiles_dict['ratings']['uri'],
   'ratings': os.path.join(get_project_dir(), "src/main/resources/ml-1m/",
     #"ratings.dat"),
-    "ratings_timestamp_sorted_part_1.dat"),
+    "ratings_train.dat"),
   'users':_infiles_dict['users']['uri'],
   'movies':_infiles_dict['movies']['uri'],
 }

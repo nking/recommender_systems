@@ -29,7 +29,7 @@ MIN_EVAL_SIZE = 50  # make this larger for production pipeline
 BATCH_SIZE = 64
 NUM_EPOCHS = 20
 
-num_examples = 800187
+num_examples = 805139
 
 PIPELINE_NAME = 'metadata_pipeline'
 PIPELINE_ROOT = os.path.join(get_bin_dir(), PIPELINE_NAME)

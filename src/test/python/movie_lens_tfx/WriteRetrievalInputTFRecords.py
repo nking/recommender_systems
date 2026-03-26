@@ -61,7 +61,8 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
       # direct_running_mode='multi_threading',
     )
     
-    self.input_path0 = os.path.join(get_project_dir(), 'src/main/resources/ml-1m/ratings_timestamp_sorted_part_1.dat')
+    self.input_path0 = os.path.join(get_project_dir(),
+       'src/main/resources/ml-1m/ratings_train.dat')
     self.output_uri0 = os.path.join(get_bin_dir(), "ratings_pivot")
     
     self.input_path1 = os.path.join(get_project_dir(), 'src/main/resources/ml-1m/movies.dat')
@@ -74,7 +75,7 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
     self.schema_path = os.path.join(get_project_dir(),
       'src/main/resources/pre_transform/schema.pbtxt')
     self.saved_model_path = os.path.join(get_project_dir(),
-      'src/test/resources/serving_model/1773459991')
+      'src/test/resources/serving_model/1774483738')
     
     self.output_pivot_uri = os.path.join(get_bin_dir(), "ratings_and_predictions_pivot")
     

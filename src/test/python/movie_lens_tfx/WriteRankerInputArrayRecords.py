@@ -46,18 +46,21 @@ class WriteRankerInputArrayRecords(tf.test.TestCase):
         )
         
         self.input_path0 = os.path.join(get_project_dir(),
-            'src/main/resources/ml-1m/ratings_timestamp_sorted_part_1.dat')
+            'src/main/resources/ml-1m/ratings_train.dat')
         self.input_path1 = os.path.join(get_project_dir(),
-            'src/main/resources/ml-1m/ratings_timestamp_sorted_part_2.dat')
+            'src/main/resources/ml-1m/ratings_val.dat')
+        self.input_path2 = os.path.join(get_project_dir(),
+            'src/main/resources/ml-1m/ratings_test.dat')
         
         self.movie_csv_uri = os.path.join(get_project_dir(),
             'src/main/resources/ml-1m/movies.dat')
         self.movie_array_record_uri = os.path.join(get_bin_dir(),
             'movie_ids.array_record')
         
-        self.output_uri0 = os.path.join(get_bin_dir(), "ratings_part_1.array_record")
-        self.output_uri0_tiny = os.path.join(get_bin_dir(), "ratings_part_1_tiny.array_record")
-        self.output_uri1 = os.path.join(get_bin_dir(), "ratings_part_2.array_record")
+        self.output_uri0 = os.path.join(get_bin_dir(), "ratings_train.array_record")
+        self.output_uri0_tiny = os.path.join(get_bin_dir(), "ratings_train_tiny.array_record")
+        self.output_uri1 = os.path.join(get_bin_dir(), "ratings_val.array_record")
+        self.output_uri2 = os.path.join(get_bin_dir(), "ratings_test.array_record")
     
     def test_write_array_records(self):
        
@@ -90,27 +93,39 @@ class WriteRankerInputArrayRecords(tf.test.TestCase):
             >> arrayrecordio.WriteToArrayRecord(file_path_prefix=self.output_uri0_tiny,
             num_shards=1))
 
-        pc2 = (pipeline0 | f"read_ratings_raw_test" >>
+        pc2 = (pipeline0 | f"read_ratings_raw_val" >>
               beam.io.ReadFromText(self.input_path1,
                   skip_header_lines=0,
                   coder=CustomUTF8Coder())
-              | f'parse_ratings_raw_test' >> beam.Map(
+              | f'parse_ratings_raw_val' >> beam.Map(
                     lambda line: line.split("::")))
         
-        #serialized_train2 = (pc2 | "FormatToDict_test" >> beam.Map(lambda x: {
-        #        "user_id": int(x[0]), "movie_id": int(x[1]),
-        #        "rating": float(x[2]), "timestamp": int(x[3])})
-        #            | "SerializeWithMsgpack_test" >> beam.Map(
-        #        msgpack.packb))
-        
-        serialized_train2 = (pc2 | "FormatToList_test" >> beam.Map(lambda x: [
+        serialized_val = (pc2 | "FormatToList_val" >> beam.Map(lambda x: [
             int(x[0]), int(x[1]), int(x[2]), int(x[3])])
-            | "SerializeWithMsgpack_test" >> beam.Map(msgpack.packb))
+            | "SerializeWithMsgpack_val" >> beam.Map(msgpack.packb))
         
-        (serialized_train2 | f'write_array_record_test'
+        (serialized_val | f'write_array_record_val'
          >> arrayrecordio.WriteToArrayRecord(file_path_prefix=self.output_uri1,
                     num_shards=1))
         
+        pc3 = (pipeline0 | f"read_ratings_raw_test" >>
+               beam.io.ReadFromText(self.input_path2,
+                   skip_header_lines=0,
+                   coder=CustomUTF8Coder())
+               | f'parse_ratings_raw_test' >> beam.Map(
+                    lambda line: line.split("::")))
+        
+        serialized_test = (
+                    pc3 | "FormatToList_test" >> beam.Map(lambda x: [
+                int(x[0]), int(x[1]), int(x[2]), int(x[3])])
+                    | "SerializeWithMsgpack_test" >> beam.Map(
+                msgpack.packb))
+        
+        (serialized_test | f'write_array_record_test'
+         >> arrayrecordio.WriteToArrayRecord(
+                    file_path_prefix=self.output_uri2,
+                    num_shards=1))
+                    
         pipeline0.run()
     
     def test_write_movies_array_record(self):
