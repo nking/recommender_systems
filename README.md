@@ -1,6 +1,19 @@
 # recommender_systems
 repository for refactoring of code at https://www.kaggle.com/code/nicholeasuniquename/recommender-systems to use MLOps
 
+The main pipeline, run_kaggle_pipelines.py runs the MLOps
+for the TwoTowerDNN with or without bias corrections.
+The Two-Tower (bi-encoder) DNN model with bias corrections
+follows the Yi et al. 2019 "Sampling-bias-corrected neural modeling
+for large corpus item recommendations"
+to efficiently calculate item sampling probabilities to correct for
+sampling bias.
+The model trains Query and Candidate models that produce
+embeddings that live in the same space,
+used downstream in a Retrieval model.
+TwoTowerDNN is optimized using Contrastive Learning and is a 
+Listwise Discriminative Model.
+
 This repository is source code used in Kaggle notebooks (in progress):
 
 https://www.kaggle.com/code/nicholeasuniquename/recommender-systems-with-tfx-pipelines/
