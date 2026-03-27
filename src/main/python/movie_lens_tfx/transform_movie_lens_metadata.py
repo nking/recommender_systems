@@ -64,8 +64,9 @@ def preprocessing_fn(inputs):
     
   outputs = {'movie_id': tf.cast(inputs['movie_id'], dtype=tf.float32)}
 
-  outputs['rating'] = tf.divide(tf.cast(inputs['rating'], tf.float32), \
-    tf.constant(5.0, dtype=tf.float32))
+  outputs['rating'] = tf.divide(
+        tf.subtract(tf.cast(inputs['rating'], tf.float32), 1.0), 4.0
+    )
 
   def transform_genres(input_genres):
     out = tf.strings.regex_replace(

@@ -93,6 +93,7 @@ class WriteParquetTest(tf.test.TestCase):
         transform_dir=tr_dir, user_id_max=self.user_id_max,
         movie_id_max=self.movie_id_max,
         n_genres=self.n_genres, n_age_groups=self.n_age_groups,
+        use_bias_corr=False,
         min_eval_size=self.MIN_EVAL_SIZE,
         batch_size=32, num_epochs=2, device="CPU",
         serving_model_dir=serving_model_dir,

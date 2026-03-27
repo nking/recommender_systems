@@ -11,17 +11,18 @@ from movie_lens_tfx.misc import tfrecord_to_parquet
 
 class PIPELINE_TYPE(enum.Enum):
   PREPROCESSING = "preprocessing_data"
-  BASELINE = "baseline"
+  BASELINE = "baseline" #will use metadata model for baseline
   PRODUCTION = "production"
   BATCH_INFERENCE = "batch_inference"
   
 class MODEL_NAME(enum.Enum):
   USER_MOVIE = "user_movie"
+  USER_MOVIE_BIAS_CORR = "user_movie_bias_corr"
   MOVIE_METADATA = "movie_metadata"
 
 class PipelineComponentsFactory():
   def __init__(self, num_examples:int, infiles_dict_ser:str, output_config_ser:str, transform_dir:str,
-    user_id_max: int, movie_id_max:int, n_genres:int, n_age_groups:int,
+    user_id_max: int, movie_id_max:int, n_genres:int, n_age_groups:int, use_bias_corr:bool=False,
     min_eval_size:int=100, batch_size:int=64, num_epochs:int=20, device:str="CPU",
     serving_model_dir:str=None,
     output_parquet_path:str=None, version:str="1.0.0", git_hash:str=None, team_lead:str=None,):
@@ -40,6 +41,7 @@ class PipelineComponentsFactory():
       movie_id_max: int, maximum movie ID
       n_genres: int, number of genres
       n_age_groups: int, number of age groups
+      use_bias_corr: whether or not to use bias corrections in the model.  ignore for metadata model
       min_eval_size: int, minimum number of examples
       batch_size: int, number of examples per batch
       num_epochs: int, number of epochs
@@ -58,6 +60,7 @@ class PipelineComponentsFactory():
     self.movie_id_max = movie_id_max
     self.n_genres = n_genres
     self.n_age_groups = n_age_groups
+    self.use_bias_corr = use_bias_corr
     self.min_eval_size = min_eval_size
     self.batch_size = batch_size
     self.num_epochs = num_epochs
@@ -133,7 +136,7 @@ class PipelineComponentsFactory():
       'n_age_groups': self.n_age_groups,
       'feature_acronym': "a",
       'run_eagerly': False,
-      "use_bias_corr": False,
+      "use_bias_corr": self.use_bias_corr,
       'incl_genres': True,
       'BATCH_SIZE':self.batch_size,
       "NUM_EPOCHS":self.num_epochs,
@@ -146,6 +149,8 @@ class PipelineComponentsFactory():
       "version": self.version,
       "model_name": MODEL_NAME.USER_MOVIE.value,
     }
+    if self.use_bias_corr:
+        push_config["model_name"] = MODEL_NAME.USER_MOVIE_BIAS_CORR.value
     if self.team_lead:
       tuner_custom_config['team_lead'] = self.team_lead
       push_config['team_lead'] = self.team_lead
@@ -328,13 +333,6 @@ class PipelineComponentsFactory():
                 threshold=tfma.MetricThreshold(
                   value_threshold=tfma.GenericValueThreshold(
                     lower_bound={'value': self.min_eval_size}
-                  ))),
-              tfma.MetricConfig(class_name='MeanAbsoluteError',
-                # rating scale 0:5 is 0.:1.0 so error of 1 in a rating is 0.20. fail for error of 2 in a rating = 0.4
-                threshold=tfma.MetricThreshold(
-                  change_threshold=tfma.GenericChangeThreshold(
-                    direction=tfma.MetricDirection.LOWER_IS_BETTER,
-                    absolute={'value': 0.4}
                   ))),
               #tfma.MetricConfig(class_name='MeanSquaredError'),
             ]

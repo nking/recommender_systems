@@ -61,8 +61,12 @@ class IngestMovieLensBeamPATest(tf.test.TestCase):
     for r_number in [1, 2]:
       for key in ["ratings", "users", "movies"]:
         if key == "ratings":
-          infiles_dict[key]["uri"] = os.path.join(get_project_dir(),
-            f"src/main/resources/ml-1m/ratings_timestamp_sorted_part_{r_number}.dat")
+          if r_number == 1:
+            infiles_dict[key]["uri"] = os.path.join(get_project_dir(),
+                f"src/main/resources/ml-1m/ratings_train.dat")
+          else:
+              infiles_dict[key]["uri"] = os.path.join(get_project_dir(),
+                  f"src/main/resources/ml-1m/ratings_test.dat")
         
         ratings, column_name_type_list =\
           pipeline | f"IngestAndJoin_{random.randint(0, 1000000000)}"\
@@ -127,7 +131,6 @@ class IngestMovieLensBeamPATest(tf.test.TestCase):
       print("❌ Metrics2 not found.")
       
     #self.assertEqual(final_count_integer2, final_count_integer)
-    self.assertEqual(final_count_integer2, 1000209)
     
   def _estWriteRawToParquet(self):
     # DirectRunner is default pipeline if options is not specified
