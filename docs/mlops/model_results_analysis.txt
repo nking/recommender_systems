@@ -1,0 +1,11 @@
+lift = normalized hit rate = batch_size * hit_rate
+
+analysis:
+   completely random NHR would be batch_size*(1/batch_size) = 1
+   so NHR of 3.34 shows model is doing better than average.
+
+   we would expect:
+      healthy learning: 1.9 - 2.9
+      strongly optimized: 3.2 - 4.8
+      potential data leakage: >= 6.4
+

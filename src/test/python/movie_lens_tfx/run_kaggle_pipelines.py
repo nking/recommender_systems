@@ -31,7 +31,7 @@ n_age_groups = N_AGE_GROUPS
 n_occupations = 21
 MIN_EVAL_SIZE = 50  # make this larger for production pipeline
 
-BATCH_SIZE = 64
+BATCH_SIZE = 1024
 NUM_EPOCHS = 20
 
 num_examples = 805139

@@ -24,8 +24,7 @@ _infiles_dict = deserialize(_infiles_dict_ser)
 file_paths = {
   #'ratings': _infiles_dict['ratings']['uri'],
   'ratings': os.path.join(get_project_dir(), "src/main/resources/ml-1m/",
-    #"ratings.dat"),
-    "ratings_train.dat"),
+  'ratings_train.dat'),
   'users':_infiles_dict['users']['uri'],
   'movies':_infiles_dict['movies']['uri'],
 }
@@ -109,8 +108,10 @@ df_as_string = df_users.select(
 df_as_string.write_csv(os.path.join(get_bin_dir(), "users_single_genre.dat"),
   include_header=False, quote_style="never")
 
-#writa a parquet file:
+#write a parquet file:
 df_users.write_parquet(os.path.join(get_bin_dir(),"users_single_genre.parquet"))
+
+print('done writing files bin/users_single_genre.*')
 
 """ one might want to compare the hypergeomtric distr eval to a model trained only with
 this data for something like best case statistics to compare and understand results.

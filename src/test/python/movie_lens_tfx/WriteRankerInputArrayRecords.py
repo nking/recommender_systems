@@ -51,6 +51,9 @@ class WriteRankerInputArrayRecords(tf.test.TestCase):
             'src/main/resources/ml-1m/ratings_val.dat')
         self.input_path2 = os.path.join(get_project_dir(),
             'src/main/resources/ml-1m/ratings_test.dat')
+        #this is ratings_train filtered to remove ratings 1,2,3:
+        self.input_path3 = os.path.join(get_project_dir(),
+            'src/main/resources/ml-1m/ratings_train_liked.dat')
         
         self.movie_csv_uri = os.path.join(get_project_dir(),
             'src/main/resources/ml-1m/movies.dat')
@@ -61,6 +64,7 @@ class WriteRankerInputArrayRecords(tf.test.TestCase):
         self.output_uri0_tiny = os.path.join(get_bin_dir(), "ratings_train_tiny.array_record")
         self.output_uri1 = os.path.join(get_bin_dir(), "ratings_val.array_record")
         self.output_uri2 = os.path.join(get_bin_dir(), "ratings_test.array_record")
+        self.output_uri3 = os.path.join(get_bin_dir(), "ratings_train_liked.array_record")
     
     def test_write_array_records(self):
        
@@ -126,6 +130,24 @@ class WriteRankerInputArrayRecords(tf.test.TestCase):
                     file_path_prefix=self.output_uri2,
                     num_shards=1))
                     
+        pc4 = (pipeline0 | f"read_ratings_liked" >>
+               beam.io.ReadFromText(self.input_path3,
+                   skip_header_lines=0,
+                   coder=CustomUTF8Coder())
+               | f'parse_ratings_liked_liked' >> beam.Map(
+                    lambda line: line.split("::")))
+        
+        serialized_liked = (
+                    pc4 | "FormatToList_liked" >> beam.Map(lambda x: [
+                int(x[0]), int(x[1]), int(x[2]), int(x[3])])
+                    | "SerializeWithMsgpack_liked" >> beam.Map(
+                msgpack.packb))
+        
+        (serialized_liked | f'write_array_record_liked'
+         >> arrayrecordio.WriteToArrayRecord(
+                    file_path_prefix=self.output_uri3,
+                    num_shards=1))
+                    
         pipeline0.run()
     
     def test_write_movies_array_record(self):
@@ -159,8 +181,10 @@ class WriteRankerInputArrayRecords(tf.test.TestCase):
         import os
         from array_record.python import array_record_module
 
-        for filename in ["ratings_part_1.array_record-00000-of-00001",
-            "ratings_part_2.array_record-00000-of-00001"]:
+        for filename in ["ratings_train.array_record-00000-of-00001",
+            "ratings_val.array_record-00000-of-00001",
+            "ratings_test.array_record-00000-of-00001",
+            "ratings_train_liked.array_record-00000-of-00001"]:
             filepath = os.path.join(get_bin_dir(),filename)
             if os.path.exists(filepath):
                 reader = None
@@ -172,10 +196,4 @@ class WriteRankerInputArrayRecords(tf.test.TestCase):
                 finally:
                     if reader is not None:
                         reader.close()
-                """record: dict = msgpack.unpackb(reader.read())
-                self.assertTrue(record['user_id'] is not None)
-                self.assertTrue(record['movie_id'] is not None)
-                self.assertTrue(record['rating'] is not None)
-                self.assertTrue(record['timestamp'] is not None)"""
-
 

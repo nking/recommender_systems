@@ -40,7 +40,7 @@ class WriteParquetTest(tf.test.TestCase):
   def test_write_joined_tfrecords(self):
     
     for i, rating_file in enumerate([
-      "ratings_train.dat", "ratings_val.dat", "ratings_test.dat"]):
+      "ratings_train.dat", "ratings_val.dat", "ratings_test.dat", "ratings_train_liked.dat"]):
       
       PIPELINE_NAME = f'TFRecordTest{i}'
       # output_data_dir = os.path.join(os.environ.get('TEST_UNDECLARED_OUTPUTS_DIR',self.get_temp_dir()),self._testMethodName)

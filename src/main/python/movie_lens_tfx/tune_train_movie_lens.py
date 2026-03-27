@@ -41,11 +41,12 @@ The tuner_fn specifies that the custom metric "val_hit_rate" should be used
 to decide which model is best.
 '''
 
-DEFAULT_BATCH_SIZE = 64
+DEFAULT_BATCH_SIZE = 32
 DEFAULT_NUM_EPOCHS = 20
 DEFAULT_NUM_EXAMPLES = 100000
 
 MAX_TUNE_TRIALS_DEFAULT = 10
+EXECUTIONS_PER_TRIAL_DEFAULT = 1
 
 #NOTE: could be improved by writing the headers to a file in the Transform stage and reading them here:
 FEATURE_KEYS = [
@@ -931,9 +932,9 @@ def get_default_hyperparameters(custom_config, input_element_spec) -> keras_tune
   #print(f'get_default_hyperparameters: custom_config={custom_config}')
   hp = keras_tuner.HyperParameters()
   # Defines search space.
-  hp.Choice('learning_rate', [1e-4], default=1e-4)
-  hp.Choice("regl2", values=[0.0, 0.001, 0.01], default=0.0)
-  hp.Float("drop_rate", min_value=0.1, max_value=0.5, default=0.5)
+  hp.Float('learning_rate', 1e-4, 1e-2, sampling='log')
+  hp.Float('regl2', 1e-6, 1e-4, sampling="log")
+  hp.Float('drop_rate', min_value=0.1, max_value=0.5, default=0.5)
   hp.Choice("embed_out_dim", values=[32], default=32)
   #layers_sizes is a list of ints, so encode each list as a string, chices can only be int,float,bool,str
   hp.Choice("layer_sizes", values=[json.dumps([32])], default=json.dumps([32]))
@@ -945,7 +946,7 @@ def get_default_hyperparameters(custom_config, input_element_spec) -> keras_tune
   use_bias_corr = hp.Choice("use_bias_corr", values=[True, False], default=True)
   if use_bias_corr:
       hp.Choice("bias_corr_alpha", values=[0.01, 0.05, 0.1], default=0.1) #0.01, 0.05, 0.1
-      hp.Choice("temperature", values=[0.1, 0.5, 1.0], default=1.0)
+      hp.Float('temperature', 0.05, 0.2, step=0.05)
   else:
       hp.Choice("bias_corr_alpha", values=[0.1], default=0.1)  # 0.01, 0.05, 0.1
       hp.Choice("temperature", values=[1.0], default=1.0)
@@ -956,6 +957,7 @@ def get_default_hyperparameters(custom_config, input_element_spec) -> keras_tune
   hp.Fixed('run_eagerly', custom_config["run_eagerly"])
   hp.Fixed('device', custom_config.get("device", 'CPU'))
   hp.Fixed('MAX_TUNE_TRIALS', custom_config.get("MAX_TUNE_TRIALS", MAX_TUNE_TRIALS_DEFAULT))
+  hp.Fixed('EXECUTIONS_PER_TRIAL', custom_config.get("EXECUTIONS_PER_TRIAN", EXECUTIONS_PER_TRIAL_DEFAULT))
   hp.Fixed('input_dataset_element_spec_ser', (base64.b64encode(pickle.dumps(input_element_spec))).decode('utf-8'))
   num_examples = custom_config.get("num_examples", DEFAULT_NUM_EXAMPLES)
   num_train = int(num_examples * 0.8)
@@ -1560,15 +1562,29 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
   # the objective must be must be a name that appears in the logs
   # returned by the model.fit() method during training.
   #val_logs has keys 'val_loss' and 'val_compile_metrics'
+  """
   tuner = keras_tuner.RandomSearch(
     _make_2tower_keras_model,
-    max_trials=hp.get("MAX_TUNE_TRIALS"),
+    max_trials=hp.get('MAX_TUNE_TRIALS'),
+    executions_per_trial=hp.get('EXECUTIONS_PER_TRIAL'),
+    overwrite=True,
     hyperparameters=hp,
     allow_new_entries=False,
     objective=keras_tuner.Objective(f'val_hit_rate', 'max'),
-    # objective=keras_tuner.Objective('val_loss', 'min'),
     directory=fn_args.working_dir,
-    project_name='movie_lens_2t_tuning')
+    project_name='movie_lens_2t_tuning_r')
+  """
+  tuner = keras_tuner.Hyperband(
+    _make_2tower_keras_model,
+    objective=keras_tuner.Objective(f'val_hit_rate', 'max'),
+    max_epochs=20,
+    factor=3,
+    hyperband_iterations=1,
+    overwrite=True,
+    hyperparameters=hp,
+    allow_new_entries=False,
+    directory=fn_args.working_dir,
+    project_name='movie_lens_2t_tuning_hb')
   
   return tfx.components.TunerFnResult(
     tuner=tuner,

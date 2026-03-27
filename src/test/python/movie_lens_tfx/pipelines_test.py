@@ -356,7 +356,7 @@ class PipelinesTest(tf.test.TestCase):
         func=create_fake_data, inp=[line], Tout=tf.string)
       )
       
-      output_file_path = os.path.join(get_bin_dir(), "ratings_to_infer.dat")
+      output_file_path = os.path.join(get_bin_dir(), "ratings_1000.dat")
       with open(output_file_path, 'w') as f:
         for element in dataset2.as_numpy_iterator():
           f.write(element.decode('utf-8') + '\n')

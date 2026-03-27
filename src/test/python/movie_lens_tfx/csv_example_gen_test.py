@@ -25,7 +25,7 @@ class CSVExampleGenTest(tf.test.TestCase):
 
   @mock.patch.object(publisher, 'Publisher')
   def testRun(self, mock_publisher):
-
+    print('running test')
     test_num = "csv_comp_1"
     if self.is_kaggle:
       prefix = '/kaggle/working/ml-1m/'

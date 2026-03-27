@@ -84,4 +84,8 @@ the features are the direct inputs to the models.
   - transforms the data
   - performs a db lookup to find candidate movies
 
-
+Note that label encoding to new values 1 - nUsers for users
+and movies being nUsers - (nUsers + nMovies) is performed
+before storing the data in src/main/resources.
+The change is needed for compatibility with operations in
+the Ranker component downstream.
