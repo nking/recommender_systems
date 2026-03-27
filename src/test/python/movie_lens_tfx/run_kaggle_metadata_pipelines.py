@@ -79,7 +79,6 @@ pipeline_factory = PipelineComponentsFactory(
   output_config_ser=output_config_ser, transform_dir=tr_dir,
   user_id_max=user_id_max, movie_id_max=movie_id_max,
   n_genres=n_genres, n_age_groups=n_age_groups,
-  use_bias_corr=False,
   min_eval_size=MIN_EVAL_SIZE, batch_size=BATCH_SIZE, num_epochs=NUM_EPOCHS, device="CPU",
   serving_model_dir=serving_model_dir,
   output_parquet_path=output_parquet_path, version= "1.0.0", git_hash=git_hash,

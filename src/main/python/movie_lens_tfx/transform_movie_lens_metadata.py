@@ -44,7 +44,7 @@ def preprocessing_fn(inputs):
   'user_id': <tf.Tensor 'inputs_7_copy:0' shape=(None, 1) dtype=int64>}
     
     outputs={
-    'movie_id': <tf.Tensor 'Cast_1:0' shape=(None, 1) dtype=float32>,
+    'movie_id': <tf.Tensor 'Cast_1:0' shape=(None, 1) dtype=int32>,
     'rating': <tf.Tensor 'truediv:0' shape=(None, 1) dtype=float32>,
     'genres': <tf.Tensor 'RaggedToTensor_1/RaggedTensorToTensor:0' shape=(None, 1, 18) dtype=float32>,
       }
@@ -62,6 +62,7 @@ def preprocessing_fn(inputs):
         return tf.lookup.StaticHashTable(init, default_value=-1)
     genres_table = create_static_table(genres, var_dtype=tf.string)
     
+  #TODO: change the integer types to int32
   outputs = {'movie_id': tf.cast(inputs['movie_id'], dtype=tf.float32)}
 
   outputs['rating'] = tf.divide(

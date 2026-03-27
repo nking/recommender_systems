@@ -68,7 +68,6 @@ class TuneTrainTest(tf.test.TestCase):
       'n_genres' : self.n_genres,
       'n_age_groups' : self.n_age_groups,
       'run_eagerly' : True,
-      "use_bias_corr" : False,
       'incl_genres':False,
       'feature_acronym':"",
       "NUM_EPOCHS" : 2,

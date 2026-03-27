@@ -47,20 +47,17 @@ class PipelinesTest(tf.test.TestCase):
   
   def test_main_models(self):
       print(f'run main user_model model WITH bias corretions')
-      self._run_main_models("WITH_BIAS_COR", use_bias_corr=True)
-      
-      print(f'run main user_model model WITHOUT bias corretions')
-      self._run_main_models("WITHOUT_BIAS_COR", use_bias_corr=False)
+      self._run_main_models("MAIN_USER_MOVIE")
   
-  def _run_main_models(self, test_num:str, use_bias_corr:bool):
+  def _run_main_models(self, test_num:str):
     
     run_pipeline_before_bulk_infer = True
     run_bulk_infer = True
     
     PIPELINE_NAME = 'TestPipelines'
     # output_data_dir = os.path.join(os.environ.get('TEST_UNDECLARED_OUTPUTS_DIR',self.get_temp_dir()),self._testMethodName)
-    output_data_dir = os.path.join(get_bin_dir(), self._testMethodName, test_num)
-    PIPELINE_ROOT = os.path.join(output_data_dir, PIPELINE_NAME)
+    output_data_dir = os.path.join(get_bin_dir(), PIPELINE_NAME, test_num)
+    PIPELINE_ROOT = output_data_dir
     METADATA_PATH = os.path.join(PIPELINE_ROOT, 'tfx_metadata', 'metadata.db')
     
     if run_pipeline_before_bulk_infer:
@@ -96,7 +93,6 @@ class PipelinesTest(tf.test.TestCase):
       infiles_dict_ser=self.infiles_dict_ser, output_config_ser=self.output_config_ser,
       transform_dir=tr_dir, user_id_max=self.user_id_max, movie_id_max=self.movie_id_max,
       n_genres=self.n_genres, n_age_groups=self.n_age_groups,
-      use_bias_corr=use_bias_corr,
       min_eval_size=self.MIN_EVAL_SIZE,
       batch_size=self.BATCH_SIZE, num_epochs=2, device="CPU", serving_model_dir=serving_model_dir)
     
@@ -393,7 +389,6 @@ class PipelinesTest(tf.test.TestCase):
         transform_dir=tr_dir, user_id_max=self.user_id_max,
         movie_id_max=self.movie_id_max,
         n_genres=self.n_genres, n_age_groups=self.n_age_groups,
-        use_bias_corr=False,
         min_eval_size=self.MIN_EVAL_SIZE,
         batch_size=self.BATCH_SIZE, num_epochs=2, device="CPU",
         serving_model_dir=model_uri)
@@ -525,7 +520,6 @@ class PipelinesTest(tf.test.TestCase):
       transform_dir=tr_dir, user_id_max=self.user_id_max,
       movie_id_max=self.movie_id_max,
       n_genres=self.n_genres, n_age_groups=self.n_age_groups,
-      use_bias_corr=False,
       min_eval_size=self.MIN_EVAL_SIZE,
       batch_size=self.BATCH_SIZE, num_epochs=2, device="CPU",
       serving_model_dir=serving_model_dir,

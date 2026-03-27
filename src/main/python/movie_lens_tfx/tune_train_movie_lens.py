@@ -601,10 +601,10 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
           # Persistent state for item frequency estimation
           # A stores the last 't' (global step) the movie was seen
           self.table_A = tf.lookup.experimental.MutableHashTable(
-              key_dtype=tf.int64, value_dtype=tf.float32, default_value=0.)
+              key_dtype=tf.int32, value_dtype=tf.float32, default_value=0.)
           # B stores the estimated probability (p_i)
           self.table_B = tf.lookup.experimental.MutableHashTable(
-              key_dtype=tf.int64, value_dtype=tf.float32, default_value=1e-6)
+              key_dtype=tf.int32, value_dtype=tf.float32, default_value=1e-6)
           self.global_step = tf.Variable(0., trainable=False,
               dtype=tf.float32)
      
@@ -656,7 +656,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         self.global_step.assign_add(1.0)
         t = self.global_step
         
-        movie_ids_int = tf.cast(movie_ids, tf.int64)
+        movie_ids_int = tf.cast(movie_ids, tf.int32)
         movie_ids_flat = tf.reshape(movie_ids_int, [-1])
         
         last_t = self.table_A.lookup(movie_ids_flat)
@@ -726,7 +726,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         if self.use_bias_corr:
             # We use the frequencies learned during training
             movie_ids_keys = tf.cast(tf.reshape(x['movie_id'], [-1]),
-                tf.int64)
+                tf.int32)
             p_i = self.table_B.lookup(movie_ids_keys)
             logits = logits - tf.expand_dims(tf.math.log(p_i), axis=0)
         
@@ -898,9 +898,13 @@ def get_default_hyperparameters(custom_config, input_element_spec) -> keras_tune
   hp.Fixed("incl_genres", custom_config["incl_genres"])
   hp.Fixed('BATCH_SIZE', custom_config.get("BATCH_SIZE", DEFAULT_BATCH_SIZE))
   hp.Fixed('NUM_EPOCHS', custom_config.get("NUM_EPOCHS", DEFAULT_NUM_EPOCHS))
-  hp.Fixed("use_bias_corr", value=custom_config["use_bias_corr"])
-  hp.Choice("bias_corr_alpha", values=[0.1], default=0.1) #0.01, 0.05, 0.1
-  hp.Choice("temperature", values=[1.0], default=1.0)
+  use_bias_corr = hp.Choice("use_bias_corr", values=[True, False], default=True)
+  if use_bias_corr:
+      hp.Choice("bias_corr_alpha", values=[0.01, 0.05, 0.1], default=0.1) #0.01, 0.05, 0.1
+      hp.Choice("temperature", values=[0.1, 0.5, 1.0], default=1.0)
+  else:
+      hp.Choice("bias_corr_alpha", values=[0.1], default=0.1)  # 0.01, 0.05, 0.1
+      hp.Choice("temperature", values=[1.0], default=1.0)
   hp.Fixed('user_id_max', value=custom_config["user_id_max"])
   hp.Fixed('movie_id_max', custom_config["movie_id_max"])
   hp.Fixed('n_age_groups', custom_config["n_age_groups"])

@@ -18,12 +18,12 @@ tf.get_logger().propagate = False
 logging.set_verbosity(logging.WARNING)
 logging.set_stderrthreshold(logging.WARNING)
 
-'''
-results:
-10003/10003 ━━━━━━━━━━━━━━━━━━━━ 40s 4ms/step - mean_absolute_error: 0.1382 - root_mean_squared_error: 0.1741 - loss: 0.0252 - val_loss: 0.0303
-'''
-
 infiles_dict_ser, output_config_ser, split_names = get_test_data(use_small=False)
+infiles_dict = deserialize(infiles_dict_ser)
+infiles_dict['ratings']['uri'] = os.path.join(get_project_dir(),
+  "src/main/resources/ml-1m/ratings_train_liked.dat")
+infiles_dict_ser = serialize_to_string(infiles_dict)
+
 user_id_max = 6040
 movie_id_max = 3952
 n_genres = N_GENRES
@@ -82,7 +82,6 @@ pipeline_factory = PipelineComponentsFactory(
   output_config_ser=output_config_ser, transform_dir=tr_dir,
   user_id_max=user_id_max, movie_id_max=movie_id_max,
   n_genres=n_genres, n_age_groups=n_age_groups,
-  use_bias_corr=True,
   min_eval_size=MIN_EVAL_SIZE, batch_size=BATCH_SIZE, num_epochs=NUM_EPOCHS, device="CPU",
   serving_model_dir=serving_model_dir, output_parquet_path=output_parquet_path)
 
