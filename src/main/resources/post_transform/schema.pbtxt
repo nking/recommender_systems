@@ -75,7 +75,7 @@ feature {
 }
 feature {
   name: "movie_id"
-  type: INT
+  type: FLOAT
   presence {
     min_fraction: 1.0
   }

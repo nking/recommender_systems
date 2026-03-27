@@ -31,6 +31,16 @@ from absl import logging
 logging.set_verbosity(logging.WARNING)
 logging.set_stderrthreshold(logging.WARNING)
 
+'''
+builds pipelines for training a TwoTowerDNN model to train Query and Candidate
+embedding models.  The training is optimized using Contrastive Learning for a
+Listwise Discriminative Model.
+
+The run_fn defines the model, compile, fit and signatures.
+The tuner_fn specifies that the custom metric "val_hit_rate" should be used
+to decide which model is best.
+'''
+
 DEFAULT_BATCH_SIZE = 64
 DEFAULT_NUM_EPOCHS = 20
 DEFAULT_NUM_EXAMPLES = 100000
@@ -343,7 +353,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     def __init__(self, n_users: int, n_age_groups: int,
                  layer_sizes: list,
                  embed_out_dim: int = 32,
-                 reg: keras.regularizers.Regularizer = None,
+                 regl2:float = 0.0,
                  drop_rate: float = 0., feature_acronym: str = "",
                  **kwargs):
       """Model for encoding user queries.
@@ -355,6 +365,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       """
       super(QueryModel, self).__init__(**kwargs)
       
+      self.regl2 = regl2
+      
       self.embedding_model = UserModel(max_user_id=n_users,
                                        n_age_groups=n_age_groups,
                                        embed_out_dim=embed_out_dim,
@@ -363,8 +375,11 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         layer_sizes = json.loads(layer_sizes)
       
       self.dense_layers = keras.Sequential(name="dense_query")
+      reg = None
       # Use the ReLU activation for all but the last layer.
       for layer_size in layer_sizes[:-1]:
+        if self.regl2 > 0.0:
+            reg = keras.regularizers.l2(self.regl2)
         self.dense_layers.add(
           keras.layers.Dense(layer_size, activation="elu",
                              kernel_regularizer=reg,
@@ -378,8 +393,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
                                                  kernel_initializer="glorot_normal"))
       
       self.dense_layers.add(keras.layers.UnitNormalization(axis=-1))
-      
-      self.reg = reg
       
       self.n_users = n_users
       self.n_age_groups = n_age_groups
@@ -423,15 +436,12 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
                      "drop_rate": self.drop_rate,
                      "layer_sizes": self.layer_sizes,
                      "feature_acronym": self.feature_acronym,
-                     "reg": keras.utils.serialize_keras_object(
-                       self.reg),
+                     "regl2": self.regl2,
                      })
       return config
     
     @classmethod
     def from_config(cls, config):
-      for key in ["reg"]:
-        config[key] = keras.utils.deserialize_keras_object(config[key])
       return cls(**config)
   
   # TODO: add hyper-parameter "temperature" after L2Norm
@@ -442,7 +452,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     # for init from a load, arguments are present for the compositional instance members too
     def __init__(self, n_movies: int, n_genres: int, layer_sizes,
                  embed_out_dim: int = 32,
-                 reg: keras.regularizers.Regularizer = None,
+                 regl2: float = 0.0,
                  drop_rate: float = 0., incl_genres: bool = True,
                  **kwargs):
       """Model for encoding candidate features.
@@ -454,6 +464,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       """
       super(CandidateModel, self).__init__(**kwargs)
       
+      self.regl2 = regl2
+      
       self.embedding_model = MovieModel(n_movies=n_movies,
         n_genres=n_genres,
         embed_out_dim=embed_out_dim,
@@ -462,8 +474,11 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       self.dense_layers = keras.Sequential(name="dense_candidate")
       if isinstance(layer_sizes, str):
         layer_sizes = json.loads(layer_sizes)
+      reg = None
       # Use the ReLU activation for all but the last layer.
       for layer_size in layer_sizes[:-1]:
+        if self.regl2 > 0.0:
+          reg = keras.regularizers.l2(self.regl2)
         self.dense_layers.add(
           keras.layers.Dense(layer_size, activation="elu",
                              kernel_regularizer=reg,
@@ -477,8 +492,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
           kernel_initializer="glorot_normal"))
       
       self.dense_layers.add(keras.layers.UnitNormalization(axis=-1))
-      
-      self.reg = reg
       
       self.n_movies = n_movies
       self.n_genres = n_genres
@@ -522,15 +535,13 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
          "embed_out_dim": self.embed_out_dim,
          "drop_rate": self.drop_rate,
          "layer_sizes": self.layer_sizes,
-         "reg": keras.utils.serialize_keras_object(self.reg),
+         "regl2": self.regl2,
          "incl_genres": self.incl_genres
          })
       return config
     
     @classmethod
     def from_config(cls, config):
-      for key in ["reg"]:
-        config[key] = keras.utils.deserialize_keras_object(config[key])
       return cls(**config)
   
   @keras.utils.register_keras_serializable(package=package)
@@ -543,13 +554,16 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     within a mini-batch which is then used to correct probabilities and the batch loss sum.
 
     the number of layers is controlled by a list of their sizes in layer_sizes.
+    
+    The model trains the Query and Candidate models that are downstream used as a Retrieval model.
+    TwoTowerDNN is optimized using In-Batch Negative Contrastive Learning and is a Listwise Discriminative Model.
     """
     
     # for init from a load, arguments are present for the compositional instance members too
     def __init__(self, n_users: int, n_movies: int, n_age_groups: int,
          n_genres: int,
          layer_sizes: list, embed_out_dim: int,
-         reg: keras.regularizers.Regularizer = None,
+         regl2: float = 0.0,
          drop_rate: float = 0,
          feature_acronym: str = "",
          use_bias_corr: bool = False,
@@ -565,7 +579,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
                                     n_age_groups=n_age_groups,
                                     layer_sizes=layer_sizes,
                                     embed_out_dim=embed_out_dim,
-                                    reg=reg,
+                                    regl2=regl2,
                                     drop_rate=drop_rate,
                                     feature_acronym=feature_acronym,
                                     **kwargs)
@@ -574,14 +588,16 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
                                             n_genres=n_genres,
                                             layer_sizes=layer_sizes,
                                             embed_out_dim=embed_out_dim,
-                                            reg=reg,
+                                            regl2=regl2,
                                             drop_rate=drop_rate,
                                             incl_genres=incl_genres,
                                             **kwargs)
       
       self.dot_layer = keras.layers.Dot(axes=1)
+      self.loss_tracker = tf.keras.metrics.Mean(name="loss")
+      self.hit_rate_metric = InBatchHitRate(name="hit_rate")
       
-      self.reg = reg
+      self.regl2 = regl2
       
       self.n_users = n_users
       self.n_age_groups = n_age_groups
@@ -597,6 +613,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       self.bias_corr_alpha = bias_corr_alpha #for batch_size>=512 alpha ~ 0.01 else 0.1
       self.temperature = temperature
       
+      self.debug_count = 0
+      
       if self.use_bias_corr:
           # Persistent state for item frequency estimation
           # A stores the last 't' (global step) the movie was seen
@@ -607,10 +625,22 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
               key_dtype=tf.int32, value_dtype=tf.float32, default_value=1e-6)
           self.global_step = tf.Variable(0., trainable=False,
               dtype=tf.float32)
-     
+    
+    @property
+    def metrics(self):
+        # OVERRIDE to workaround tf.keras handling of validation metrics
+        # It tells the model: "When you finish an epoch, pull results from these two."
+        return [self.loss_tracker, self.hit_rate_metric]
+    
     @tf.function(input_signature=[input_dataset_element_spec])
     def call(self, inputs):
-      """['user_id', 'gender', 'age_group', 'occupation','movie_id', 'rating']"""
+      """
+      compute the cosine similarity score for the user data to movie data.
+      Args:
+         inputs: ['user_id', 'gender', 'age_group', 'occupation','movie_id', 'rating']
+      Returns:
+          cosine similarity score for the user data to movie data
+      """
       #logging.debug(f'call {self.name} inputs={inputs}\n')
       user_vector = self.query_model(inputs)
       movie_vector = self.candidate_model(inputs)
@@ -650,7 +680,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       return _shape_3
       # return (None,)
     
-    @keras.utils.register_keras_serializable(package=package, name="update_frequencies")
     def _update_frequencies(self, movie_ids):
         """Streaming frequency estimation logic from Yi et al."""
         self.global_step.assign_add(1.0)
@@ -670,6 +699,11 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         return p_new
     
     def train_step(self, batch):
+        # temporary debug:
+        if self.debug_count == 0:
+            print(f'train metrics {[m.name for m in model.metrics]}')
+            self.debug_count += 1
+            
         x, y = batch  # y is typically not used in pure In-Batch Softmax (identity matrix is the target)
         movie_ids = x['movie_id']
         
@@ -707,6 +741,10 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         gradients = tape.gradient(loss, self.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
         
+        self.loss_tracker.update_state(loss)
+        self.hit_rate_metric.update_state(y_true=labels, y_pred=logits, sample_weight=y)
+        return {m.name: m.result() for m in self.metrics}
+        '''
         for metric in self.metrics:
             if metric.name == "loss":
                 metric.update_state(loss)
@@ -714,11 +752,15 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
                 # labels: [0, 1, 2...]
                 # logits: [B, B] matrix of dot products
                 metric.update_state(labels, logits, sample_weight=y)
-             
-        # Return a dict mapping metric names to current value.
         return {m.name: m.result() for m in self.metrics}
+        '''
     
     def test_step(self, data):
+        #temporary debug:
+        if self.debug_count == 1:
+            print(f'test metrics {[m.name for m in model.metrics]}')
+            self.debug_count += 1
+            
         x, y = data
         user_embeddings = self.query_model(x, training=False)
         movie_embeddings = self.candidate_model(x, training=False)
@@ -739,15 +781,18 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         loss = tf.reduce_mean(
             tf.nn.sparse_softmax_cross_entropy_with_logits(labels=labels, logits=logits)
         )
-        
+        self.loss_tracker.update_state(loss)
+        self.hit_rate_metric.update_state(y_true=labels, y_pred=logits, sample_weight=y)
+        return {m.name: m.result() for m in self.metrics}
+        '''
         for metric in self.metrics:
             if metric.name == "loss":
                 metric.update_state(loss)
             else:
                 # Important: Use y as sample_weight if you want to respect ratings
                 metric.update_state(labels, logits, sample_weight=y)
-        
         return {m.name: m.result() for m in self.metrics}
+        '''
     
     def get_config(self):
       config = super(TwoTowerDNN, self).get_config()
@@ -759,7 +804,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         "layer_sizes": self.layer_sizes,
         "use_bias_corr": self.use_bias_corr,
         "feature_acronym": self.feature_acronym,
-        "reg": keras.utils.serialize_keras_object(self.reg),
+        "regl2": self.regl2,
         "incl_genres": self.incl_genres,
         "bias_corr_alpha": self.bias_corr_alpha,
         "temperature": self.temperature,
@@ -768,8 +813,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     
     @classmethod
     def from_config(cls, config):
-      for key in ["reg"]:
-        config[key] = keras.utils.deserialize_keras_object(config[key])
       return cls(**config)
   
   @keras.utils.register_keras_serializable(package=package)
@@ -830,6 +873,9 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     device = Device.CPU
   strategy, device = _get_strategy(device)
   
+  #METRICS_FN_LIST = [InBatchHitRate(name="hit_rate")]
+  #tf.keras.metrics.SparseCategoricalAccuracy(name="acc")
+  
   with strategy.scope():
     model = TwoTowerDNN(
       n_users=hp.get("user_id_max") + 1,
@@ -838,12 +884,13 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       n_genres=hp.get("n_genres"),
       layer_sizes=hp.get('layer_sizes'),
       embed_out_dim=hp.get('embed_out_dim'),
-      reg=None, drop_rate=0.1,
+      regl2=hp.get('regl2'),
+      drop_rate=hp.get('drop_rate'),
       feature_acronym=hp.get("feature_acronym"),
       use_bias_corr=hp.get('use_bias_corr'),
       bias_corr_alpha = hp.get('bias_corr_alpha'),
       incl_genres=hp.get('incl_genres'),
-      temperature=hp.get('temperature')
+      temperature=hp.get('temperature'),
     )
   
     input_shapes = {}
@@ -855,17 +902,14 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         input_shapes[element] = (None, 1)
     
     model.build(input_shapes)
+    #print(f"DEBUG: Model metrics names: {[m.name for m in model.metrics]}")
     
     optimizer = keras.optimizers.Adam(learning_rate=hp.get('learning_rate'))
-    
+
+    #NOTE: do not set metrics here as they are hard-coded in model
     model.compile(
         loss=None, # internally fixed to sparse softmax cross entropy for logits
         optimizer=optimizer,
-        metrics=[
-            InBatchHitRate(name="hit_rate"),
-            #tf.keras.metrics.SparseCategoricalAccuracy(name="acc"),
-            #tf.keras.metrics.SparseTopKCategoricalAccuracy(k=5, name="top_5_acc")
-        ],
         run_eagerly=hp.get("run_eagerly")
     )
   
@@ -888,7 +932,7 @@ def get_default_hyperparameters(custom_config, input_element_spec) -> keras_tune
   hp = keras_tuner.HyperParameters()
   # Defines search space.
   hp.Choice('learning_rate', [1e-4], default=1e-4)
-  hp.Choice("regl2", values=[0.001, 0.01], default=None)
+  hp.Choice("regl2", values=[0.0, 0.001, 0.01], default=0.0)
   hp.Float("drop_rate", min_value=0.1, max_value=0.5, default=0.5)
   hp.Choice("embed_out_dim", values=[32], default=32)
   #layers_sizes is a list of ints, so encode each list as a string, chices can only be int,float,bool,str
@@ -1202,7 +1246,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
     log_dir=fn_args.model_run_dir, update_freq='epoch')
   
   stop_early = keras.callbacks.EarlyStopping(
-    monitor=f'val_loss', min_delta=1E-4, patience=3)
+    monitor=f'val_hit_rate', min_delta=1E-4, patience=3, mode="max")
   
   """
   checkpoint_dir = os.path.join(fn_args.serving_model_dir, 'checkpoint')
@@ -1521,7 +1565,7 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
     max_trials=hp.get("MAX_TUNE_TRIALS"),
     hyperparameters=hp,
     allow_new_entries=False,
-    objective=keras_tuner.Objective(f'val_loss', 'min'),
+    objective=keras_tuner.Objective(f'val_hit_rate', 'max'),
     # objective=keras_tuner.Objective('val_loss', 'min'),
     directory=fn_args.working_dir,
     project_name='movie_lens_2t_tuning')
