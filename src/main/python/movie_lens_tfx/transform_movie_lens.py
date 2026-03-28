@@ -111,6 +111,11 @@ def preprocessing_fn(inputs):
      column_types = int,    int ,     int ,  int,       str, int, int,          str
   :return: dictionary preprocessed features
   
+  NOTE:  the IDs and other natural integers are floats to avoid problems with data types
+  during use of saved_model signatures.   I didn't take notes the first time I found
+  the problem, but you can look further into it: serve_tf_examples_fn.  It might be that the
+  graph tracing expects floats...
+  
   ========================================
   inputs={
   'genres': <tf.Tensor 'inputs_copy:0' shape=(None, 1) dtype=string>,
@@ -155,9 +160,10 @@ def preprocessing_fn(inputs):
     
   outputs = {'user_id': tf.cast(inputs['user_id'], dtype=tf.float32),
              'movie_id': tf.cast(inputs['movie_id'], dtype=tf.float32)}
-
-  outputs['rating'] = tf.divide(tf.cast(inputs['rating'], tf.float32), \
-    tf.constant(5.0, dtype=tf.float32))
+  
+  outputs['rating'] = tf.divide(
+      tf.subtract(tf.cast(inputs['rating'], tf.float32), 1.0), 4.0
+  )
 
   outputs['gender'] = tf.cast(gender_table.lookup(inputs['gender']), dtype=tf.float32)
   #outputs['gender'] = tf.one_hot( outputs['gender'], depth=len(genders), dtype=tf.int64)

@@ -327,7 +327,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       # and concatenate the result.
       # print(f'call {self.name} type={type(inputs)}, kwargs={kwargs}\n')
       # print(f'    spec={inputs.element_spec}\n')
-      results = [self.movie_embedding(inputs['movie_id'])]
+      x = tf.cast(inputs['movie_id'], dtype=tf.int32)
+      results = [self.movie_embedding(x)]
       # shape is (batch_size, x, out_dim)
       if self.incl_genres:
         results.append(self.genres_embedding(inputs['genres']))
@@ -805,7 +806,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     def get_config(self):
       config = super(TwoTowerDNN, self).get_config()
       config.update({"n_users": self.n_users, "n_movies": self.n_movies,
-        "movies_offset" : movies_offset,
+        "movies_offset" : self.movies_offset,
         "n_age_groups": self.n_age_groups,
         "n_genres": self.n_genres,
         "embed_out_dim": self.embed_out_dim,
