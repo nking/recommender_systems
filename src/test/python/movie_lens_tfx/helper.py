@@ -43,7 +43,7 @@ def get_test_data(use_small=True) -> Tuple[str, str, list[str]]:
   prefix = os.path.join(proj_dir, "src/test/resources/ml-1m/")
   if use_small:
     ratings_uri = os.path.join(prefix, "ratings_1000.dat")
-    users_uri = os.path.join(prefix, "users_100.dat")
+    users_uri = os.path.join(prefix_main, "users.dat")
   else:
     ratings_uri = os.path.join(prefix_main,"ratings_train.dat")
     users_uri = os.path.join(prefix_main, "users.dat")

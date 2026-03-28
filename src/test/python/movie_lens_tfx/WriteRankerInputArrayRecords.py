@@ -28,10 +28,6 @@ from absl import logging
 logging.set_verbosity(logging.DEBUG)
 logging.set_stderrthreshold(logging.DEBUG)
 
-MAX_MOVIE_ID = 3952
-N_MOVIES = 3883
-
-
 class WriteRankerInputArrayRecords(tf.test.TestCase):
     def setUp(self):
         super().setUp()

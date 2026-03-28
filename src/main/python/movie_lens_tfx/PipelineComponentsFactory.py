@@ -22,7 +22,7 @@ class MODEL_NAME(enum.Enum):
 
 class PipelineComponentsFactory():
   def __init__(self, num_examples:int, infiles_dict_ser:str, output_config_ser:str, transform_dir:str,
-    user_id_max: int, movie_id_max:int, n_genres:int, n_age_groups:int,
+    n_users: int, n_movies:int, n_genres:int, n_age_groups:int,
     min_eval_size:int=100, batch_size:int=64, num_epochs:int=20, device:str="CPU",
     serving_model_dir:str=None,
     output_parquet_path:str=None, version:str="1.0.0", git_hash:str=None, team_lead:str=None,):
@@ -37,8 +37,8 @@ class PipelineComponentsFactory():
       infiles_dict_ser: str, path to input dictionary file
       output_config_ser: str, path to output dictionary file
       transform_dir: str, path to directory containing TFRecord files
-      user_id_max: int, maximum user ID
-      movie_id_max: int, maximum movie ID
+      n_users: int, number of users, same as maximum user ID for movie lens users.dat
+      n_movies: int, maximum movie ID
       n_genres: int, number of genres
       n_age_groups: int, number of age groups
       min_eval_size: int, minimum number of examples
@@ -55,8 +55,8 @@ class PipelineComponentsFactory():
     self.infiles_dict_ser = infiles_dict_ser
     self.output_config_ser = output_config_ser
     self.transform_dir = transform_dir
-    self.user_id_max = user_id_max
-    self.movie_id_max = movie_id_max
+    self.n_users = n_users
+    self.n_movies = n_movies
     self.n_genres = n_genres
     self.n_age_groups = n_age_groups
     self.min_eval_size = min_eval_size
@@ -128,8 +128,8 @@ class PipelineComponentsFactory():
       return [example_gen, model_resolver, bulk_inferrer]
     
     tuner_custom_config = {
-      'user_id_max': self.user_id_max,
-      'movie_id_max': self.movie_id_max,
+      'n_users': self.n_users,
+      'n_movies': self.n_movies,
       'n_genres': self.n_genres,
       'n_age_groups': self.n_age_groups,
       'feature_acronym': "a",
@@ -445,7 +445,7 @@ class PipelineComponentsFactory():
       return [example_gen, model_resolver, bulk_inferrer]
     
     tuner_custom_config = {
-      'movie_id_max': self.movie_id_max,
+      'n_movies': self.n_movies,
       'n_genres': self.n_genres,
       'run_eagerly': False,
       'BATCH_SIZE': self.batch_size,

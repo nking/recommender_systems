@@ -36,9 +36,6 @@ from absl import logging
 logging.set_verbosity(logging.DEBUG)
 logging.set_stderrthreshold(logging.DEBUG)
 
-MAX_MOVIE_ID = 3952
-N_MOVIES = 3883
-
 #TODO: write a component for making the user and movie tfrecords needed for inputs to
 # the embeddings in the Retrieval project.  for now, hard-wiring the columns instead of using
 # pre-transformed schema

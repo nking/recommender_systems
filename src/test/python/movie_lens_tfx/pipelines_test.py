@@ -36,8 +36,8 @@ class PipelinesTest(tf.test.TestCase):
     self.infiles_dict_ser, self.output_config_ser, self.split_names = \
       get_test_data()
     self.num_examples = 1000
-    self.user_id_max = 6040
-    self.movie_id_max = 3952
+    self.n_users = 6040
+    self.n_movies = 3952
     self.n_genres = N_GENRES
     self.n_age_groups = N_AGE_GROUPS
     self.n_occupations = 21
@@ -91,7 +91,7 @@ class PipelinesTest(tf.test.TestCase):
     pipeline_factory = PipelineComponentsFactory(
       num_examples=self.num_examples,
       infiles_dict_ser=self.infiles_dict_ser, output_config_ser=self.output_config_ser,
-      transform_dir=tr_dir, user_id_max=self.user_id_max, movie_id_max=self.movie_id_max,
+      transform_dir=tr_dir, n_users=self.n_users, n_movies=self.n_movies,
       n_genres=self.n_genres, n_age_groups=self.n_age_groups,
       min_eval_size=self.MIN_EVAL_SIZE,
       batch_size=self.BATCH_SIZE, num_epochs=2, device="CPU", serving_model_dir=serving_model_dir)
@@ -345,7 +345,7 @@ class PipelinesTest(tf.test.TestCase):
         # This entire function runs in standard Python
         line = line_string.numpy().decode('utf-8')
         fields = line.split('::')
-        fields[1] = str(random.randint(1, self.movie_id_max))
+        fields[1] = str(random.randint(1, self.n_movies))
         fields[2] = "0"
         fields[3] = str(int(fields[3]) + 315360000) #adding 10 years
         rejoined_string = "::".join(fields)
@@ -386,8 +386,8 @@ class PipelinesTest(tf.test.TestCase):
         num_examples=self.num_examples,
         infiles_dict_ser=serialize_to_string(infiles_dict),
         output_config_ser=output_config_ser,
-        transform_dir=tr_dir, user_id_max=self.user_id_max,
-        movie_id_max=self.movie_id_max,
+        transform_dir=tr_dir, n_users=self.n_users,
+        n_movies=self.n_movies,
         n_genres=self.n_genres, n_age_groups=self.n_age_groups,
         min_eval_size=self.MIN_EVAL_SIZE,
         batch_size=self.BATCH_SIZE, num_epochs=2, device="CPU",
@@ -517,8 +517,8 @@ class PipelinesTest(tf.test.TestCase):
       num_examples=self.num_examples,
       infiles_dict_ser=self.infiles_dict_ser,
       output_config_ser=self.output_config_ser,
-      transform_dir=tr_dir, user_id_max=self.user_id_max,
-      movie_id_max=self.movie_id_max,
+      transform_dir=tr_dir, n_users=self.n_users,
+      n_movies=self.n_movies,
       n_genres=self.n_genres, n_age_groups=self.n_age_groups,
       min_eval_size=self.MIN_EVAL_SIZE,
       batch_size=self.BATCH_SIZE, num_epochs=2, device="CPU",

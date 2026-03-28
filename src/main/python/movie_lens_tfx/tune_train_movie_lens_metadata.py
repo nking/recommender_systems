@@ -438,7 +438,7 @@ def _make_movie_metadata_model(hp: keras_tuner.HyperParameters) -> tf.keras.Mode
   
   with strategy.scope():
     model = MetadataDNN(
-      n_movies=hp.get("movie_id_max") + 1,
+      n_movies=hp.get("n_movies") + 1,
       n_genres=hp.get("n_genres"),
       layer_sizes=hp.get('layer_sizes'),
       embed_out_dim=hp.get('embed_out_dim'),
@@ -496,7 +496,7 @@ def get_default_hyperparameters(custom_config, input_element_spec) -> keras_tune
   # ahmos for "age", "hr_wk", "month", "occupation", "gender"
   hp.Fixed('BATCH_SIZE', custom_config.get("BATCH_SIZE", DEFAULT_BATCH_SIZE))
   hp.Fixed('NUM_EPOCHS', custom_config.get("NUM_EPOCHS", DEFAULT_NUM_EPOCHS))
-  hp.Fixed('movie_id_max', custom_config["movie_id_max"])
+  hp.Fixed('n_movies', custom_config["n_movies"])
   hp.Fixed('n_genres', custom_config["n_genres"])
   hp.Fixed('run_eagerly', custom_config["run_eagerly"])
   hp.Fixed('device', custom_config.get("device", 'CPU'))
@@ -659,8 +659,8 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
          transform graph produced by TFT.
       - model_path
       - custom_config (required):
-          'user_id_max'
-          'movie_id_max'
+          'n_users'
+          'n_movies'
           'n_genres'
           'run_eagerly'
           'device'
@@ -673,7 +673,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       "layer_sizes"
       'num_epochs'
       'batch_size'
-      'movie_id_max'
+      'n_movies'
       'n_genres'
       'run_eagerly'
       'device'
@@ -993,8 +993,8 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
          transform graph produced by TFT.
       - model_path
       - custom_config (required):
-          'user_id_max'
-          'movie_id_max'
+          'n_users'
+          'n_movies'
           'n_genres'
           'run_eagerly'
 

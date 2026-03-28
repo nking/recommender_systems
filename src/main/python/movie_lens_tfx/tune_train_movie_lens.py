@@ -276,18 +276,22 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     """
     
     # for init from a load, arguments are present for the compositional instance members too
-    def __init__(self, n_movies: int, n_genres: int,
+    def __init__(self, n_movies: int, movies_offset:int, n_genres: int,
                  embed_out_dim: int = 32, incl_genres: bool = True,
                  **kwargs):
       super(MovieModel, self).__init__(**kwargs)
       
       self.embed_out_dim = embed_out_dim
       self.n_movies = n_movies
+      self.movies_offset = movies_offset
       self.n_genres = n_genres
       self.incl_genres = incl_genres
       # out_dim = int(np.sqrt(in_dim)) ~ 64
       
       self.movie_embedding = keras.Sequential([
+        keras.layers.IntegerLookup(
+            vocabulary=[i for i in range(movies_offset+1, movies_offset + n_movies + 1)],
+            output_mode="int"),
         keras.layers.Embedding(self.n_movies + 1, self.embed_out_dim),
         keras.layers.Flatten(data_format='channels_last'),
       ], name="movie_emb")
@@ -339,7 +343,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       # to use some form of package and class name in keys or uniquely name the keys to avoid collision
       config = super(MovieModel, self).get_config()
       config.update(
-        {"n_movies": self.n_movies, "n_genres": self.n_genres,
+        {"n_movies": self.n_movies, "movies_offset": self.movies_offset, "n_genres": self.n_genres,
          "embed_out_dim": self.embed_out_dim,
          'incl_genres': self.incl_genres
          })
@@ -451,7 +455,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     """Model for encoding candidate features."""
     
     # for init from a load, arguments are present for the compositional instance members too
-    def __init__(self, n_movies: int, n_genres: int, layer_sizes,
+    def __init__(self, n_movies: int, movies_offset:int, n_genres: int, layer_sizes,
                  embed_out_dim: int = 32,
                  regl2: float = 0.0,
                  drop_rate: float = 0., incl_genres: bool = True,
@@ -467,7 +471,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       
       self.regl2 = regl2
       
-      self.embedding_model = MovieModel(n_movies=n_movies,
+      self.embedding_model = MovieModel(n_movies=n_movies, movies_offset=movies_offset,
         n_genres=n_genres,
         embed_out_dim=embed_out_dim,
         incl_genres=incl_genres, name = "movie_emb")
@@ -495,6 +499,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       self.dense_layers.add(keras.layers.UnitNormalization(axis=-1))
       
       self.n_movies = n_movies
+      self.movies_offset = movies_offset
       self.n_genres = n_genres
       self.incl_genres = incl_genres
       self.embed_out_dim = embed_out_dim
@@ -532,7 +537,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     def get_config(self):
       config = super(CandidateModel, self).get_config()
       config.update(
-        {"n_movies": self.n_movies, "n_genres": self.n_genres,
+        {"n_movies": self.n_movies, "movies_offset":self.movies_offset,
+          "n_genres": self.n_genres,
          "embed_out_dim": self.embed_out_dim,
          "drop_rate": self.drop_rate,
          "layer_sizes": self.layer_sizes,
@@ -561,7 +567,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     """
     
     # for init from a load, arguments are present for the compositional instance members too
-    def __init__(self, n_users: int, n_movies: int, n_age_groups: int,
+    def __init__(self, n_users: int, n_movies: int, movies_offset: int, n_age_groups: int,
          n_genres: int,
          layer_sizes: list, embed_out_dim: int,
          regl2: float = 0.0,
@@ -585,7 +591,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
                                     feature_acronym=feature_acronym,
                                     **kwargs)
       
-      self.candidate_model = CandidateModel(n_movies=n_movies,
+      self.candidate_model = CandidateModel(n_movies=n_movies, movies_offset=movies_offset,
                                             n_genres=n_genres,
                                             layer_sizes=layer_sizes,
                                             embed_out_dim=embed_out_dim,
@@ -603,6 +609,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       self.n_users = n_users
       self.n_age_groups = n_age_groups
       self.n_movies = n_movies
+      self.movies_offset = movies_offset
       self.n_genres = n_genres
       self.incl_genres = incl_genres
       self.layer_sizes = layer_sizes
@@ -798,6 +805,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     def get_config(self):
       config = super(TwoTowerDNN, self).get_config()
       config.update({"n_users": self.n_users, "n_movies": self.n_movies,
+        "movies_offset" : movies_offset,
         "n_age_groups": self.n_age_groups,
         "n_genres": self.n_genres,
         "embed_out_dim": self.embed_out_dim,
@@ -879,8 +887,9 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   
   with strategy.scope():
     model = TwoTowerDNN(
-      n_users=hp.get("user_id_max") + 1,
-      n_movies=hp.get("movie_id_max") + 1,
+      n_users=hp.get("n_users") + 1,
+      n_movies=hp.get("n_movies") + 1,
+      movies_offset = hp.get("n_users") + 1,
       n_age_groups=hp.get("n_age_groups") + 1,
       n_genres=hp.get("n_genres"),
       layer_sizes=hp.get('layer_sizes'),
@@ -950,8 +959,8 @@ def get_default_hyperparameters(custom_config, input_element_spec) -> keras_tune
   else:
       hp.Choice("bias_corr_alpha", values=[0.1], default=0.1)  # 0.01, 0.05, 0.1
       hp.Choice("temperature", values=[1.0], default=1.0)
-  hp.Fixed('user_id_max', value=custom_config["user_id_max"])
-  hp.Fixed('movie_id_max', custom_config["movie_id_max"])
+  hp.Fixed('n_users', value=custom_config["n_users"])
+  hp.Fixed('n_movies', custom_config["n_movies"])
   hp.Fixed('n_age_groups', custom_config["n_age_groups"])
   hp.Fixed('n_genres', custom_config["n_genres"])
   hp.Fixed('run_eagerly', custom_config["run_eagerly"])
@@ -1124,8 +1133,8 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
          transform graph produced by TFT.
       - model_path
       - custom_config (required):
-          'user_id_max'
-          'movie_id_max'
+          'n_users'
+          'n_movies'
           'n_genres'
           'run_eagerly'
           'device'
@@ -1141,8 +1150,8 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       'num_epochs'
       'batch_size'
       "use_bias_corr"
-      'user_id_max'
-      'movie_id_max'
+      'n_users'
+      'n_movies'
       'n_genres'
       'run_eagerly'
       'device'
@@ -1179,7 +1188,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
     eval_files: ['/<pipeline_path>/Transform/transformed_examples/4/Split-eval/*']
     eval_model_dir: /<pipeline_path>/Trainer/model/6/Format-TFMA
     eval_steps: 5
-    hyperparameters: {'space': [{'class_name': 'Choice', 'config': {'name': 'learning_rate', 'default': 0.0001, 'conditions': [], 'values': [0.0001], 'ordered': True}}, {'class_name': 'Choice', 'config': {'name': 'regl2', 'default': 0.0, 'conditions': [], 'values': [0.0, 0.001, 0.01], 'ordered': True}}, {'class_name': 'Float', 'config': {'name': 'drop_rate', 'default': 0.5, 'conditions': [], 'min_value': 0.1, 'max_value': 0.5, 'step': None, 'sampling': 'linear'}}, {'class_name': 'Choice', 'config': {'name': 'embed_out_dim', 'default': 32, 'conditions': [], 'values': [32], 'ordered': True}}, {'class_name': 'Choice', 'config': {'name': 'layer_sizes', 'default': '[32]', 'conditions': [], 'values': ['[32]'], 'ordered': False}}, {'class_name': 'Fixed', 'config': {'name': 'feature_acronym', 'conditions': [], 'value': 'h'}}, {'class_name': 'Fixed', 'config': {'name': 'incl_genres', 'conditions': [], 'value': True}}, {'class_name': 'Fixed', 'config': {'name': 'num_epochs', 'conditions': [], 'value': 10}}, {'class_name': 'Fixed', 'config': {'name': 'batch_size', 'conditions': [], 'value': 2}}, {'class_name': 'Fixed', 'config': {'name': 'use_bias_corr', 'conditions': [], 'value': False}}, {'class_name': 'Fixed', 'config': {'name': 'user_id_max', 'conditions': [], 'value': 6040}}, {'class_name': 'Fixed', 'config': {'name': 'movie_id_max', 'conditions': [], 'value': 3952}}, {'class_name': 'Fixed', 'config': {'name': 'n_age_groups', 'conditions': [], 'value': 7}}, {'class_name': 'Fixed', 'config': {'name': 'n_genres', 'conditions': [], 'value': 18}}, {'class_name': 'Fixed', 'config': {'name': 'run_eagerly', 'conditions': [], 'value': True}}], 'values': {'learning_rate': 0.0001, 'regl2': 0.0, 'drop_rate': 0.11706263861763477, 'embed_out_dim': 32, 'layer_sizes': '[32]', 'feature_acronym': 'h', 'incl_genres': True, 'num_epochs': 10, 'batch_size': 2, 'use_bias_corr': False, 'user_id_max': 6040, 'movie_id_max': 3952, 'n_age_groups': 7, 'n_genres': 18, 'run_eagerly': True}}
+    hyperparameters: {'space': [{'class_name': 'Choice', 'config': {'name': 'learning_rate', 'default': 0.0001, 'conditions': [], 'values': [0.0001], 'ordered': True}}, {'class_name': 'Choice', 'config': {'name': 'regl2', 'default': 0.0, 'conditions': [], 'values': [0.0, 0.001, 0.01], 'ordered': True}}, {'class_name': 'Float', 'config': {'name': 'drop_rate', 'default': 0.5, 'conditions': [], 'min_value': 0.1, 'max_value': 0.5, 'step': None, 'sampling': 'linear'}}, {'class_name': 'Choice', 'config': {'name': 'embed_out_dim', 'default': 32, 'conditions': [], 'values': [32], 'ordered': True}}, {'class_name': 'Choice', 'config': {'name': 'layer_sizes', 'default': '[32]', 'conditions': [], 'values': ['[32]'], 'ordered': False}}, {'class_name': 'Fixed', 'config': {'name': 'feature_acronym', 'conditions': [], 'value': 'h'}}, {'class_name': 'Fixed', 'config': {'name': 'incl_genres', 'conditions': [], 'value': True}}, {'class_name': 'Fixed', 'config': {'name': 'num_epochs', 'conditions': [], 'value': 10}}, {'class_name': 'Fixed', 'config': {'name': 'batch_size', 'conditions': [], 'value': 2}}, {'class_name': 'Fixed', 'config': {'name': 'use_bias_corr', 'conditions': [], 'value': False}}, {'class_name': 'Fixed', 'config': {'name': 'n_users', 'conditions': [], 'value': 6040}}, {'class_name': 'Fixed', 'config': {'name': 'n_movies', 'conditions': [], 'value': 3952}}, {'class_name': 'Fixed', 'config': {'name': 'n_age_groups', 'conditions': [], 'value': 7}}, {'class_name': 'Fixed', 'config': {'name': 'n_genres', 'conditions': [], 'value': 18}}, {'class_name': 'Fixed', 'config': {'name': 'run_eagerly', 'conditions': [], 'value': True}}], 'values': {'learning_rate': 0.0001, 'regl2': 0.0, 'drop_rate': 0.11706263861763477, 'embed_out_dim': 32, 'layer_sizes': '[32]', 'feature_acronym': 'h', 'incl_genres': True, 'num_epochs': 10, 'batch_size': 2, 'use_bias_corr': False, 'user_id_max': 6040, 'n_movies': 3952, 'n_age_groups': 7, 'n_genres': 18, 'run_eagerly': True}}
     model_run_dir: /<pipeline_path>/Trainer/model_run/6
     schema_file: /<pipeline_path>/SchemaGen/schema/3/schema.pbtxt
     schema_path: /<pipeline_path>/SchemaGen/schema/3/schema.pbtxt
@@ -1486,8 +1495,8 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
          transform graph produced by TFT.
       - model_path
       - custom_config (required):
-          'user_id_max'
-          'movie_id_max'
+          'n_users'
+          'n_movies'
           'n_genres'
           'run_eagerly'
 
@@ -1562,7 +1571,7 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
   # the objective must be must be a name that appears in the logs
   # returned by the model.fit() method during training.
   #val_logs has keys 'val_loss' and 'val_compile_metrics'
-  """
+  
   tuner = keras_tuner.RandomSearch(
     _make_2tower_keras_model,
     max_trials=hp.get('MAX_TUNE_TRIALS'),
@@ -1573,7 +1582,7 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
     objective=keras_tuner.Objective(f'val_hit_rate', 'max'),
     directory=fn_args.working_dir,
     project_name='movie_lens_2t_tuning_r')
-  """
+  '''
   tuner = keras_tuner.Hyperband(
     _make_2tower_keras_model,
     objective=keras_tuner.Objective(f'val_hit_rate', 'max'),
@@ -1585,7 +1594,7 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
     allow_new_entries=False,
     directory=fn_args.working_dir,
     project_name='movie_lens_2t_tuning_hb')
-  
+  '''
   return tfx.components.TunerFnResult(
     tuner=tuner,
     fit_kwargs={

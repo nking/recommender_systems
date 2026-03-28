@@ -29,8 +29,8 @@ class TuneTrainTest(tf.test.TestCase):
     super().setUp()
     self.infiles_dict_ser, self.output_config_ser, self.split_names = \
       get_test_data()
-    self.user_id_max = 6040
-    self.movie_id_max = 3952
+    self.n_users = 6040
+    self.n_movies = 3952
     self.n_genres = N_GENRES
     self.n_age_groups = N_AGE_GROUPS
     self.n_occupations = 21
@@ -63,8 +63,8 @@ class TuneTrainTest(tf.test.TestCase):
       module_file=os.path.join(tr_dir, 'transform_movie_lens.py'))
 
     tuner_custom_config = {
-      'user_id_max' : self.user_id_max,
-      'movie_id_max' : self.movie_id_max,
+      'n_users' : self.n_users,
+      'n_movies' : self.n_movies,
       'n_genres' : self.n_genres,
       'n_age_groups' : self.n_age_groups,
       'run_eagerly' : True,
@@ -87,7 +87,7 @@ class TuneTrainTest(tf.test.TestCase):
       eval_args=tfx.proto.EvalArgs(num_steps=5),
       custom_config=tuner_custom_config,
     )
-    #'user_id_max' 'movie_id_max' 'n_genres' 'run_eagerly'
+    #'n_users' 'n_movies' 'n_genres' 'run_eagerly'
     
     trainer_custom_config = {
       'device': "CPU",

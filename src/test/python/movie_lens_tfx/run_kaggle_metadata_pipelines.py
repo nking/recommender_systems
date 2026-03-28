@@ -19,8 +19,8 @@ logging.set_verbosity(logging.WARNING)
 logging.set_stderrthreshold(logging.WARNING)
 
 infiles_dict_ser, output_config_ser, split_names = get_test_data(use_small=False)
-user_id_max = 6040
-movie_id_max = 3952
+n_users = 6040
+n_movies = 3952
 n_genres = N_GENRES
 n_age_groups = N_AGE_GROUPS
 n_occupations = 21
@@ -77,7 +77,7 @@ beam_pipeline_args = [
 pipeline_factory = PipelineComponentsFactory(
   num_examples=num_examples, infiles_dict_ser=infiles_dict_ser,
   output_config_ser=output_config_ser, transform_dir=tr_dir,
-  user_id_max=user_id_max, movie_id_max=movie_id_max,
+  n_users=n_users, n_movies=n_movies,
   n_genres=n_genres, n_age_groups=n_age_groups,
   min_eval_size=MIN_EVAL_SIZE, batch_size=BATCH_SIZE, num_epochs=NUM_EPOCHS, device="CPU",
   serving_model_dir=serving_model_dir,

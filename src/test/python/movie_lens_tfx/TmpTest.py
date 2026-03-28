@@ -28,8 +28,8 @@ class TuneTrainTest(tf.test.TestCase):
     super().setUp()
     self.infiles_dict_ser, self.output_config_ser, self.split_names = \
       get_test_data()
-    self.user_id_max = 6040
-    self.movie_id_max = 3952
+    self.n_users = 6040
+    self.n_movies = 3952
     self.n_genres = N_GENRES
     self.n_age_groups = N_AGE_GROUPS
     self.n_occupations = 21
@@ -74,7 +74,7 @@ class TuneTrainTest(tf.test.TestCase):
     pipeline_factory = PipelineComponentsFactory(
       num_examples=self.num_examples,
       infiles_dict_ser=self.infiles_dict_ser, output_config_ser=self.output_config_ser,
-      transform_dir=tr_dir, user_id_max=self.user_id_max, movie_id_max=self.movie_id_max,
+      transform_dir=tr_dir, n_users=self.n_users, n_movies=self.n_movies,
       n_genres=self.n_genres, n_age_groups=self.n_age_groups,
       min_eval_size=self.MIN_EVAL_SIZE,
       batch_size=32, num_epochs=2, device="CPU", serving_model_dir=serving_model_dir)

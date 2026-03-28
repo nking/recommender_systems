@@ -133,7 +133,6 @@ os.makedirs(img_dir, exist_ok=True)
 
 infiles_dict_ser, output_config_ser, split_names = get_test_data(use_small=False)
 user_id_max = 6040
-movie_id_max = 3952
 n_genres = N_GENRES
 n_age_groups = N_AGE_GROUPS
 n_occupations = 21

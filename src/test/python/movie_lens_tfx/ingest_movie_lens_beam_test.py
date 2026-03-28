@@ -65,7 +65,7 @@ class IngestMovieLensBeamTest(tf.test.TestCase):
       assert_that(pc['movies']  | f'movies_count_{random.randint(0, 1000000000000)}' >> beam.combiners.Count.Globally(), \
         equal_to([3883]), label=f"assert_that_{random.randint(0, 1000000000000)}")
       assert_that(u_count, \
-        equal_to([100]), label=f"assert_that_{random.randint(0, 1000000000000)}")
+        equal_to([6040]), label=f"assert_that_{random.randint(0, 1000000000000)}")
       assert_that(r_count, \
                   equal_to([1000]), label=f"assert_that_{random.randint(0, 1000000000000)}")
 
