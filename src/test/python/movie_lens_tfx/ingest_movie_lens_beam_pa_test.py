@@ -24,9 +24,6 @@ class IngestMovieLensBeamPATest(tf.test.TestCase):
     #Using the full files and 2 ratings partions
 
     infiles_dict = deserialize(self.infiles_dict_ser)
-    infiles_dict["users"]["uri"] = os.path.join(get_project_dir(),"src/main/resources/ml-1m/users.dat")
-    infiles_dict["movies"]["uri"] = os.path.join(get_project_dir(), "src/main/resources/ml-1m/movies.dat")
-    infiles_dict["ratings"]["uri"] = os.path.join(get_project_dir(), "src/main/resources/ml-1m/ratings.dat")
 
     PIPELINE_NAME = 'TestIngestAndTransformPA2'
     # output_data_dir = os.path.join(os.environ.get('TEST_UNDECLARED_OUTPUTS_DIR',self.get_temp_dir()),self._testMethodName)

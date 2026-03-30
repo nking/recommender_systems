@@ -30,6 +30,45 @@ def add_to_sys(proj_dir):
   src_module_dir = os.path.join(proj_dir, "src/main/python")
   #sys.path.insert(0, self.module_dir)
 
+def get_contrastive_split_infiles_set(use_small:bool=True) -> Dict[str, str]:
+    prefix_main = os.path.join(get_project_dir(), "src/main/resources/ml-1m/")
+    ratings_col_names = ["user_id", "movie_id", "rating", "timestamp"]
+    ratings_col_types = [int, int, int, int]  # for some files, ratings are floats
+    movies_col_names = ["movie_id", "title", "genres"]
+    movies_col_types = [int, str, str]
+    users_col_names = ["user_id", "gender", "age", "occupation", "zipcode"]
+    users_col_types = [int, str, int, int, str]
+    if (use_small):
+        ratings_prefix = os.path.join(get_project_dir(), "src/test/resources/ml-1m/small/")
+    else:
+        ratings_prefix = prefix_main
+    movies_dict = create_infile_dict(for_file='movies',
+        uri=os.path.join(prefix_main, "movies.dat"),
+        col_names=movies_col_names,
+        col_types=movies_col_types,
+        headers_present=False, delim="::")
+    
+    users_dict = create_infile_dict(for_file='users',
+        uri=os.path.join(prefix_main, "users.dat"),
+        col_names=users_col_names,
+        col_types=users_col_types,
+        headers_present=False, delim="::")
+    
+    dicts_ser = {}
+    for split_name in ["train", "val", "test"]:
+        ratings_uri = os.path.join(ratings_prefix, f"ratings_{split_name}_liked.dat")
+        ratings_dict = create_infile_dict(for_file='ratings',
+            uri=ratings_uri,
+            col_names=ratings_col_names,
+            col_types=ratings_col_types,
+            headers_present=False, delim="::")
+        infiles_dict = create_infiles_dict(ratings_dict=ratings_dict,
+            movies_dict=movies_dict.copy(),
+            users_dict=users_dict.copy(),
+            version=1)
+        dicts_ser[split_name] = serialize_to_string(infiles_dict)
+    return dicts_ser
+    
 
 def get_test_data(use_small=True) -> Tuple[str, str, list[str]]:
   """
@@ -42,11 +81,10 @@ def get_test_data(use_small=True) -> Tuple[str, str, list[str]]:
   prefix_main = os.path.join(proj_dir, "src/main/resources/ml-1m/")
   prefix = os.path.join(proj_dir, "src/test/resources/ml-1m/")
   if use_small:
-    ratings_uri = os.path.join(prefix, "ratings_1000.dat")
-    users_uri = os.path.join(prefix_main, "users.dat")
+    ratings_uri = os.path.join(prefix, "small", "ratings.dat")
   else:
     ratings_uri = os.path.join(prefix_main,"ratings_train.dat")
-    users_uri = os.path.join(prefix_main, "users.dat")
+  users_uri = os.path.join(prefix_main, "users.dat")
   movies_uri = os.path.join(prefix_main, "movies.dat")
   add_to_sys(proj_dir)
 
