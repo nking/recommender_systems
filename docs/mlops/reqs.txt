@@ -1,19 +1,42 @@
 goal of the recommender systems notebook:
-  - ability to predict what user's would like to see and have not already seen
-    in the moviews inventory.
+  - train a bi-encoder model to be used in a retrieval model
+    that returns personalized movie recommendations to users.
+  - create a production quality MLOps pipeline for the bi-encoder
+    model encompassing the main stages data loading, 
+    data pre-processing, data evaluation including checks for data
+    shift, data transformation, model hyper-parameter tuning, 
+    model training using best
+    hyper-parameters, evaluation of model compared to baseline
+    or latest production model including checks for drift, 
+    approval or rejection of model, push of best model to serving and a batch
+    inference option.  Each stage should have ability to
+    persist and track artifacts.
+  - for monitoring, provide the details and how to, espec
+    with code where possible. 
 
-goal of the refactoring:
-  - refactor the code to use modular custom python functions in TFX pipelines 
-    for MLOps pipeline
+metrics:
+  - the model will be a Two-Tower bi-encoder and will
+    use item sampling corrections for
+    popularity bias following  the Yi et al. 2019 
+    paper "Sampling-bias-corrected neural modeling
+    for large corpus item recommendations".
+    Such corrections increase the recommendation diversity
+    and long tail recall of the movie distribution.
+  - the model will be trained with a contrastive loss
+    and the best model will be selected by hit rate 
+    on the validation dataset.
+  - the model will be designed as a listwise discriminitive
+    model for calculations needed to compare results in the
+    increasingly more relevant recommendations and ranking from 
+    projects:  retriever, ranker, and re-ranker.
+    The metrics are NHR, NDCG@K, recall_tail@K, and 
+    intra-list diversity.
 
 ---------------------------------------
 
-place the code for recommender systems into TFX components to make a 
-pipeline which is runnable by a local spark runner.
-
-consider writing a pipeline with placeholders for iteration, approval, and
-deployment.
-
 code should be efficient and easy to maintain and modify with knowledge of
 TFX and some knowledge of Apache-Beam.
+
+the install process should carefully control library versions to avoid
+conflict between libraries.
 

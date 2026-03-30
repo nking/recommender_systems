@@ -18,4 +18,8 @@ consider improving the zipcodes to use ZCTA ..
   can get centroid of them and then time zone.
   consider also using the 2010 database for the failed 2020 lookups.
 
-
+very low priority, but with time might be more useful:
+- improve model as a Jax model which can be exported
+  to TFX serving model.  compatibilities beween libraries
+  might be such that can use larger version numbers.
+  

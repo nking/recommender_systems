@@ -72,7 +72,7 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
     self.schema_path = os.path.join(get_project_dir(),
       'src/main/resources/pre_transform/schema.pbtxt')
     self.saved_model_path = os.path.join(get_project_dir(),
-      'src/test/resources/serving_model/1774483738')
+      'src/test/resources/serving_model/1774809061')
     
     self.output_pivot_uri = os.path.join(get_bin_dir(), "ratings_and_predictions_pivot")
     
@@ -321,7 +321,7 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
       
     result2 = pipeline2.run()
     
-    return result1
+    return result2
 
   def _write_train_ratings_pivot_table(self):
     if not self.rewrite_all:
@@ -526,7 +526,7 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
       | f'group_by_key_preds_pivot_{random.randint(0,1000000000)}' \
       >> beam.CoGroupByKey())
     
-    #grouped_data | "print_grouped_data" >> beam.Map(lambda x: print(f'grouped={x}'))
+    grouped_data | "print_grouped_data" >> beam.Map(lambda x: print(f'grouped={x}'))
     
     try:
       joined_pivot_data = grouped_data \

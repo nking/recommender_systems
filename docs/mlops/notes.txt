@@ -1,3 +1,6 @@
+These are notes on some of the urls I found useful
+while writing components and the pipeline.
+
 see https://www.tensorflow.org/tfx/guide/custom_function_component
 
 see

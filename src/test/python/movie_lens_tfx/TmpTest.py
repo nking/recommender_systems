@@ -39,7 +39,7 @@ class TuneTrainTest(tf.test.TestCase):
     
   def test_signature(self):
     
-    run_pipeline = False
+    run_pipeline = True
     
     PIPELINE_NAME = 'TMPTest'
     # output_data_dir = os.path.join(os.environ.get('TEST_UNDECLARED_OUTPUTS_DIR',self.get_temp_dir()),self._testMethodName)

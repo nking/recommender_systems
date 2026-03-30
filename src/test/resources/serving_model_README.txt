@@ -1,14 +1,54 @@
 serving model was created from run_kaggle_pipelines.py
 which is in the test python source code.
 
-The model last fit stdout messaage was:
-Epoch 10/20
-10003/10003 ━━━━━━━━━━━━━━━━━━━━ 42s 4ms/step - mean_absolute_error: 0.1388 - root_mean_squared_error: 0.1748 - loss: 0.0259 - val_loss: 0.0305
+use_bias_cor was fixed to True and the Tuner used RandomSearch
+among the hyper-parameters.
 
-TODO: add test RMSE here
+The best fitting model is in saved_model and has these hyper-parameters:
 
-For comparison, the RMSE of netflix competition winners was 0.8567 on 
-the Netflix  test dataset.
+"learning_rate": 0.004537750100817641, 
+"regl2": 3.3037707935951735e-06, 
+"drop_rate ": 0.1110236162515454, 
+"embed_out_dim": 32, 
+"layer_sizes": "[32]", 
+"feature_acronym": "a", 
+"incl_genres": true
+"BATCH_SIZE": 1024, 
+"NUM_EPOCHS": 20, 
+"use_bias_corr": true, 
+"bias_corr_alpha": 0.05, 
+"temperature": 0.15000000000000002, 
+"n_users": 6040, 
+"n_movies": 3952, 
+"n_age_groups": 7, 
+"n_genres": 18, 
+"run_eagerly": false, 
+"device": "CPU", 
+"MAX_TUNE_TRIALS": 10, 
+"EXECUTIONS_PER_TRIAL": 1,
 
-fit history.history={'mean_absolute_error': [0.16529640555381775, 0.15592367947101593, 0.14680881798267365, 0.1439635157585144, 0.14127087593078613, 0.1404789388179779, 0.13885891437530518, 0.1388455331325531, 0.13885189592838287, 0.13878242671489716], 'root_mean_squared_error': [0.20500512421131134, 0.1935318112373352, 0.18357166647911072, 0.1804640144109726, 0.1774856150150299, 0.17651060223579407, 0.17490899562835693, 0.1747843623161316, 0.1747613251209259, 0.17475152015686035], 'loss': [0.03961654379963875, 0.03208156302571297, 0.03077893704175949, 0.029827935621142387, 0.028814343735575676, 0.027932992205023766, 0.027244985103607178, 0.02669326402246952, 0.026286542415618896, 0.025879599153995514], 'val_loss': [0.042027100920677185, 0.03745456412434578, 0.03369855880737305, 0.032567258924245834, 0.03150114417076111, 0.031155992299318314, 0.030593154951930046, 0.03054957091808319, 0.030541520565748215, 0.03053809143602848]}
+The validation metrics:
+   val_hit_rate = 0.0023
+   normalized for batch_size=1024 gives NHR = 2.36
+   which is healthy learning above an NHR of 1 for random.
+NOTE: can improve upon the NHR by a factor >=3 
+by using Hyperband in the tune_fn.
+The model saved in test/resources found hyperparameters
+using the fast track keras tuner RandomSearch, but
+Hyperband is more thorough.
+
+fit history.history={'hit_rate': [0.004506396595388651, 0.008250406943261623, 0.010327128693461418, 0.01246777
+8287827969], 'loss': [5.65212345123291, 5.374941825866699, 5.348050117492676, 5.2616496086120605], 'val_hit_ra
+te': [0.002761336974799633, 0.002535830484703183, 0.00240512122400105, 0.0025421911850571632], 'val_loss': [9.
+630130767822266, 9.74338150024414, 9.744372367858887, 9.888795852661133]}
+
+=========================================================
+The metadata model (not saved in this project, but you
+can create it with run_kaggle_metadata_pipelines.py)
+is a regression model and calculates RMSE as one of its
+metrics, so can be compared with the Netflix competition
+which won with a model with RMSE of 0.8567, improving 
+upon the Netflix standard by 10%.
+The metadata model with batch_size 32 has RMSE 0.25
+on this project's validation dataset.
 

@@ -26,6 +26,7 @@ class IngestMovieLensBeamPATest(tf.test.TestCase):
     infiles_dict = deserialize(self.infiles_dict_ser)
     infiles_dict["users"]["uri"] = os.path.join(get_project_dir(),"src/main/resources/ml-1m/users.dat")
     infiles_dict["movies"]["uri"] = os.path.join(get_project_dir(), "src/main/resources/ml-1m/movies.dat")
+    infiles_dict["ratings"]["uri"] = os.path.join(get_project_dir(), "src/main/resources/ml-1m/ratings.dat")
 
     PIPELINE_NAME = 'TestIngestAndTransformPA2'
     # output_data_dir = os.path.join(os.environ.get('TEST_UNDECLARED_OUTPUTS_DIR',self.get_temp_dir()),self._testMethodName)
@@ -58,42 +59,34 @@ class IngestMovieLensBeamPATest(tf.test.TestCase):
     #with TestPipeline(options=options) as pipeline:
     step_names = []
     pipeline =  beam.Pipeline(options=options)
-    for r_number in [1, 2]:
-      for key in ["ratings", "users", "movies"]:
-        if key == "ratings":
-          if r_number == 1:
-            infiles_dict[key]["uri"] = os.path.join(get_project_dir(),
-                f"src/main/resources/ml-1m/ratings_train.dat")
-          else:
-              infiles_dict[key]["uri"] = os.path.join(get_project_dir(),
-                  f"src/main/resources/ml-1m/ratings_test.dat")
+    for key in ["ratings", "users", "movies"]:
+      
+      ratings, column_name_type_list =\
+        pipeline | f"IngestAndJoin_{random.randint(0, 1000000000)}"\
+        >> IngestAndJoin0(infiles_dict=infiles_dict)
+      
+      """
+      ##DEBUG
+      sampled_data = ratings | f'Sample Elements_{random.randint(0, 1000000000)}' >> beam.combiners.Sample.FixedSizeGlobally(5)
+      (
+        sampled_data
+        | f'Flatten List_{random.randint(0, 1000000000)}' >> beam.FlatMap(lambda x: x)
+        | f'Print Rows_{random.randint(0, 1000000000)}' >> beam.Map(print)
+      )
+      """
         
-        ratings, column_name_type_list =\
-          pipeline | f"IngestAndJoin_{random.randint(0, 1000000000)}"\
-          >> IngestAndJoin0(infiles_dict=infiles_dict)
-        
-        """
-        ##DEBUG
-        sampled_data = ratings | f'Sample Elements_{random.randint(0, 1000000000)}' >> beam.combiners.Sample.FixedSizeGlobally(5)
-        (
-          sampled_data
-          | f'Flatten List_{random.randint(0, 1000000000)}' >> beam.FlatMap(lambda x: x)
-          | f'Print Rows_{random.randint(0, 1000000000)}' >> beam.Map(print)
-        )
-        """
-          
-        file_path_prefix = os.path.join(PIPELINE_ROOT, f'ratings_sorted_{r_number}_joined')
-        
-        ratings | f"WriteJoinedRatingsParquet_{random.randint(0, 1000000000)}" \
-          >>  WriteJoinedRatingsParquet(
-          file_path_prefix=file_path_prefix,
-          column_name_type_list=column_name_type_list)
-        
-        step_name = f'Count Rows_{random.randint(0, 1000000000)}'
-        
-        ratings | step_name >> beam.ParDo(RowCounter('total_rows'))
-        step_names.append(step_name)
-    
+      file_path_prefix = os.path.join(PIPELINE_ROOT, f'ratings_joined')
+      
+      ratings | f"WriteJoinedRatingsParquet_{random.randint(0, 1000000000)}" \
+        >>  WriteJoinedRatingsParquet(
+        file_path_prefix=file_path_prefix,
+        column_name_type_list=column_name_type_list)
+      
+      step_name = f'Count Rows_{random.randint(0, 1000000000)}'
+      
+      ratings | step_name >> beam.ParDo(RowCounter('total_rows'))
+      step_names.append(step_name)
+  
     result = pipeline.run()
     result.wait_until_finish()
     final_count_integer = 0
@@ -111,7 +104,7 @@ class IngestMovieLensBeamPATest(tf.test.TestCase):
         print("❌ Metrics not found.")
     
     pipeline = beam.Pipeline(options=options)
-    file_pattern = os.path.join(PIPELINE_ROOT,'ratings_sorted*.parquet')
+    file_pattern = os.path.join(PIPELINE_ROOT,'ratings_joined*.parquet')
     pc_parquet = (pipeline
       | f'Read Parquet_{random.randint(0, 1000000000)}' >> parquetio.ReadFromParquet(file_pattern)
     )

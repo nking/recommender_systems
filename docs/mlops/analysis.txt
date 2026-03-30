@@ -1,12 +1,15 @@
-libraries:
+This is a summary of libraries needed to implement the
+requirements.  
+
+libraries which need specific versions for compatibility:
   - apache-beam
   - TFX
   - TensorFlow Data Validation
   - TensorFlow Transform
   - tfx_bsl
 
-need to use a conda venv because of the earlier version of python
-with python 3.10, these are the versions to install:
+need to use a conda virtual environment due to python 3.10 requirement
+for TFX.
 pip -q install pyarrow==10.0.1
 pip -q install apache-beam==2.59.0
 pip -q install tensorflow==2.16.1
@@ -20,72 +23,85 @@ TFX is compatible with a restricted range of python and tensorflow.
 see https://pypi.org/project/tfx/
 use python 3.9 or 3.10
 
-considering the various ways to pre-process, transform data.
-wanting a component for transformations in a pipeline to automate the process,
-and want the transformations to be distributable.
-- tf.data is for in-memory size data processing so not an option here.
-- consider using keras layers
-  pros:
-    - less code, simpler to maintain
-  cons:
-    - by performing the transformation to features in the model, we are
-      repeating work, especially during the compute intensive hyper-parameter
-      tuning phase.
-    - features are not saved in a feature store, which might be a preference
-      for some organization
-    - cannot perform stats on features
-- using tft and tfx
-  pros:
-    - transform to features once and that is input to the hyper-parameter tuning
-  cons:
-    - it's more work, at least while I'm ramping up.
+Data distributed data pre-processing and transformation:
+- data ingestion:
+  - apache beam components in TFX pipeline are highly distibutable
+  and there are options and many examples on how to make custom
+  components with dsl annotatings as needed
+  - custom component is needed to join the ratings records
+    with user and movie information.
+- transformations
+  - normalizing rating to a relevance value between 0 and 1
+  - transforming timestamp into features that might be used in the model.
+  - options for library to use:
+    - tf.data is for in-memory size data processing so not an option here.
+    - considered using keras layers
+      pros:
+        - less code, simpler to maintain
+      cons:
+       - by performing the transformation to features in the model, we are
+         repeating work, especially during the compute intensive hyper-parameter
+         tuning phase.
+       - features, that is, tranformed data, are not saved in a feature store
+       - cannot perform stats on features
+    - decided to use tft and tfx
+      pros:
+        - transform to features once and that is input to the hyper-parameter tuning
+        - transformed data is persisted and usable in calculating statistics
+      cons:
+        - ramping-up to using it is larger
 
-place the code for recommender systems into TFX components to make a 
-pipeline which is runnable by a local spark runner.
+pipeline:
+  - decided on TFX 
+    - scalability, works on linux in all environments, is a mature platform with
+      alot of documentation, examples, community support
+    - the pipeline can be compiled to create a yaml intermediate file
+      for running with airflow or kfp, etc.  cloud specific changes
+      for Vertex AI, etc. should be straight forward.
+  - the components needed in the pipeline to implement the requirements:
+    - MovieLensExampleGen: a custom ingest component that joins ratings with 
+      user and movie data
+    - Resolver for resolving artifacts in the MLMD datastore
+    - StatisticsGen for calculating stats on the transformed data
+    - SchemaGen for extracting a schema from the statistics
+    - Importer for inporting a schema when needed
+    - ExampleValidator for anomaly and missing value detection
+    - ExampleDiff for looking for data skew compared to previous data
+    - Tranform to perform data transformations
+    - Tuner to find hyper-parameters for best performing model
+    - Trainer to train a model using the best hyper-parameters
+    - Evaluator for calculating model eval stats and a quality 
+      validation w.r.t. a baseline model
+    - optionally: InfraValidator to validate that the model 
+      is compatible with the serving infrastructure.
+    - Pusher for pushing a blessed model to the serving_model directory
+    - BulkInferrerBeam: a custom component to handle specifics for saved_model
 
-considering custom python functions and using the TFX dsl annotations.
+monitoring:
+  - any metrics monitored outside of the pipeline, for a model actively
+    serving inference.
 
-TFXIO might be useful for transforming data into tfrecords.
+listwise evaluation metrics:
+  - comparing current model to previous:
+    - NHR
+  - comparing each model in the series of Retrieval, Ranking, and Re-Ranking
+    for improvments in ability to provide relevant ranked recommendations
+    to a user:
+    - NHR, NDCG@K, recall_tail@K, and intra-list diversity
 
-tf.Transform methods that make a pass through all of the data are needed 
-to count records and to define vocabularies, else the operations are 
-parallelizable in pre-processing..
+Misc:
+  - ability to write data in formats: tfrecord, parquet, and array_record
+    for downstream components
 
-consider writing a pipeline with iteration, placeholder for approval, and
-placeholder for deployment.
-
-would like to use the custom python functions with dsl annotations
-
-also create the compiler statements needed to create the yaml intermediate file
-for running with airflow or kfp etc
-
-The transformations can either occur in the pipeline before training,
-or can occur as keras layers within the model.
-An advantage to preprocessing in pipeline before training, is that it makes
-it easier to reuse the code in a pipeline that makes curated features for a
-feature store.  It also makes it easier to use EDA on the features in contrast to
-using keras layers in transformations to features.
-Note that the nomenclature is that raw data is transformed to features and
-the features are the direct inputs to the models.
-
-- there will be scripts to set up the environment (provision a workbench).
-  including setup of scan or other vector db
-- there will be python function custom components
-  - ingest, validate data, transform, train, tune, evaluate
-- there will be a custom component to use the trained model to reconstruct
-  the tf/keras model and extract the query and candidate models.
-- there will be a custom component to create movie vector embeddings
-  and store them in the vector db.
-- there will be an application which:
-  - downloads data if doesn't exist
-  - runs pipeline
-- the evaluate function:
-  - receives user or query information,
-  - transforms the data
-  - performs a db lookup to find candidate movies
-
-Note that label encoding to new values 1 - nUsers for users
-and movies being nUsers - (nUsers + nMovies) is performed
-before storing the data in src/main/resources.
-The change is needed for compatibility with operations in
-the Ranker component downstream.
+Late item of interest regarding data preparation before
+the pipeline:
+   - movie ids are rewritten from src/main/resources/ml-1m-orig/
+     to src/main/resources/ml-1m/ by script
+     src/test/python/movie_lens_tfx/RenumberIds.py
+     - the movie ids are reassigned numbers that start at n_users + 1
+       and continue consecutively to n_user + n_movies + 1.
+     - the reason that the re-numbering is needed is because a
+       downstrem component, the Ranker, needs the movie ids to follow
+       the user ids in numerical order as they are both used as
+       indices (offset by 1) for accessing a matrix of concatenated 
+       user_embeddings followed by movie_embeddings.

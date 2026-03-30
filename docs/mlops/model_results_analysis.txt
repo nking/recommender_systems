@@ -7,5 +7,34 @@ analysis:
    we would expect:
       healthy learning: 1.9 - 2.9
       strongly optimized: 3.2 - 4.8
-      potential data leakage: >= 6.4
+      potential data leakage: >= 15
+
+=========================================
+I ran the pipeline tuner using RandomSearch because it's much
+faster than the Hyperband search, but the later should be used
+in true production environment.
+
+  batch size  use_bias_corr=0   use_bias_corr=1  NHR_0   NHR_1
+   32           0.1357           0.0364          8.685   2.33
+  128           0.0459           0.0151          5.875   1.93
+  512           0.0141           0.0051          7.22    2.61
+ 1024           0.0142           0.0062          14.54   6.35
+
+where NHR_0 is for not using the bias correction
+and NHR_1 is for using the bias correction.
+
+That the scores for the model using bias correction are worse
+than the scores for not using bias correction isn't suprising
+because the model using bias correction is becoming a better
+generalist while trying to learn more than what is popular.
+
+we will use the batch_size = 1024 model that uses bias
+correction.
+
+For downstream metrics, we will calculate for the
+Retriver, Ranker, and Re-Ranker:
+   NHR, NDCG, long tail recall, and intra-list diversity
+   and use T-tests with Bonferroni corrections to
+   compare each subsequent stage to another to ensure
+   improvements of the process of personalized recommendations.
 

@@ -101,7 +101,7 @@ def _make_movie_metadata_model(hp: keras_tuner.HyperParameters) -> tf.keras.Mode
     # for init from a load, arguments are present for the compositional instance members too
     def __init__(self, layer_sizes: list, n_genres: int=18,
                  embed_out_dim: int = 32,
-                 reg: keras.regularizers.Regularizer = None,
+                 regl2: float = 0.0,
                  drop_rate: float = 0., **kwargs):
       """Model for encoding genres queries.
 
@@ -115,6 +115,8 @@ def _make_movie_metadata_model(hp: keras_tuner.HyperParameters) -> tf.keras.Mode
         drop_rate
       """
       super(QueryModel, self).__init__(**kwargs)
+
+      self.regl2 = regl2
       
       self.embedding_model = keras.Sequential([
         keras.layers.Dense(embed_out_dim),
@@ -125,8 +127,11 @@ def _make_movie_metadata_model(hp: keras_tuner.HyperParameters) -> tf.keras.Mode
         layer_sizes = json.loads(layer_sizes)
       
       self.dense_layers = keras.Sequential(name="dense_query")
+      reg = None
       # Use the ReLU activation for all but the last layer.
       for layer_size in layer_sizes[:-1]:
+        if self.regl2 > 0.0:
+            reg = keras.regularizers.l2(self.regl2)
         self.dense_layers.add(
           keras.layers.Dense(layer_size, activation="elu",
                              kernel_regularizer=reg,
@@ -140,8 +145,6 @@ def _make_movie_metadata_model(hp: keras_tuner.HyperParameters) -> tf.keras.Mode
                                                  kernel_initializer="glorot_normal"))
       
       self.dense_layers.add(keras.layers.UnitNormalization(axis=-1))
-      
-      self.reg = reg
       
       self.n_genres = n_genres
       self.embed_out_dim = embed_out_dim
@@ -180,15 +183,12 @@ def _make_movie_metadata_model(hp: keras_tuner.HyperParameters) -> tf.keras.Mode
       config.update({"n_genres": self.n_genres,
                      "embed_out_dim": self.embed_out_dim,
                      "layer_sizes": self.layer_sizes,
-                     "reg": keras.utils.serialize_keras_object(
-                       self.reg),
+                     "regl2": self.regl2,
                      })
       return config
     
     @classmethod
     def from_config(cls, config):
-      for key in ["reg"]:
-        config[key] = keras.utils.deserialize_keras_object(config[key])
       return cls(**config)
   
   # TODO: add hyper-parameter "temperature" after L2Norm
@@ -197,9 +197,9 @@ def _make_movie_metadata_model(hp: keras_tuner.HyperParameters) -> tf.keras.Mode
     """Model for encoding candidate features, that is, movie_ids."""
     
     # for init from a load, arguments are present for the compositional instance members too
-    def __init__(self, n_movies: int, layer_sizes,
+    def __init__(self, n_movies: int, movies_offset:int, layer_sizes,
                  embed_out_dim: int = 32,
-                 reg: keras.regularizers.Regularizer = None,
+                 regl2: float = 0.0,
                  drop_rate: float = 0., **kwargs):
       """Model for encoding candidate features.
 
@@ -210,7 +210,12 @@ def _make_movie_metadata_model(hp: keras_tuner.HyperParameters) -> tf.keras.Mode
       """
       super(CandidateModel, self).__init__(**kwargs)
       
+      self.regl2 = regl2
+
       self.embedding_model = keras.Sequential([
+        keras.layers.IntegerLookup(
+            vocabulary=[i for i in range(movies_offset+1, movies_offset + n_movies + 1)],
+            output_mode="int"),
         keras.layers.Embedding(n_movies + 1, embed_out_dim),
         keras.layers.Flatten(data_format='channels_last'),
       ], name="movie_emb")
@@ -218,8 +223,11 @@ def _make_movie_metadata_model(hp: keras_tuner.HyperParameters) -> tf.keras.Mode
       self.dense_layers = keras.Sequential(name="dense_candidate")
       if isinstance(layer_sizes, str):
         layer_sizes = json.loads(layer_sizes)
+      reg = None
       # Use the ReLU activation for all but the last layer.
       for layer_size in layer_sizes[:-1]:
+        if self.regl2 > 0.0:
+          reg = keras.regularizers.l2(self.regl2)
         self.dense_layers.add(
           keras.layers.Dense(layer_size, activation="elu",
                              kernel_regularizer=reg,
@@ -234,9 +242,8 @@ def _make_movie_metadata_model(hp: keras_tuner.HyperParameters) -> tf.keras.Mode
       
       self.dense_layers.add(keras.layers.UnitNormalization(axis=-1))
       
-      self.reg = reg
-      
       self.n_movies = n_movies
+      self.movies_offset = movies_offset
       self.embed_out_dim = embed_out_dim
       self.drop_rate = drop_rate
       self.layer_sizes = layer_sizes
@@ -261,7 +268,8 @@ def _make_movie_metadata_model(hp: keras_tuner.HyperParameters) -> tf.keras.Mode
     def call(self, inputs, **kwargs):
       # inputs should contain columns "movie_id", "genres"
       # logging.debug(f'call {self.name} type ={type(inputs)}\ntype ={inputs}\n')
-      feature_embedding = self.embedding_model(inputs['movie_id'], **kwargs)
+      x = tf.cast(inputs['movie_id'], dtype=tf.int32)
+      feature_embedding = self.embedding_model(x, **kwargs)
       #tf.print('invoked movie_emb.  shape=', feature_embedding.shape)
       res = self.dense_layers(feature_embedding)
       # returns an np.ndarray wrapped in a tensor if inputs is tensor, else not wrapped
@@ -272,18 +280,16 @@ def _make_movie_metadata_model(hp: keras_tuner.HyperParameters) -> tf.keras.Mode
     def get_config(self):
       config = super(CandidateModel, self).get_config()
       config.update(
-        {"n_movies": self.n_movies,
+        {"n_movies": self.n_movies, "movies_offset": self.movies_offset,
          "embed_out_dim": self.embed_out_dim,
          "drop_rate": self.drop_rate,
          "layer_sizes": self.layer_sizes,
-         "reg": keras.utils.serialize_keras_object(self.reg),
+         "regl2": self.regl2,
          })
       return config
     
     @classmethod
     def from_config(cls, config):
-      for key in ["reg"]:
-        config[key] = keras.utils.deserialize_keras_object(config[key])
       return cls(**config)
   
   @keras.utils.register_keras_serializable(package=package)
@@ -297,9 +303,9 @@ def _make_movie_metadata_model(hp: keras_tuner.HyperParameters) -> tf.keras.Mode
     """
     
     # for init from a load, arguments are present for the compositional instance members too
-    def __init__(self,  n_movies: int, n_genres: int,
+    def __init__(self,  n_movies: int, movies_offset: int, n_genres: int,
                  layer_sizes: list, embed_out_dim: int,
-                 reg: keras.regularizers.Regularizer = None,
+                 regl2: float = 0.0,
                  drop_rate: float = 0, **kwargs):
       super(MetadataDNN, self).__init__(**kwargs)
       
@@ -308,23 +314,22 @@ def _make_movie_metadata_model(hp: keras_tuner.HyperParameters) -> tf.keras.Mode
       
       self.query_model = QueryModel(layer_sizes=layer_sizes, n_genres=n_genres,
                                     embed_out_dim=embed_out_dim,
-                                    reg=reg,
+                                    regl2=regl2,
                                     drop_rate=drop_rate,
                                     **kwargs)
       
       self.candidate_model = CandidateModel(n_movies=n_movies,
-                                            layer_sizes=layer_sizes, embed_out_dim=embed_out_dim,
-                                            reg=reg,
-                                            drop_rate=drop_rate,
-                                            **kwargs)
+          movies_offset = movies_offset,
+          layer_sizes=layer_sizes, embed_out_dim=embed_out_dim,
+          regl2=regl2, drop_rate=drop_rate, **kwargs)
       
       # elementwise multiplication:
       self.dot_layer = keras.layers.Dot(axes=1)
       self.sigmoid_layer = keras.layers.Activation(keras.activations.sigmoid)
       
-      self.reg = reg
-      
+      self.regl2 = regl2
       self.n_movies = n_movies
+      self.movies_offset = movies_offset
       self.n_genres = n_genres
       self.layer_sizes = layer_sizes
       self.embed_out_dim = embed_out_dim
@@ -411,19 +416,17 @@ def _make_movie_metadata_model(hp: keras_tuner.HyperParameters) -> tf.keras.Mode
     
     def get_config(self):
       config = super(MetadataDNN, self).get_config()
-      config.update({"n_movies": self.n_movies,
+      config.update({"n_movies": self.n_movies, "movies_offset": self.movies_offset,
                      "n_genres": self.n_genres,
                      "embed_out_dim": self.embed_out_dim,
                      "drop_rate": self.drop_rate,
                      "layer_sizes": self.layer_sizes,
-                     "reg": keras.utils.serialize_keras_object(self.reg),
+                     "regl2": self.regl2,
                      })
       return config
     
     @classmethod
     def from_config(cls, config):
-      for key in ["reg"]:
-        config[key] = keras.utils.deserialize_keras_object(config[key])
       return cls(**config)
   
   # use strategy
@@ -439,10 +442,12 @@ def _make_movie_metadata_model(hp: keras_tuner.HyperParameters) -> tf.keras.Mode
   with strategy.scope():
     model = MetadataDNN(
       n_movies=hp.get("n_movies") + 1,
+      movies_offset = hp.get("n_users") + 1,
       n_genres=hp.get("n_genres"),
       layer_sizes=hp.get('layer_sizes'),
       embed_out_dim=hp.get('embed_out_dim'),
-      reg=None, drop_rate=0.1,
+      regl2=hp.get("regl2"), 
+      drop_rate=hp.get("drop_rate"),
     )
   
     input_shapes = {}
@@ -496,7 +501,9 @@ def get_default_hyperparameters(custom_config, input_element_spec) -> keras_tune
   # ahmos for "age", "hr_wk", "month", "occupation", "gender"
   hp.Fixed('BATCH_SIZE', custom_config.get("BATCH_SIZE", DEFAULT_BATCH_SIZE))
   hp.Fixed('NUM_EPOCHS', custom_config.get("NUM_EPOCHS", DEFAULT_NUM_EPOCHS))
+  hp.Float('regl2', 1e-6, 1e-4, sampling="log")
   hp.Fixed('n_movies', custom_config["n_movies"])
+  hp.Fixed('n_users', value=custom_config["n_users"])
   hp.Fixed('n_genres', custom_config["n_genres"])
   hp.Fixed('run_eagerly', custom_config["run_eagerly"])
   hp.Fixed('device', custom_config.get("device", 'CPU'))
@@ -1067,6 +1074,8 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
   tuner = keras_tuner.RandomSearch(
     _make_movie_metadata_model,
     max_trials=hp.get("MAX_TUNE_TRIALS"),
+    executions_per_trial=1,
+    overwrite=True,
     hyperparameters=hp,
     allow_new_entries=False,
     objective=keras_tuner.Objective(f'val_loss', 'min'),

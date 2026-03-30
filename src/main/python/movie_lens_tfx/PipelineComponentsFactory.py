@@ -445,6 +445,7 @@ class PipelineComponentsFactory():
       return [example_gen, model_resolver, bulk_inferrer]
     
     tuner_custom_config = {
+      'n_users': self.n_users,
       'n_movies': self.n_movies,
       'n_genres': self.n_genres,
       'run_eagerly': False,
@@ -589,6 +590,7 @@ class PipelineComponentsFactory():
                     direction=tfma.MetricDirection.LOWER_IS_BETTER,
                     absolute={'value': 0.4}
                   ))),
+              tfma.MetricConfig(class_name='MeanSquaredError'),
             ]
           )
         ])

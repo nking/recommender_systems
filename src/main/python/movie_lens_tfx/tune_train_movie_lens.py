@@ -144,6 +144,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       self.feature_acronym = feature_acronym
       self.n_age_groups = n_age_groups
       
+      #NOTE: it is up to the using component to filter for OOV values
+      #      to avoid using this incorrectly
       self.user_embedding = keras.Sequential([
         keras.layers.Embedding(self.max_user_id + 1, embed_out_dim),
         keras.layers.Flatten(data_format='channels_last'),
@@ -288,6 +290,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       self.incl_genres = incl_genres
       # out_dim = int(np.sqrt(in_dim)) ~ 64
       
+      #NOTE: it is up to the using component to filter for OOV values
+      #      to avoid using this incorrectly
       self.movie_embedding = keras.Sequential([
         keras.layers.IntegerLookup(
             vocabulary=[i for i in range(movies_offset+1, movies_offset + n_movies + 1)],
@@ -953,7 +957,8 @@ def get_default_hyperparameters(custom_config, input_element_spec) -> keras_tune
   hp.Fixed("incl_genres", custom_config["incl_genres"])
   hp.Fixed('BATCH_SIZE', custom_config.get("BATCH_SIZE", DEFAULT_BATCH_SIZE))
   hp.Fixed('NUM_EPOCHS', custom_config.get("NUM_EPOCHS", DEFAULT_NUM_EPOCHS))
-  use_bias_corr = hp.Choice("use_bias_corr", values=[True, False], default=True)
+  #use_bias_corr = hp.Choice("use_bias_corr", values=[True, False], default=True)
+  use_bias_corr = hp.Fixed("use_bias_corr", value=True)
   if use_bias_corr:
       hp.Choice("bias_corr_alpha", values=[0.01, 0.05, 0.1], default=0.1) #0.01, 0.05, 0.1
       hp.Float('temperature', 0.05, 0.2, step=0.05)
