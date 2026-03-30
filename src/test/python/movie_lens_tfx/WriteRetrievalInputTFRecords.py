@@ -72,7 +72,7 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
     self.schema_path = os.path.join(get_project_dir(),
       'src/main/resources/pre_transform/schema.pbtxt')
     self.saved_model_path = os.path.join(get_project_dir(),
-      'src/test/resources/serving_model/1774809061')
+      'src/test/resources/serving_model/BEST')
     
     self.output_pivot_uri = os.path.join(get_bin_dir(), "ratings_and_predictions_pivot")
     

@@ -54,13 +54,13 @@ def _transform_timestamp(timestamp, outputs:dict):
   # mon=1, tues=2, wed=3, thur=4, fri=5, sat=6, sun=7
   #                           =0      1      2      3
   #                 add 3, mod 7, add 1
+  # changed so that mon=0 now:
   outputs["weekday"] = tf.add(days_since_1970, tf.constant(3, dtype=tf.int64))
   outputs["weekday"] = tf.math.mod(outputs["weekday"], tf.constant(7, dtype=tf.int64))
-  outputs["weekday"] = tf.add(outputs["weekday"], tf.constant(1, dtype=tf.int64))
   
-  #a cross of hour and weekday: hr * 7 + weekday.  range is [0,168]. in UsrModel, tf.keras.layers.Embedding further modtransforms
-  outputs["hr_wk"] = tf.add(tf.multiply(outputs["hr"], tf.constant(7, dtype=tf.int64)),
-    outputs["weekday"])
+  #a cross of hour and weekday:weekday * 24 + hr.  range is [0,168]. in UsrModel, tf.keras.layers.Embedding further modtransforms
+  outputs["hr_wk"] = tf.add(tf.multiply(outputs["weekday"], tf.constant(24, dtype=tf.int64)),
+    outputs["hr"])
   
   for key in ["hr", "weekday", "hr_wk"]:
     outputs[key] = tf.cast(outputs[key], dtype=tf.float32)
@@ -135,9 +135,9 @@ def preprocessing_fn(inputs):
     'age': <tf.Tensor 'Cast_4:0' shape=(None, 1) dtype=float32>,
     'occupation': <tf.Tensor 'Cast_5:0' shape=(None, 1) dtype=float32>,
     'genres': <tf.Tensor 'RaggedToTensor_1/RaggedTensorToTensor:0' shape=(None, 1, 18) dtype=float32>,
-    'hr': <tf.Tensor 'Cast_8:0' shape=(None, 1) dtype=float32>,
-    'weekday': <tf.Tensor 'Cast_9:0' shape=(None, 1) dtype=float32>,
-    'hr_wk': <tf.Tensor 'Cast_10:0' shape=(None, 1) dtype=float32>,
+    'hr': <tf.Tensor 'Cast_8:0' shape=(None, 1) dtype=float32>,  range is 0 to 23
+    'weekday': <tf.Tensor 'Cast_9:0' shape=(None, 1) dtype=float32>, range is 0 to 6
+    'hr_wk': <tf.Tensor 'Cast_10:0' shape=(None, 1) dtype=float32>, range is 0 to 167
     'month': <tf.Tensor 'Cast_11:0' shape=(None, 1) dtype=float32>,
     'yr': <tf.Tensor 'Cast_12:0' shape=(None, 1) dtype=float32>,
     'sec_into_yr': <tf.Tensor 'Cast_13:0' shape=(None, 1) dtype=float32>

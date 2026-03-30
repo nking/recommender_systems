@@ -1,14 +1,9 @@
 import shutil
-import os
-from apache_beam.io.tfrecordio_test import TestTFRecordUtil
-from tfx.dsl.io import fileio
 from tfx.orchestration import metadata
 
 import tensorflow as tf
 from tensorflow_serving.apis import prediction_log_pb2
-import os
 import glob
-from typing import Text, Any, Dict
 
 import tensorflow_transform as tft
 import random
@@ -34,8 +29,7 @@ class PipelinesTest(tf.test.TestCase):
     
     def setUp(self):
         super().setUp()
-        self.infiles_dict_ser, self.output_config_ser, self.split_names = \
-            get_test_data()
+        
         self.num_examples = 1000
         self.n_users = 6040
         self.n_movies = 3952
@@ -95,10 +89,13 @@ class PipelinesTest(tf.test.TestCase):
         
         serving_model_dir = os.path.join(PIPELINE_ROOT, 'serving_model')
         
+        infiles_dict_of_dicts_ser = get_contrastive_split_infiles_set(
+            use_small=True)
+        
         pipeline_factory = PipelineComponentsFactory(
             num_examples=self.num_examples,
-            infiles_dict_ser=self.infiles_dict_ser,
-            output_config_ser=self.output_config_ser,
+            infiles_dict_ser=infiles_dict_of_dicts_ser,
+            output_config_ser=None,
             transform_dir=tr_dir, n_users=self.n_users,
             n_movies=self.n_movies,
             n_genres=self.n_genres, n_age_groups=self.n_age_groups,
@@ -129,7 +126,7 @@ class PipelinesTest(tf.test.TestCase):
             )
             
             tfx.orchestration.LocalDagRunner().run(my_pipeline)
-            logging.debug("BASELINE pipeline finished")
+            print("BASELINE pipeline finished")
             
             artifact_types = store.get_artifact_types()
             logging.debug(f"MLMD store artifact_types={artifact_types}")
@@ -203,10 +200,8 @@ class PipelinesTest(tf.test.TestCase):
             [os.path.join(schema_uri, name) for name in
                 os.listdir(schema_uri)][0]
             
-            schema = tfx.utils.parse_pbtxt_file(schema_file_path,
-                schema_pb2.Schema())
-            feature_spec = schema_utils.schema_as_feature_spec(
-                schema).feature_spec
+            schema = tfx.utils.parse_pbtxt_file(schema_file_path,schema_pb2.Schema())
+            feature_spec = schema_utils.schema_as_feature_spec(schema).feature_spec
             
             examples_list = store.get_artifacts_by_type("Examples")
             for artifact in examples_list:
@@ -215,7 +210,7 @@ class PipelinesTest(tf.test.TestCase):
                         "Split-test")
                     break
             for artifact in examples_list:
-                if "MovieLensExampleGen" in artifact.uri:
+                if "MovieLensSplitExampleGen" in artifact.uri:
                     raw_examples_uri = os.path.join(artifact.uri,
                         "Split-test")
                     break
@@ -378,39 +373,43 @@ class PipelinesTest(tf.test.TestCase):
         # it's MLMD store.
         if run_bulk_infer:
             
+            #mostly, testing that the component works.
             # make fake incoming rating data that will be missing ratings (entered as 0)
             # by taking the user_ids from ratings_1000.dat and taking random movie_ids from the range of movies
             # and filter out any already seen by user.
             # then write to bin directory
             # and create new infiles_dict_ser for those files
-            infiles_dict = deserialize(self.infiles_dict_ser)
-            ratings_uri = infiles_dict['ratings']['uri']
-            dataset = tf.data.TextLineDataset(ratings_uri)
             
-            def create_fake_data(line_string):
-                # This entire function runs in standard Python
-                line = line_string.numpy().decode('utf-8')
-                fields = line.split('::')
-                fields[1] = str(random.randint(1, self.n_movies))
-                fields[2] = "0"
-                fields[3] = str(
-                    int(fields[3]) + 315360000)  # adding 10 years
-                rejoined_string = "::".join(fields)
-                return tf.constant(rejoined_string)
+            infiles_dict_of_dicts_ser = get_contrastive_split_infiles_set(use_small=True)
             
-            # Apply the Python function to the dataset
-            dataset2 = dataset.map(lambda line: tf.py_function(
-                func=create_fake_data, inp=[line], Tout=tf.string)
-            )
-            
-            output_file_path = os.path.join(get_bin_dir(),
-                "ratings_1000.dat")
-            with open(output_file_path, 'w') as f:
-                for element in dataset2.as_numpy_iterator():
-                    f.write(element.decode('utf-8') + '\n')
-            
-            # infiles_dict['ratings']['uri'] = output_file_path
-            
+            '''
+            for key in infiles_dict_of_dicts_ser:
+                if key != "train":
+                    continue
+                infiles_dict_split = deserialize(infiles_dict_of_dicts_ser[key])
+                ratings_uri = infiles_dict_split['ratings']['uri']
+                
+                dataset = tf.data.TextLineDataset(ratings_uri)
+                def create_fake_data(line_string):
+                    # This entire function runs in standard Python
+                    line = line_string.numpy().decode('utf-8')
+                    fields = line.split('::')
+                    fields[1] = str(random.randint(1, self.n_movies))
+                    fields[2] = "0"
+                    fields[3] = str(int(fields[3]) + 315360000)  # adding 10 years
+                    rejoined_string = "::".join(fields)
+                    return tf.constant(rejoined_string)
+                # Apply the Python function to the dataset
+                dataset2 = dataset.map(lambda line: tf.py_function(
+                    func=create_fake_data, inp=[line], Tout=tf.string)
+                )
+                output_file_path = os.path.join(get_bin_dir(), f"ratings_{key}_1000.dat")
+                with open(output_file_path, 'w') as f:
+                    for element in dataset2.as_numpy_iterator():
+                        f.write(element.decode('utf-8') + '\n')
+                infiles_dict_split['ratings']['uri'] = output_file_path
+                infiles_dict_of_dicts_ser[key] = serialize_to_string(infiles_dict_split)
+            '''
             print(f'serving_model_dir={serving_model_dir}')
             
             artifact_list = store.get_artifacts_by_type("PushedModel")
@@ -423,19 +422,10 @@ class PipelinesTest(tf.test.TestCase):
                     break
             print(f'model_uri={model_uri}')
             
-            output_config = example_gen_pb2.Output(
-                split_config=example_gen_pb2.SplitConfig(
-                    splits=[
-                        example_gen_pb2.SplitConfig.Split(name='train',
-                            hash_buckets=1)]
-                )
-            )
-            output_config_ser = serialize_proto_to_string(output_config)
-            
             pipeline_factory = PipelineComponentsFactory(
                 num_examples=self.num_examples,
-                infiles_dict_ser=serialize_to_string(infiles_dict),
-                output_config_ser=output_config_ser,
+                infiles_dict_ser=infiles_dict_of_dicts_ser,
+                output_config_ser=None,
                 transform_dir=tr_dir, n_users=self.n_users,
                 n_movies=self.n_movies,
                 n_genres=self.n_genres, n_age_groups=self.n_age_groups,
@@ -528,7 +518,7 @@ class PipelinesTest(tf.test.TestCase):
                 print(f"\n--- DONE ---")
                 print(
                     f"Total inspected records across all files: {total_records_processed}")
-                self.assertEqual(1000, total_records_processed)
+                self.assertEqual(3*1000, total_records_processed)
             
             read_prediction_logs_from_directory(inference_result_uri)
     
@@ -570,10 +560,13 @@ class PipelinesTest(tf.test.TestCase):
         
         serving_model_dir = os.path.join(PIPELINE_ROOT, 'serving_model')
         
+        infiles_dict_of_dicts_ser = get_contrastive_split_infiles_set(
+            use_small=True)
+        
         pipeline_factory = PipelineComponentsFactory(
             num_examples=self.num_examples,
-            infiles_dict_ser=self.infiles_dict_ser,
-            output_config_ser=self.output_config_ser,
+            infiles_dict_ser=infiles_dict_of_dicts_ser,
+            output_config_ser=None,
             transform_dir=tr_dir, n_users=self.n_users,
             n_movies=self.n_movies,
             n_genres=self.n_genres, n_age_groups=self.n_age_groups,
@@ -687,7 +680,7 @@ class PipelinesTest(tf.test.TestCase):
                     "Split-test")
                 break
         for artifact in examples_list:
-            if "MovieLensExampleGen" in artifact.uri:
+            if "MovieLensSplitExampleGen" in artifact.uri:
                 raw_examples_uri = os.path.join(artifact.uri,
                     "Split-test")
                 break
@@ -892,10 +885,14 @@ class PipelinesTest(tf.test.TestCase):
             shell=False, stdout=subprocess.PIPE)
         git_hash = process.communicate()[0].strip().decode()
         
+        # for MetadataDNN need the regression dataset
+        infiles_dict_ser, output_config_ser, split_names = \
+            get_test_data()
+        
         pipeline_factory = PipelineComponentsFactory(
             num_examples=self.num_examples,
-            infiles_dict_ser=self.infiles_dict_ser,
-            output_config_ser=self.output_config_ser,
+            infiles_dict_ser=infiles_dict_ser,
+            output_config_ser=output_config_ser,
             transform_dir=tr_dir, n_users=self.n_users,
             n_movies=self.n_movies,
             n_genres=self.n_genres, n_age_groups=self.n_age_groups,

@@ -2,34 +2,43 @@ lift = normalized hit rate = batch_size * hit_rate
 
 analysis:
    completely random NHR would be batch_size*(1/batch_size) = 1
-   so NHR of 3.34 shows model is doing better than average.
+   so NHR > 1 +- std error shows a model is doing better than random.
 
    we would expect:
       healthy learning: 1.9 - 2.9
       strongly optimized: 3.2 - 4.8
       potential data leakage: >= 15
 
+   An NHR > 1 but less than 1.5-ish suggests that the model is
+   not quite capturing personalization yet and so more features
+   may need to be enabled.
+
 =========================================
 I ran the pipeline tuner using RandomSearch because it's much
 faster than the Hyperband search, but the later should be used
 in true production environment.
 
-  batch size  use_bias_corr=0   use_bias_corr=1  NHR_0   NHR_1
-   32           0.1357           0.0364          8.685   2.33
-  128           0.0459           0.0151          5.875   1.93
-  512           0.0141           0.0051          7.22    2.61
- 1024           0.0142           0.0062          14.54   6.35
+The datasets needed to rank a user's preferred movie over the
+in-batch negatives which are comprised mostly of movies that the user
+has not rated but that other users liked.
+The ratings_train.dat, ratings_val.dat, and ratings_test.dat are
+filter to keep only ratings > 3
+(== ratings_train_liked.dat, ratings_val_liked.dat, ratings_test_liked.dat)
 
-where NHR_0 is for not using the bias correction
-and NHR_1 is for using the bias correction.
+for Query features of user_id, age and Candidate features of movie_id, genres
+the NHR is 1.1.
+but this is from the tuner using RandomSearch, so it
+could be improved upon using Hyperband.
 
-That the scores for the model using bias correction are worse
-than the scores for not using bias correction isn't suprising
-because the model using bias correction is becoming a better
-generalist while trying to learn more than what is popular.
+increasing the Query features to use user_id, age, hr_week, occupation
+the NHR is 1.39, 
+but this is for the tuner using RandomSearch, so it
+could be improved upon using Hyperband.
 
-we will use the batch_size = 1024 model that uses bias
-correction.
+increasing the Query features to use user_id, age, hr_week, occupation, gender
+the NHR is 1.57, 
+but this is for the tuner using RandomSearch, so it
+could be improved upon.
 
 For downstream metrics, we will calculate for the
 Retriver, Ranker, and Re-Ranker:

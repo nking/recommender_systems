@@ -8,6 +8,8 @@ from tfx.utils import io_utils
 from tensorflow_metadata.proto.v0 import anomalies_pb2
 from tensorflow_transform.tf_metadata import schema_utils
 
+from movie_lens_tfx.ingest_already_split_pyfunc_component.ingest_already_split_movie_lens_component import \
+    MovieLensSplitExampleGen
 from movie_lens_tfx.ingest_pyfunc_component.ingest_movie_lens_component import *
 #import trainer_movie_lens
 
@@ -27,8 +29,7 @@ class TuneTrainTest(tf.test.TestCase):
 
   def setUp(self):
     super().setUp()
-    self.infiles_dict_ser, self.output_config_ser, self.split_names = \
-      get_test_data()
+    self.infiles_dict_dict_ser = get_contrastive_split_infiles_set()
     self.n_users = 6040
     self.n_movies = 3952
     self.n_genres = N_GENRES
@@ -38,9 +39,10 @@ class TuneTrainTest(tf.test.TestCase):
 
   def test_tune_and_train(self):
     test_num = "tune_train_1"
-    ratings_example_gen = (MovieLensExampleGen(
-      infiles_dict_ser=self.infiles_dict_ser,
-      output_config_ser = self.output_config_ser))
+    ratings_example_gen = (MovieLensSplitExampleGen(
+        infiles_dict_train_ser=self.infiles_dict_dict_ser["train"],
+        infiles_dict_val_ser=self.infiles_dict_dict_ser["val"],
+        infiles_dict_test_ser=self.infiles_dict_dict_ser["test"]))
 
     statistics_gen = StatisticsGen(examples = ratings_example_gen.outputs['output_examples'])
 
@@ -263,7 +265,7 @@ class TuneTrainTest(tf.test.TestCase):
         transfomed_examples_uri = os.path.join(artifact.uri, "Split-test")
         break
     for artifact in examples_list:
-      if "MovieLensExampleGen" in artifact.uri:
+      if "MovieLensSplitExampleGen" in artifact.uri:
         raw_examples_uri = os.path.join(artifact.uri, "Split-test")
         break
     print(f"raw_examples_uri={raw_examples_uri}")

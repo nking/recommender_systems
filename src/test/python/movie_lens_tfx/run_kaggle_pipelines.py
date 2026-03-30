@@ -18,11 +18,7 @@ tf.get_logger().propagate = False
 logging.set_verbosity(logging.WARNING)
 logging.set_stderrthreshold(logging.WARNING)
 
-infiles_dict_ser, output_config_ser, split_names = get_test_data(use_small=False)
-infiles_dict = deserialize(infiles_dict_ser)
-infiles_dict['ratings']['uri'] = os.path.join(get_project_dir(),
-  "src/main/resources/ml-1m/ratings_train_liked.dat")
-infiles_dict_ser = serialize_to_string(infiles_dict)
+infiles_dict_of_dicts_ser = get_contrastive_split_infiles_set(use_small=False)
 
 n_users = 6040
 n_movies = 3952
@@ -34,7 +30,7 @@ MIN_EVAL_SIZE = 50  # make this larger for production pipeline
 BATCH_SIZE = 1024
 NUM_EPOCHS = 20
 
-num_examples = 805139
+num_examples = 463548
 
 PIPELINE_NAME = 'rs_pipeline'
 PIPELINE_ROOT = os.path.join(get_bin_dir(), PIPELINE_NAME)
@@ -78,8 +74,8 @@ beam_pipeline_args = [
 ]
 
 pipeline_factory = PipelineComponentsFactory(
-  num_examples=num_examples, infiles_dict_ser=infiles_dict_ser,
-  output_config_ser=output_config_ser, transform_dir=tr_dir,
+  num_examples=num_examples, infiles_dict_ser=infiles_dict_of_dicts_ser,
+  output_config_ser=None, transform_dir=tr_dir,
   n_users=n_users, n_movies=n_movies,
   n_genres=n_genres, n_age_groups=n_age_groups,
   min_eval_size=MIN_EVAL_SIZE, batch_size=BATCH_SIZE, num_epochs=NUM_EPOCHS, device="CPU",

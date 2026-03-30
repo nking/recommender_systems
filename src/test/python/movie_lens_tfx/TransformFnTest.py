@@ -32,7 +32,7 @@ class TransformFnTest(unittest.TestCase):
     
     #$$Sunday, December 31, 2000 22:29:12 UTC
     #Saturday, January 6, 2001 23:35:39 UTC
-    expected = {'yr': [2000, 2001], 'month': [12, 1], 'hr': [22, 23], 'weekday':[7, 6]}
+    expected = {'yr': [2000, 2001], 'month': [12, 1], 'hr': [22, 23], 'weekday':[6, 5]}
     for x, y in zip(expected['yr'], outputs['yr']):
       y = int(y.numpy().item())
       self.assertEqual(x, y)

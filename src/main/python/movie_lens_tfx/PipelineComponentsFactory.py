@@ -6,12 +6,15 @@ from movie_lens_tfx.bulk_infer_component.BulkInferrerBeam import BulkInferrerBea
 import enum
 
 from tfx.proto import pusher_pb2
+
+from movie_lens_tfx.ingest_already_split_pyfunc_component.ingest_already_split_movie_lens_component import \
+    MovieLensSplitExampleGen
 from movie_lens_tfx.ingest_pyfunc_component.ingest_movie_lens_component import *
 from movie_lens_tfx.misc import tfrecord_to_parquet
 
 class PIPELINE_TYPE(enum.Enum):
   PREPROCESSING = "preprocessing_data"
-  BASELINE = "baseline" #will use metadata model for baseline
+  BASELINE = "baseline"
   PRODUCTION = "production"
   BATCH_INFERENCE = "batch_inference"
   
@@ -21,7 +24,8 @@ class MODEL_NAME(enum.Enum):
   MOVIE_METADATA = "movie_metadata"
 
 class PipelineComponentsFactory():
-  def __init__(self, num_examples:int, infiles_dict_ser:str, output_config_ser:str, transform_dir:str,
+  def __init__(self, num_examples:int, infiles_dict_ser:Union[str, Dict[str, str]],
+    output_config_ser:Union[str, None], transform_dir:str,
     n_users: int, n_movies:int, n_genres:int, n_age_groups:int,
     min_eval_size:int=100, batch_size:int=64, num_epochs:int=20, device:str="CPU",
     serving_model_dir:str=None,
@@ -34,7 +38,10 @@ class PipelineComponentsFactory():
     
     Args:
       num_examples: int, number of examples to use
-      infiles_dict_ser: str, path to input dictionary file
+      infiles_dict_ser: if given as a single string, this is a serialized infiles dictionary holding information of the input
+         files and is used for the regression model a.k.a. MetadataDNN, else if argument is given as a dictionary of strings,
+         the input is a dictionary of serialized infile dictionaries to be used for the contrastive loss model a.k.a.
+         TwoTowerDNN which needs the already split data.
       output_config_ser: str, path to output dictionary file
       transform_dir: str, path to directory containing TFRecord files
       n_users: int, number of users, same as maximum user ID for movie lens users.dat
@@ -78,9 +85,13 @@ class PipelineComponentsFactory():
     #NOTE: can add .with_id('...') onto end of any component, and that will be the name of the directory under the PIPELINE_ROOT
     # used instea dof the compoonent name
     
-    example_gen = MovieLensExampleGen(
-      infiles_dict_ser=self.infiles_dict_ser,
-      output_config_ser=self.output_config_ser)
+    if not isinstance(self.infiles_dict_ser, dict):
+        raise ValueError("infiles_dict_ser must be a dictionary of serialized infirle_dicts for the contrastive learning builds")
+    
+    example_gen = MovieLensSplitExampleGen(
+            infiles_dict_train_ser = self.infiles_dict_ser["train"],
+            infiles_dict_val_ser=self.infiles_dict_ser["val"],
+            infiles_dict_test_ser=self.infiles_dict_ser["test"])
     
     print(f'type={type}')
     if type == PIPELINE_TYPE.BATCH_INFERENCE:
@@ -132,7 +143,7 @@ class PipelineComponentsFactory():
       'n_movies': self.n_movies,
       'n_genres': self.n_genres,
       'n_age_groups': self.n_age_groups,
-      'feature_acronym': "a",
+      'feature_acronym': "ahos",
       'run_eagerly': False,
       'incl_genres': True,
       'BATCH_SIZE':self.batch_size,

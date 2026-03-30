@@ -1213,7 +1213,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   
   hp = keras_tuner.HyperParameters.from_config(fn_args.hyperparameters)
   
-  logging.info('HyperParameters for training: %s' % hp.get_config())
+  print('HyperParameters for training: %s' % hp.get_config())
   
   d = hp.get("device")
   if d == "GPU":
@@ -1263,7 +1263,8 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
     log_dir=fn_args.model_run_dir, update_freq='epoch')
   
   stop_early = keras.callbacks.EarlyStopping(
-    monitor=f'val_hit_rate', min_delta=1E-4, patience=3, mode="max")
+    monitor=f'val_hit_rate', min_delta=1E-4, patience=3, mode="max",
+    restore_best_weights=True)
   
   """
   checkpoint_dir = os.path.join(fn_args.serving_model_dir, 'checkpoint')
@@ -1337,7 +1338,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
     def serve_tf_examples_fn(serialized_tf_example):
       '''Returns the serving signature for input being raw examples such as
       inputs = tf.data.TFRecordDataset(examples_file_paths, compression_type="GZIP")
-      where examples_file_paths was written by MovieLensExampleGen
+      where examples_file_paths was written by MovieLensSplitExampleGen
       '''
       raw_feature_spec = tf_transform_output.raw_feature_spec()
       try:
@@ -1386,7 +1387,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
     ])
     def transform_features_fn(serialized_tf_example):
       '''Returns the transformed_features to be fed as input to evaluator.  inputs are the raw
-      examples from MovieLensExampleGen
+      examples from MovieLensSplitExampleGen
       '''
       raw_feature_spec = tf_transform_output.raw_feature_spec()
       logging.debug(f'transform_features_fn spec = {raw_feature_spec}')
@@ -1577,7 +1578,7 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
   # the objective must be must be a name that appears in the logs
   # returned by the model.fit() method during training.
   #val_logs has keys 'val_loss' and 'val_compile_metrics'
-  
+  '''
   tuner = keras_tuner.RandomSearch(
     _make_2tower_keras_model,
     max_trials=hp.get('MAX_TUNE_TRIALS'),
@@ -1592,7 +1593,7 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
   tuner = keras_tuner.Hyperband(
     _make_2tower_keras_model,
     objective=keras_tuner.Objective(f'val_hit_rate', 'max'),
-    max_epochs=20,
+    max_epochs=10,
     factor=3,
     hyperband_iterations=1,
     overwrite=True,
@@ -1600,7 +1601,7 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
     allow_new_entries=False,
     directory=fn_args.working_dir,
     project_name='movie_lens_2t_tuning_hb')
-  '''
+  
   return tfx.components.TunerFnResult(
     tuner=tuner,
     fit_kwargs={

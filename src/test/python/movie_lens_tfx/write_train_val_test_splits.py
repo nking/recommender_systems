@@ -61,17 +61,13 @@ def choose_randomly(df1):
 
 df_train, df_val = choose_randomly(df1)
 
-# TwoTower bi-encoder needs to be trained only with likes, but the downstream models use the full train dataset
-df_train_liked = df_train.filter(pl.col("rating") > 3)
-print(f'#train liked = {len(df_train_liked)} out of {len(df_train)} in train')
-
 #print(f'{len(df_train)} train samples,  {len(df_val)}')
 print(f'{len(df_train)} train2 samples,  {len(df_val)}, ratio = {len(df_val)/len(df_train)}')
 
 # array records are written in WriteRamkerInputArrayRecords
 # parquet records are written in WriteRetrievalInputParquet.py
 # write to .dat here
-for df_write, prefix in zip([df_train, df_val, df_test, df_train_liked], ['train', 'val', 'test', 'train_liked']):
+for df_write, prefix in zip([df_train, df_val, df_test], ['train', 'val', 'test']):
     #write dat files
     file_path = os.path.join(get_bin_dir(), f'ratings_{prefix}.dat')
     

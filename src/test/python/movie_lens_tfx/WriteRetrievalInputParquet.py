@@ -21,13 +21,15 @@ tf.get_logger().propagate = False
 from absl import logging
 logging.set_verbosity(logging.WARNING)
 logging.set_stderrthreshold(logging.WARNING)
+import polars as pl
+import io
+from collections import OrderedDict
+from polars.testing import assert_frame_equal
 
 class WriteParquetTest(tf.test.TestCase):
 
   def setUp(self):
     super().setUp()
-    self.infiles_dict_ser, self.output_config_ser, self.split_names = \
-      get_test_data()
     self.n_users = 6040
     self.n_movies = 3952
     self.n_genres = N_GENRES
@@ -37,6 +39,48 @@ class WriteParquetTest(tf.test.TestCase):
     self.num_examples = 80_000
     self.MIN_EVAL_SIZE = 50
     
+  def test_write_parquet_files(self):
+      schemas = {
+          'ratings': pl.Schema(OrderedDict({'user_id': pl.Int64,
+              'movie_id': pl.Int64, 'rating': pl.Int64,
+              'timestamp': pl.Int64})),
+          'users': pl.Schema(OrderedDict({'user_id': pl.Int64,
+              'gender': pl.String, 'age': pl.Int64,
+              'occupation': pl.Int64,
+              'zipcode': pl.String})),
+          'movies': pl.Schema(OrderedDict({'movie_id': pl.Int64,
+              'title': pl.String, 'genres': pl.String}))}
+      
+      res_dir = os.path.join(get_project_dir(), 'src/main/resources/ml-1m')
+      for key in ["movies", "users", "ratings", "ratings_train", "ratings_train_liked", "ratings_val", "ratings_test"]:
+          processed_buffer = io.StringIO()
+          file_path = os.path.join(res_dir, f"{key}.dat")
+          if key.startswith("ratings"):
+              schema = schemas["ratings"]
+          else:
+              schema = schemas[key]
+          # print(f"key={key}, file_path={file_path}")
+          with open(file_path, "r", encoding='iso-8859-1') as file:
+              for line in file:
+                  line2 = line.replace('::', '\t')
+                  processed_buffer.write(line2)
+          processed_buffer.seek(0)
+          df = pl.read_csv(processed_buffer,
+              encoding='iso-8859-1', has_header=False,
+              skip_rows=0, separator='\t', schema=schema,
+              try_parse_dates=True,
+              new_columns=schema.names(),
+              use_pyarrow=True)
+          if key == "movies":
+              df = df.with_columns(
+                  pl.col("genres").str.replace("Children's", "Children")
+              )
+          outfile_path = os.path.join(get_bin_dir(), f'{key}.parquet')
+          df.write_parquet(outfile_path)
+          
+          df2 = pl.read_parquet(outfile_path)
+          assert_frame_equal(df, df2)
+  
   def test_write_joined_tfrecords(self):
     
     for i, rating_file in enumerate([
@@ -71,25 +115,14 @@ class WriteParquetTest(tf.test.TestCase):
       
       serving_model_dir = os.path.join(PIPELINE_ROOT, 'serving_model')
       
-      infiles_dict_ser, _, __ =  get_test_data(use_small=False)
-      infiles_dict = deserialize(infiles_dict_ser)
-      infiles_dict['ratings']['uri'] = os.path.join(get_project_dir(),
-          "src/main/resources/ml-1m/", rating_file)
-      infiles_dict_ser = serialize_to_string(infiles_dict)
+      infiles_dict_of_dicts_ser = get_contrastive_split_infiles_set(use_small=True)
       
-      output_config = example_gen_pb2.Output(
-        split_config=example_gen_pb2.SplitConfig(
-          splits=[example_gen_pb2.SplitConfig.Split(
-            name=f'train', hash_buckets=1)]
-        )
-      )
-      output_config_ser = serialize_proto_to_string(output_config)
       output_parquet_path = os.path.join(PIPELINE_ROOT, "transformed_parquet")
       
       pipeline_factory = PipelineComponentsFactory(
         num_examples=self.num_examples,
-        infiles_dict_ser=infiles_dict_ser,
-        output_config_ser=output_config_ser,
+        infiles_dict_ser=infiles_dict_of_dicts_ser,
+        output_config_ser=None,
         transform_dir=tr_dir, n_users=self.n_users,
         n_movies=self.n_movies,
         n_genres=self.n_genres, n_age_groups=self.n_age_groups,

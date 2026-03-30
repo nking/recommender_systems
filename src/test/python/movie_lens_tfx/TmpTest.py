@@ -26,8 +26,7 @@ class TuneTrainTest(tf.test.TestCase):
 
   def setUp(self):
     super().setUp()
-    self.infiles_dict_ser, self.output_config_ser, self.split_names = \
-      get_test_data()
+    self.infiles_dict_of_dicts_ser = get_contrastive_split_infiles_set(use_small=False)
     self.n_users = 6040
     self.n_movies = 3952
     self.n_genres = N_GENRES
@@ -73,7 +72,8 @@ class TuneTrainTest(tf.test.TestCase):
 
     pipeline_factory = PipelineComponentsFactory(
       num_examples=self.num_examples,
-      infiles_dict_ser=self.infiles_dict_ser, output_config_ser=self.output_config_ser,
+      infiles_dict_ser=self.infiles_dict_of_dicts_ser,
+      output_config_ser=None,
       transform_dir=tr_dir, n_users=self.n_users, n_movies=self.n_movies,
       n_genres=self.n_genres, n_age_groups=self.n_age_groups,
       min_eval_size=self.MIN_EVAL_SIZE,
@@ -134,7 +134,7 @@ class TuneTrainTest(tf.test.TestCase):
         feature_spec = schema_utils.schema_as_feature_spec(schema).feature_spec
         
     for artifact in store.get_artifacts_by_type("Examples"):
-      if "MovieLensExampleGen" in artifact.uri:
+      if "MovieLensSplitExampleGen" in artifact.uri:
         raw_examples_uri = os.path.join(artifact.uri, "Split-test")
         break
     file_paths = [os.path.join(raw_examples_uri, name) for name in

@@ -39,7 +39,7 @@ class NannyMLTests(unittest.TestCase):
     #find latest raw examples for test split
     examples_list = store.get_artifacts_by_type("Examples")
     for artifact in examples_list:
-      if "MovieLensExampleGen" in artifact.uri:
+      if "MovieLensSplitExampleGen" in artifact.uri:
         test_examples_uri = os.path.join(artifact.uri, "Split-test")
         file_paths = [os.path.join(test_examples_uri, name) for name
           in os.listdir(test_examples_uri)]

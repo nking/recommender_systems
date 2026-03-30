@@ -1,0 +1,63 @@
+DATA
+
+- pre-ingest data:
+    - used RenumberIds.py to reassign movie_ids to begin
+      at n_users + 1 and end at n_users + 1 + n_movies
+    - used write_train_val_test_splits.py to split the
+      data by time into (train + val) and (test)
+      then spiit (train + val) into (train) and (val) 
+      by unique user_ids.
+      the splits are roughly 80:10:10 for train:val:test.
+- preprocessing data in TFX pipeline transform preprocessing_fn
+    - change categorical to nominal indices
+    - change gender to nominal indices
+    - change occupation to nominal indices
+    - change age to ordinal indices
+    - normalize rating to between 0 and 1
+    - canonicalize genres "children's"
+    - transform genres to multihot array
+    - extract timestamp features
+    - ignore timezone, but should use ZCTA and geohashing in future
+- validation in TFX pipeline
+    - data are validated against a schema in the pipeline
+    - changes of the data distribution with respect to recent 
+      distributions are looked for
+- live mointoring
+    - methods are presented including exploration with NannyML 
+
+MODEL
+- development of Two-Tower models using tf and tf.keras:
+    - A TwoTower bi-encoder Listwise Discriminitive model with
+      sample bias corrections was developend and trained with
+      a contrastive learning loss.  The model should be better
+      able to be used to recommend the from the movie distribution 
+      tails when user prefers these less popular movies.
+    - a bi-encoder regression model called MetadataDNN was trained
+      using MSE. 
+- training and deploymnet in TFX pipeline:
+    - find best hyper-parameters
+    - train model using best hyperparameters
+    - evaluation of model against a baseline model using statistics
+      specific to the model, and passing to "BLESSED" stage
+    - ability to wait for approval from stakeholders
+    - push of approved model to model_serving directory
+    - ability to use bulk inference and realtime inference
+- monitoring:
+    - methods are presented for monitoring drifts
+    - monitor and alerts for anomalies in latency, resource usages
+
+SECURITY:
+    - inherent in the cloud infrastructure
+    - for user data, consider encryption at rest and in transit
+    - ACL, organizational defined sharing policies for artifacts including data and model
+    - code and code repository security considerations
+    - validation of models with organization infrastrurure such as security keys
+    - validation of data with organization infrastruture such as ACL,
+      tracking of lineage.
+    - data regulatory concerns
+    - data PII concerns
+      - data masking, pseudonymization, differential privacy
+    - ensuring integrity of inference data
+
+METRICS:
+    - hit rate, normalized hit rate, NDCG@K, recall_tail@K, and intra-list diversity
