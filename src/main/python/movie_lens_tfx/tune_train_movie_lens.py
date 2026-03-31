@@ -354,7 +354,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
          })
       return config
   
-  # TODO: add hyper-parameter "temperature" after L2Norm
   @keras.utils.register_keras_serializable(package=package)
   class QueryModel(keras.Model):
     """Model for encoding user queries."""
@@ -454,7 +453,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     def from_config(cls, config):
       return cls(**config)
   
-  # TODO: add hyper-parameter "temperature" after L2Norm
   @keras.utils.register_keras_serializable(package=package)
   class CandidateModel(keras.Model):
     """Model for encoding candidate features."""
@@ -777,7 +775,9 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         x, y = data
         user_embeddings = self.query_model(x, training=False)
         movie_embeddings = self.candidate_model(x, training=False)
-        logits = tf.matmul(user_embeddings, movie_embeddings,transpose_b=True)
+        logits = tf.matmul(user_embeddings, movie_embeddings, transpose_b=True)
+        logits = logits / self.temperature
+        
         if self.use_bias_corr:
             # We use the frequencies learned during training
             movie_ids_keys = tf.cast(tf.reshape(x['movie_id'], [-1]),
@@ -919,7 +919,25 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     model.build(input_shapes)
     #print(f"DEBUG: Model metrics names: {[m.name for m in model.metrics]}")
     
-    optimizer = keras.optimizers.Adam(learning_rate=hp.get('learning_rate'))
+    BATCH_SIZE_PER_REPLICA = hp.get("BATCH_SIZE")
+    NUM_EPOCHS = hp.get("NUM_EPOCHS")
+    n_replicas = strategy.num_replicas_in_sync
+    GLOBAL_BATCH_SIZE = BATCH_SIZE_PER_REPLICA * n_replicas
+    # virtual epochs:
+    TRAIN_STEPS_PER_EPOCH = math.ceil(hp.get("num_train") / GLOBAL_BATCH_SIZE)
+    TOTAL_STEPS = TRAIN_STEPS_PER_EPOCH * NUM_EPOCHS
+    #NOTE: warmup should be 10-20% of total steps
+    WARMUP_STEPS = TOTAL_STEPS//10
+    
+    lr_scheduler = tf.keras.optimizers.schedules.CosineDecay(
+        initial_learning_rate=0.0,
+        decay_steps=TOTAL_STEPS,
+        warmup_steps=WARMUP_STEPS,
+        warmup_target=hp.get('learning_rate')
+    )
+    
+    optimizer = keras.optimizers.AdamW(learning_rate=lr_scheduler,
+        weight_decay=hp.get("weight_decay"))
 
     #NOTE: do not set metrics here as they are hard-coded in model
     model.compile(
@@ -947,6 +965,7 @@ def get_default_hyperparameters(custom_config, input_element_spec) -> keras_tune
   hp = keras_tuner.HyperParameters()
   # Defines search space.
   hp.Float('learning_rate', 1e-4, 1e-2, sampling='log')
+  hp.Float('weight_decay', 1e-6, 1e-2, sampling='log')
   hp.Float('regl2', 1e-6, 1e-4, sampling="log")
   hp.Float('drop_rate', min_value=0.1, max_value=0.5, default=0.5)
   hp.Choice("embed_out_dim", values=[32], default=32)
@@ -1578,7 +1597,7 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
   # the objective must be must be a name that appears in the logs
   # returned by the model.fit() method during training.
   #val_logs has keys 'val_loss' and 'val_compile_metrics'
-  '''
+  #'''
   tuner = keras_tuner.RandomSearch(
     _make_2tower_keras_model,
     max_trials=hp.get('MAX_TUNE_TRIALS'),
@@ -1589,18 +1608,33 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
     objective=keras_tuner.Objective(f'val_hit_rate', 'max'),
     directory=fn_args.working_dir,
     project_name='movie_lens_2t_tuning_r')
+  #'''
   '''
   tuner = keras_tuner.Hyperband(
     _make_2tower_keras_model,
     objective=keras_tuner.Objective(f'val_hit_rate', 'max'),
-    max_epochs=10,
-    factor=3,
-    hyperband_iterations=1,
+    max_epochs=8,
+    factor=4,
+    hyperband_iterations=3,
     overwrite=True,
     hyperparameters=hp,
     allow_new_entries=False,
     directory=fn_args.working_dir,
     project_name='movie_lens_2t_tuning_hb')
+  '''
+  '''
+  tuner = keras_tuner.BayesianOptimization(
+      _make_2tower_keras_model,
+      objective=keras_tuner.Objective(f'val_hit_rate', 'max'),
+      hyperparameters=hp,
+      alpha=1e-4, # 1e-3 for more exploration. alpha >= (change we want to detect)**2, so for batchsize 1024, alpha ~ (0.004)**2
+      beta=5.0, #defaut 2.6;  4.0 for more exploration.  sqrt(alpha) = 1./batch_size
+      num_initial_points=20, #30
+      max_trials=50, #should be 2 to 3 times num_initial_points
+      allow_new_entries=False,
+      directory=fn_args.working_dir,
+      project_name='movie_lens_2t_tuning_bayesian')
+  '''
   
   return tfx.components.TunerFnResult(
     tuner=tuner,

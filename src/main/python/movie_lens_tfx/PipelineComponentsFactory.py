@@ -632,6 +632,7 @@ class PipelineComponentsFactory():
     # Checks whether the model passed the validation steps and pushes the model
     # to a file destination if check passed.
     pusher = None
+    #NOTE: consider this pushing to a staged area to get stakeholder approval before pushing to production
     with tfx.dsl.Cond(
       evaluator.outputs['blessing'].future()[0].custom_property(
         'blessed') == 1

@@ -1,8 +1,14 @@
 lift = normalized hit rate = batch_size * hit_rate
 
 analysis:
-   completely random NHR would be batch_size*(1/batch_size) = 1
-   so NHR > 1 +- std error shows a model is doing better than random.
+   we are using in-batch negatives so there is 1 positive and
+   batch_size number of negatives.  With each positive, we have
+   batch_size cosine similarity scores for the candidates.
+   For randomly trained embeddings each candidate would have an
+   equal chance of having the highest similarity score.
+   The probability that the positive candidate has the highest
+   score is then 1/batch_size.
+   So we want out NHR to be better than batch_size*(1/batch_size) = 1
 
    we would expect:
       healthy learning: 1.9 - 2.9
@@ -14,10 +20,6 @@ analysis:
    may need to be enabled.
 
 =========================================
-I ran the pipeline tuner using RandomSearch because it's much
-faster than the Hyperband search, but the later should be used
-in true production environment.
-
 The datasets needed to rank a user's preferred movie over the
 in-batch negatives which are comprised mostly of movies that the user
 has not rated but that other users liked.
@@ -26,19 +28,19 @@ filter to keep only ratings > 3
 (== ratings_train_liked.dat, ratings_val_liked.dat, ratings_test_liked.dat)
 
 for Query features of user_id, age and Candidate features of movie_id, genres
-the NHR is 1.1.
-but this is from the tuner using RandomSearch, so it
-could be improved upon using Hyperband.
+the NHR is 1.1
+but using keras_tuner.RandomSearch, i.e. results could be improved.
 
 increasing the Query features to use user_id, age, hr_week, occupation
 the NHR is 1.39, 
-but this is for the tuner using RandomSearch, so it
-could be improved upon using Hyperband.
+but using keras_tuner.RandomSearch, i.e. results could be improved.
 
 increasing the Query features to use user_id, age, hr_week, occupation, gender
 the NHR is 1.57, 
-but this is for the tuner using RandomSearch, so it
-could be improved upon.
+but using keras_tuner.RandomSearch, i.e. results could be improved.
+
+then changing to use keras_tuner.BayesianOptimization results in
+NHR = <in progress>
 
 For downstream metrics, we will calculate for the
 Retriver, Ranker, and Re-Ranker:
