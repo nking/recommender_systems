@@ -1597,7 +1597,7 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
   # the objective must be must be a name that appears in the logs
   # returned by the model.fit() method during training.
   #val_logs has keys 'val_loss' and 'val_compile_metrics'
-  #'''
+  '''
   tuner = keras_tuner.RandomSearch(
     _make_2tower_keras_model,
     max_trials=hp.get('MAX_TUNE_TRIALS'),
@@ -1608,7 +1608,7 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
     objective=keras_tuner.Objective(f'val_hit_rate', 'max'),
     directory=fn_args.working_dir,
     project_name='movie_lens_2t_tuning_r')
-  #'''
+  '''
   '''
   tuner = keras_tuner.Hyperband(
     _make_2tower_keras_model,
@@ -1622,7 +1622,7 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
     directory=fn_args.working_dir,
     project_name='movie_lens_2t_tuning_hb')
   '''
-  '''
+  
   tuner = keras_tuner.BayesianOptimization(
       _make_2tower_keras_model,
       objective=keras_tuner.Objective(f'val_hit_rate', 'max'),
@@ -1634,7 +1634,6 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
       allow_new_entries=False,
       directory=fn_args.working_dir,
       project_name='movie_lens_2t_tuning_bayesian')
-  '''
   
   return tfx.components.TunerFnResult(
     tuner=tuner,

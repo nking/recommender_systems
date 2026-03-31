@@ -40,7 +40,7 @@ the NHR is 1.57,
 but using keras_tuner.RandomSearch, i.e. results could be improved.
 
 then changing to use keras_tuner.BayesianOptimization results in
-NHR = <in progress>
+NHR = 1.74
 
 For downstream metrics, we will calculate for the
 Retriver, Ranker, and Re-Ranker:
@@ -48,4 +48,3 @@ Retriver, Ranker, and Re-Ranker:
    and use T-tests with Bonferroni corrections to
    compare each subsequent stage to another to ensure
    improvements of the process of personalized recommendations.
-
