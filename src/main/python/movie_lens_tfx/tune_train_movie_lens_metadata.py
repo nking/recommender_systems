@@ -79,19 +79,12 @@ def input_fn(file_pattern: List[str],
 
 
 def _make_movie_metadata_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
-  # TODO: consider change to read from the transformed schema
   
-  input_dataset_element_spec_ser = hp.get("input_dataset_element_spec_ser")
-  input_dataset_element_spec = pickle.loads(base64.b64decode(input_dataset_element_spec_ser.encode('utf-8')))
-  logging.debug(f'input_dataset_element_spec={input_dataset_element_spec}')
-  # NOTE: tfx expected the models to subclass tf.keras.Model, not keras.Model
+  #input_dataset_element_spec_raw = hp.get("input_dataset_element_spec_raw_ser")
+  #input_dataset_element_spec_raw = pickle.loads(base64.b64decode(input_dataset_element_spec_raw.encode('utf-8')))
   
-  _input_dataset_element_spec = {}
-  for key, value in input_dataset_element_spec.items():
-    _shape = [i for i in value.shape]
-    _shape[0] = None
-    _input_dataset_element_spec[key] = tf.TensorSpec(shape=_shape, dtype=value.dtype, name=key)
-  input_dataset_element_spec = _input_dataset_element_spec
+  input_dataset_element_spec_trans = hp.get("input_dataset_element_spec_trans_ser")
+  input_dataset_element_spec_trans = pickle.loads(base64.b64decode(input_dataset_element_spec_trans.encode('utf-8')))
   
   # TODO: add hyper-parameter "temperature" after L2Norm
   @keras.utils.register_keras_serializable(package=package)
@@ -335,7 +328,7 @@ def _make_movie_metadata_model(hp: keras_tuner.HyperParameters) -> tf.keras.Mode
       self.embed_out_dim = embed_out_dim
       self.drop_rate = drop_rate
     
-    @tf.function(input_signature=[input_dataset_element_spec])
+    @tf.function(input_signature=[input_dataset_element_spec_trans])
     def call(self, inputs):
       #logging.debug(f'call {self.name} inputs={inputs}\n')
       user_vector = self.query_model(inputs)
@@ -346,12 +339,12 @@ def _make_movie_metadata_model(hp: keras_tuner.HyperParameters) -> tf.keras.Mode
       #tf.print('CALL', self.name, ' shape=', s.shape, ' type=', type(s))
       return s
       
-    @tf.function(input_signature=[input_dataset_element_spec])
+    @tf.function(input_signature=[input_dataset_element_spec_trans])
     def serve_query_model(self, inputs):
       """A dedicated function to trace and serve the trained Query Model."""
       return self.query_model(inputs)  #
     
-    @tf.function(input_signature=[input_dataset_element_spec])
+    @tf.function(input_signature=[input_dataset_element_spec_trans])
     def serve_candidate_model(self, inputs):
       """A dedicated function to trace and serve the trained Candidate Model."""
       return self.candidate_model(inputs)  #
@@ -508,7 +501,6 @@ def get_default_hyperparameters(custom_config, input_element_spec) -> keras_tune
   hp.Fixed('run_eagerly', custom_config["run_eagerly"])
   hp.Fixed('device', custom_config.get("device", 'CPU'))
   hp.Fixed('MAX_TUNE_TRIALS', custom_config.get("MAX_TUNE_TRIALS", MAX_TUNE_TRIALS_DEFAULT))
-  hp.Fixed('input_dataset_element_spec_ser', (base64.b64encode(pickle.dumps(input_element_spec))).decode('utf-8'))
   num_examples = custom_config.get("num_examples", DEFAULT_NUM_EXAMPLES)
   num_train = int(num_examples * 0.8)
   num_eval = int(num_examples * 0.1)
@@ -576,6 +568,17 @@ def _get_serve_tf_examples_fn(model, tf_transform_output):
   # the layer is added as an attribute to the model in order to make sure that
   # the model assets are handled correctly when exporting.
   model.tft_layer = tf_transform_output.transform_features_layer()
+
+def create_fake_transformed_batch(input_signature):
+    dummy_batch = {}
+    for feat, config in input_signature.items():
+        shape = [_ if _ is not None else 1 for _ in config.shape]
+        dtype = config.dtype
+        if dtype == tf.string:
+            dummy_batch[feat] = tf.constant([[""]], dtype=tf.string)
+        else:
+            dummy_batch[feat] = tf.zeros(shape, dtype=dtype)
+    return dummy_batch
 
 def convert_feature_spec_to_tensor_spec(raw_feature_spec: Dict) -> Dict[
   str, tf.TensorSpec]:
@@ -696,20 +699,11 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   
   if not fn_args.hyperparameters:
     raise ValueError('hyperparameters must be provided')
-  
-  transform_graph = tft.TFTransformOutput(fn_args.transform_graph_path)
-  
-  if fn_args.hyperparameters:
-    hp = keras_tuner.HyperParameters.from_config(fn_args.hyperparameters)
-  else:
-    tmp_dataset = input_fn(fn_args.train_files, fn_args.data_accessor,
-                           transform_graph, DEFAULT_BATCH_SIZE)
     
-    def extract_features(features, label):
-      return features
-    
-    x = tmp_dataset.map(extract_features)
-    hp = get_default_hyperparameters(fn_args.custom_config, x.element_spec)
+  if not fn_args.hyperparameters:
+      raise ValueError('hyperparameters must be provided')
+  
+  hp = keras_tuner.HyperParameters.from_config(fn_args.hyperparameters)
   
   logging.info('HyperParameters for training: %s' % hp.get_config())
   
@@ -734,11 +728,20 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   TRAIN_STEPS_PER_EPOCH = math.ceil(hp.get("num_train") / GLOBAL_BATCH_SIZE)
   EVAL_STEPS_PER_EPOCH = math.ceil(hp.get("num_eval") / GLOBAL_BATCH_SIZE)
   
+  # for run_fn, fn_args.transform_output is not None
   tf_transform_output = tft.TFTransformOutput(fn_args.transform_output)
-  
-  input_signature_raw = convert_feature_spec_to_tensor_spec(tf_transform_output.raw_feature_spec())
+  input_signature_raw = convert_feature_spec_to_tensor_spec(
+      tf_transform_output.raw_feature_spec())
+  input_signature_trans = convert_feature_spec_to_tensor_spec(
+      tf_transform_output.transformed_feature_spec())
   del input_signature_raw[LABEL_KEY]
-  logging.debug(f"input_signature_raw={input_signature_raw}")
+  del input_signature_trans[LABEL_KEY]
+  
+  try:
+    _ = hp.get('input_dataset_element_spec_trans_ser')
+  except Exception:
+    hp.Fixed('input_dataset_element_spec_trans_ser',
+      (base64.b64encode(pickle.dumps(input_signature_trans))).decode('utf-8'))
   
   train_dataset = input_fn(
     fn_args.train_files,
@@ -791,20 +794,6 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
     model.load_weights(latest_checkpoint)
     print(f"Loaded best weights from {latest_checkpoint}")
   """
-  
-  input_element_spec = train_dataset.element_spec[0]
-  
-  call_sig = model.call.get_concrete_function(
-    input_element_spec
-  )
-  
-  query_sig = model.serve_query_model.get_concrete_function(
-    input_element_spec
-  )
-  
-  candidate_sig = model.serve_candidate_model.get_concrete_function(
-    input_element_spec
-  )
   
   #from TFX codebase: https://github.com/tensorflow/tfx/blob/v1.16.0/tfx/examples/penguin/penguin_utils_base.py
   def _make_raw_serving_signatures(model, tf_transform_output: tft.TFTransformOutput):
@@ -888,7 +877,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       examples from MovieLensExampleGen
       '''
       raw_feature_spec = tf_transform_output.raw_feature_spec()
-      print('transform_features_fn spec = {raw_feature_spec}')
+      #print('transform_features_fn spec = {raw_feature_spec}')
       raw_features = tf.io.parse_example(serialized_tf_example, raw_feature_spec)
       transformed_features = model.tft_layer(raw_features)
       logging.info('eval_transformed_features = %s',transformed_features)
@@ -928,11 +917,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       "serving_candidate_dict": serve_candidate_dict_fn
     }
   
-  signatures = {
-    'serving_twotower_transformed': call_sig,
-    'serving_query_transformed': query_sig,
-    'serving_candidate_transformed': candidate_sig,
-  }
+  signatures = {}
   other_sigs = _make_raw_serving_signatures(model, tf_transform_output)
   signatures["transform_features"] = other_sigs["transform_features"]
   signatures["serving_default"] = other_sigs["serving_default"]
@@ -942,22 +927,9 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   signatures["serving_query_dict"] = other_sigs["serving_query_dict"]
   signatures["serving_candidate_dict"] = other_sigs["serving_candidate_dict"]
   
-  """
-  #this isn't necessary.  BulkInferrer still has the same problems finding saved model variables
-  import numpy as np
-  serialized_batch = tf.constant(np.array(
-    [b'\n\xa2\x01\n\x1d\n\x06genres\x12\x13\n\x11\n\x0fAction|Thriller\n\x0f\n\x06gender\x12\x05\n\x03\n\x01M\n\x0c\n\x03age\x12\x05\x1a\x03\n\x01-\n\x0f\n\x06rating\x12\x05\x1a\x03\n\x01\x04\n\x12\n\x08movie_id\x12\x06\x1a\x04\n\x02\x8c\x08\n\x16\n\ttimestamp\x12\t\x1a\x07\n\x05\x8a\xac\xbe\xd2\x03\n\x13\n\noccupation\x12\x05\x1a\x03\n\x01\x07\n\x10\n\x07user_id\x12\x05\x1a\x03\n\x01\x04',
-     b'\n\xa9\x01\n\x0c\n\x03age\x12\x05\x1a\x03\n\x01-\n\x16\n\ttimestamp\x12\t\x1a\x07\n\x05\xf4\xab\xbe\xd2\x03\n$\n\x06genres\x12\x1a\n\x18\n\x16Action|Sci-Fi|Thriller\n\x0f\n\x06rating\x12\x05\x1a\x03\n\x01\x05\n\x0f\n\x06gender\x12\x05\n\x03\n\x01M\n\x13\n\noccupation\x12\x05\x1a\x03\n\x01\x07\n\x10\n\x07user_id\x12\x05\x1a\x03\n\x01\x04\n\x12\n\x08movie_id\x12\x06\x1a\x04\n\x02\xd8\t']))
-  try:
-    # Call the serving function with dummy data forces the graph to trace and initialize all variables
-    # within the context of the signature.  NLK: The fit function creates trace only for training, not serving.
-    print("Forcing model tracing with dummy data...")
-    INPUT_KEY = "serialized_tf_example"# list(signatures["serving_default"].structured_input_signature[1].keys())[0]
-    _ = signatures["serving_default"](**{INPUT_KEY: serialized_batch})
-    print(f"Tracing complete. Variables should be initialized.  outputs={_}")
-  except Exception as e:
-    print(f"Warning: Failed to trace with dummy data. Error: {e}")
-  """
+  fake_trans_ds = create_fake_transformed_batch(input_signature_trans)
+  #print(f'fake_raw_ds={fake_trans_ds}')
+  model(fake_trans_ds)
   
   tf.saved_model.save(model, fn_args.serving_model_dir, signatures=signatures)
   
@@ -1025,17 +997,23 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
   logging.debug(f"Hyperparameters: {fn_args.hyperparameters}")
   logging.debug(f"Custom config: {fn_args.custom_config}")
   
-  transform_graph = tft.TFTransformOutput(fn_args.transform_graph_path)
-  
   if fn_args.hyperparameters:
     hp = keras_tuner.HyperParameters.from_config(fn_args.hyperparameters)
   else:
-    tmp_dataset = input_fn(fn_args.train_files,fn_args.data_accessor,
-      transform_graph, DEFAULT_BATCH_SIZE)
-    def extract_features(features, label):
-      return features
-    x = tmp_dataset.map(extract_features)
-    hp = get_default_hyperparameters(fn_args.custom_config, x.element_spec)
+    hp = get_default_hyperparameters(fn_args.custom_config)
+  
+  ## because _make_2tower_keras_model needs these specs for signatures, we store them as fixed hyperpareters
+  # Also oote that the tuner method needs to use fn_args.transform_graph_path
+  transform_graph = tft.TFTransformOutput(fn_args.transform_graph_path)
+  input_signature_raw = convert_feature_spec_to_tensor_spec(transform_graph.raw_feature_spec())
+  input_signature_trans = convert_feature_spec_to_tensor_spec(transform_graph.transformed_feature_spec())
+  del input_signature_raw[LABEL_KEY]
+  del input_signature_trans[LABEL_KEY]
+  
+  hp.Fixed('input_dataset_element_spec_raw_ser',
+      (base64.b64encode(pickle.dumps(input_signature_raw))).decode('utf-8'))
+  hp.Fixed('input_dataset_element_spec_trans_ser',
+      (base64.b64encode(pickle.dumps(input_signature_trans))).decode('utf-8'))
     
   d = hp.get("device")
   if d == "GPU":

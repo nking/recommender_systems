@@ -115,13 +115,7 @@ class TuneTrainTest(tf.test.TestCase):
     infer_query = loaded_saved_model.signatures["serving_query"]
     infer_candidate = loaded_saved_model.signatures["serving_candidate"]
     transform_raw = loaded_saved_model.signatures["transform_features"]
-    infer_twotower_transformed = loaded_saved_model.signatures[
-      "serving_twotower_transformed"]
-    infer_query_transformed = loaded_saved_model.signatures[
-      "serving_query_transformed"]
-    infer_canndidate_transformed = loaded_saved_model.signatures[
-      "serving_candidate_transformed"]
-    
+   
     infer_query_for_dict = loaded_saved_model.signatures["serving_query_dict"]
     
     schema_artifacts = sorted(store.get_artifacts_by_type("Schema"),

@@ -39,6 +39,7 @@ class TuneTrainTest(tf.test.TestCase):
 
   def test_tune_and_train(self):
     test_num = "tune_train_1"
+    
     ratings_example_gen = (MovieLensSplitExampleGen(
         infiles_dict_train_ser=self.infiles_dict_dict_ser["train"],
         infiles_dict_val_ser=self.infiles_dict_dict_ser["val"],
@@ -136,13 +137,12 @@ class TuneTrainTest(tf.test.TestCase):
                   ratings_transform, tuner, trainer]
 
     PIPELINE_NAME = 'TestPythonTransformPipeline'
-    #output_data_dir = os.path.join(os.environ.get('TEST_UNDECLARED_OUTPUTS_DIR',self.get_temp_dir()),self._testMethodName)
-    output_data_dir = os.path.join(get_bin_dir(), test_num, self._testMethodName)
+    output_data_dir = os.path.join(get_bin_dir(), test_num)
     PIPELINE_ROOT = os.path.join(output_data_dir, PIPELINE_NAME)
     #remove results from previous test runs:
     try:
-      logging.debug(f"removing: {PIPELINE_ROOT}")
-      shutil.rmtree(PIPELINE_ROOT)
+      logging.debug(f"removing: {output_data_dir}")
+      shutil.rmtree(output_data_dir)
     except OSError as e:
       pass
     METADATA_PATH = os.path.join(PIPELINE_ROOT, 'tfx_metadata', 'metadata.db')
@@ -174,6 +174,8 @@ class TuneTrainTest(tf.test.TestCase):
     )
 
     tfx.orchestration.LocalDagRunner().run(my_pipeline)
+    
+    print(f'finished running {PIPELINE_NAME}')
 
     #metadata_connection = metadata.Metadata(metadata_connection_config)
     store = metadata_store.MetadataStore(metadata_connection_config)
@@ -317,60 +319,11 @@ class TuneTrainTest(tf.test.TestCase):
     infer_query = loaded_saved_model.signatures["serving_query"]
     infer_candidate = loaded_saved_model.signatures["serving_candidate"]
     transform_raw = loaded_saved_model.signatures["transform_features"]
-    infer_twotower_transformed = loaded_saved_model.signatures["serving_twotower_transformed"]
-    infer_query_transformed = loaded_saved_model.signatures["serving_query_transformed"]
-    infer_canndidate_transformed = loaded_saved_model.signatures["serving_candidate_transformed"]
     infer_query_for_dict = loaded_saved_model.signatures["serving_query_dict"]
-    infer_candidate_for_dict = loaded_saved_model.signatures[
-      "serving_candidate_dict"]
-    infer_default_for_dict = loaded_saved_model.signatures[
-      "serving_default_dict"]
+    infer_candidate_for_dict = loaded_saved_model.signatures["serving_candidate_dict"]
+    infer_default_for_dict = loaded_saved_model.signatures["serving_default_dict"]
     
-    #test the signatures for transformed data:
-    predictions = []
-    query_embeddings = []
-    candidate_embeddings = []
-    for batch in ds:
-      predictions.append(
-        infer_twotower_transformed(age=batch['age'], gender=batch['gender'],
-          genres=batch['genres'],
-          hr=batch['hr'],
-          hr_wk=batch['hr_wk'],
-          month=batch['month'],
-          movie_id=batch['movie_id'],
-          occupation=batch['occupation'],
-          sec_into_yr=batch['sec_into_yr'],
-          user_id=batch['user_id'],
-          weekday=batch['weekday'],
-          yr=batch['yr']))
-      
-      query_embeddings.append(
-        infer_query_transformed(age=batch['age'], gender=batch['gender'],
-          genres=batch['genres'],
-          hr=batch['hr'], hr_wk=batch['hr_wk'],
-          month=batch['month'],
-          movie_id=batch['movie_id'],
-          occupation=batch['occupation'],
-          sec_into_yr=batch['sec_into_yr'],
-          user_id=batch['user_id'],
-          weekday=batch['weekday'],
-          yr=batch['yr']))
-      candidate_embeddings.append(
-        infer_canndidate_transformed(age=batch['age'], gender=batch['gender'],
-          genres=batch['genres'],
-          hr=batch['hr'], hr_wk=batch['hr_wk'],
-          month=batch['month'],
-          movie_id=batch['movie_id'],
-          occupation=batch['occupation'],
-          sec_into_yr=batch['sec_into_yr'],
-          user_id=batch['user_id'],
-          weekday=batch['weekday'],
-          yr=batch['yr']))
-      
     num_rows = ds.reduce(0, lambda x, _: x + 1).numpy()
-    self.assertEqual(len(predictions), num_rows)
-    self.assertEqual(len(query_embeddings), num_rows)
-    self.assertEqual(len(candidate_embeddings), num_rows)
     
     ## test the signatures for raw data
     TT_INPUT_KEY = list(infer_twotower.structured_input_signature[1].keys())[0]
