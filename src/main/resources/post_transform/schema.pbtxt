@@ -157,3 +157,15 @@ feature {
     }
   }
 }
+feature {
+  name: "yr_z"
+  type: FLOAT
+  presence {
+    min_fraction: 1.0
+  }
+  shape {
+    dim {
+      size: 1
+    }
+  }
+}

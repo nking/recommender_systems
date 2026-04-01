@@ -39,10 +39,6 @@ METRIC_FN = keras.metrics.RootMeanSquaredError()
 
 MAX_TUNE_TRIALS_DEFAULT = 10
 
-#NOTE: could be improved by writing the headers to a file in the Transform stage and reading them here:
-FEATURE_KEYS = [
-   'movie_id', 'genres'
-]
 LABEL_KEY = 'rating'
 N_GENRES = 18
 
@@ -443,17 +439,14 @@ def _make_movie_metadata_model(hp: keras_tuner.HyperParameters) -> tf.keras.Mode
       drop_rate=hp.get("drop_rate"),
     )
   
-    input_shapes = {}
-    # input_shapes[element] = (batch_size,)
-    for element in FEATURE_KEYS:
-      if element == "genres":
-        input_shapes[element] = (None, 1, N_GENRES)
-      else:
-        input_shapes[element] = (None, 1)
-    
-    model.build(input_shapes)
-    
     optimizer = keras.optimizers.Adam(learning_rate=hp.get('learning_rate'))
+    
+    # call once to make sure methods are traced. This is purportedly better to use than model.build(inp)
+    #print(f'input_signature_trans={input_dataset_element_spec_trans}')
+    fake_trans_ds = create_fake_transformed_batch(
+        input_dataset_element_spec_trans)
+    #print(f'fake_trans_ds={fake_trans_ds}')
+    model(fake_trans_ds, training=False)
     
     # LOSS:
     # can use Ordinal Logistic Regression for classification into ratings categories
@@ -926,10 +919,6 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   signatures["serving_default_dict"] = other_sigs["serving_default_dict"]
   signatures["serving_query_dict"] = other_sigs["serving_query_dict"]
   signatures["serving_candidate_dict"] = other_sigs["serving_candidate_dict"]
-  
-  fake_trans_ds = create_fake_transformed_batch(input_signature_trans)
-  #print(f'fake_raw_ds={fake_trans_ds}')
-  model(fake_trans_ds)
   
   tf.saved_model.save(model, fn_args.serving_model_dir, signatures=signatures)
   

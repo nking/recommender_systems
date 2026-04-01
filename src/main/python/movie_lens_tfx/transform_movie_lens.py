@@ -25,6 +25,9 @@ age_groups = [1, 18, 25, 35, 45, 50, 56]
 
 num_occupations = 21
 
+MIN_YEAR = 2000
+MAX_YEAR = 2050
+
 #for now, fudging timezones:
 
 # Tf.Transform considers these features as "raw"
@@ -82,6 +85,9 @@ def _transform_timestamp(timestamp, outputs:dict):
   n_non_ly = tf.math.floordiv(tf.subtract(days_since_1972, tf.multiply(n_ly, _366)), _365)
   outputs["yr"] = tf.add(tf.add(tf.constant(1972, dtype=tf.int64), n_ly), n_non_ly)
   outputs["yr"] = tf.cast(outputs["yr"], tf.float32)
+  
+  outputs["yr_z"] = tf.math.divide(tf.subtract(outputs["yr"], MIN_YEAR), (MAX_YEAR - MIN_YEAR))
+  outputs["yr_z"] = tf.clip_by_value(outputs["yr_z"], 0.0, 1.0)
   
   ##sec_into_yr = ts - (((366 * n_ly) + (365 * (n_non_ly + 2))) * 24 * 60 * 60)
   #   where +2 is for 1970, 1971
@@ -169,6 +175,7 @@ def preprocessing_fn(inputs):
   #outputs['gender'] = tf.one_hot( outputs['gender'], depth=len(genders), dtype=tf.int64)
 
   outputs['age'] = tf.cast(age_groups_table.lookup(inputs['age']), dtype=tf.float32)
+  outputs['age'] = tf.divide(outputs['age'], 6.)
   #outputs['age'] = tf.one_hot( outputs['age'], depth=len(age_groups), dtype=tf.int64)
   
   outputs['occupation'] = tf.cast(inputs['occupation'], dtype=tf.float32)

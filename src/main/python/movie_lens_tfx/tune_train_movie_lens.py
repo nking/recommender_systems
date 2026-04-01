@@ -50,9 +50,6 @@ MAX_TUNE_TRIALS_DEFAULT = 10
 EXECUTIONS_PER_TRIAL_DEFAULT = 1
 
 #NOTE: could be improved by writing the headers to a file in the Transform stage and reading them here:
-FEATURE_KEYS = [
-    'user_id', 'movie_id', 'gender', 'age', 'occupation', 'genres', 'hr', 'weekday', 'hr_wk', 'month','yr', 'sec_into_yr'
-]
 LABEL_KEY = 'rating'
 N_GENRES = 18
 N_AGE_GROUPS = 7
@@ -96,6 +93,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   
   input_dataset_element_spec_trans = hp.get("input_dataset_element_spec_trans_ser")
   input_dataset_element_spec_trans = pickle.loads(base64.b64decode(input_dataset_element_spec_trans.encode('utf-8')))
+  print(f'in MAKE MODEL: yr_z in input_dataset_element_spec_trans:{"yr_z" in input_dataset_element_spec_trans}')
   
   @keras.utils.register_keras_serializable(package=package)
   class CyclicalEncoding(keras.layers.Layer):
@@ -145,29 +143,39 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         keras.layers.Flatten(data_format='channels_last'),
       ], name="user_emb")
       
-      # numerical, dist between items matters
+      # ordinal, dist between items matters
       self.age_embedding = None
       if self.feature_acronym.find("a") > -1:
         self.age_embedding = keras.Sequential([
-          keras.layers.Embedding(self.n_age_groups + 1, embed_out_dim),
+          keras.layers.Dense(embed_out_dim, activation='swish',
+              kernel_initializer='he_normal', bias_initializer='zeros'),
           keras.layers.Flatten(data_format='channels_last'),
         ], name="age_emb")
+        
+      # ordinal, dist between items matters
+      self.yr_z_embedding = None
+      if self.feature_acronym.find("y") > -1:
+        self.yr_z_embedding = keras.Sequential([
+          keras.layers.Dense(embed_out_dim, activation='swish',
+                kernel_initializer='he_normal',
+                bias_initializer='zeros'),
+            keras.layers.Flatten(data_format='channels_last'),
+        ], name="yr_z_emb")
       
-      # numerical
-      # TODO: hour should be cyclical so cross with day of week should be cyclical too.
+      # numerical, cyclical
       self.hr_wk_embedding = None
       if self.feature_acronym.find("h") > -1:
         self.hr_wk_embedding = keras.Sequential([
-          #keras.layers.Embedding(24 * 7 + 1, embed_out_dim),
           CyclicalEncoding(max_val=24*7),
           keras.layers.Flatten(data_format='channels_last'),
         ], name="hr_wk_emb")
       
+      #numerical, cyclical
       self.month_embedding = None
       if self.feature_acronym.find("m") > -1:
         self.month_embedding = keras.Sequential([
-          keras.layers.Embedding(12 + 1, embed_out_dim),
-          keras.layers.Flatten(data_format='channels_last'),
+            CyclicalEncoding(max_val=12),
+            keras.layers.Flatten(data_format='channels_last'),
         ], name="month_emb")
       
       # categorical, nominal, order doesn't matter
@@ -191,6 +199,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       self.user_embedding.build(input_shape['user_id'])
       if self.age_embedding:
         self.age_embedding.build(input_shape['age'])
+      if self.yr_z_embedding:
+        self.yr_z_embedding.build(input_shape['yr_z'])
       if self.hr_wk_embedding:
         self.hr_wk_embedding.build(input_shape['hr_wk'])
       if self.month_embedding:
@@ -211,6 +221,9 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       if self.age_embedding:
         _shape = self.age_embedding.compute_output_shape(input_shape['age'])
         total_length += _shape[-1]
+      if self.yr_z_embedding:
+          _shape = self.yr_z_embedding.compute_output_shape(input_shape['yr_z'])
+          total_length += _shape[-1]
       if self.hr_wk_embedding:
         _shape = self.hr_wk_embedding.compute_output_shape(
           input_shape['hr_wk'])
@@ -241,6 +254,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       results.append(self.user_embedding(inputs['user_id']))
       if self.age_embedding:
         results.append(self.age_embedding(inputs['age']))
+      if self.yr_z_embedding:
+        results.append(self.yr_z_embedding(inputs['yr_z']))
       if self.hr_wk_embedding:
         results.append(self.hr_wk_embedding(inputs['hr_wk']))
       if self.month_embedding:
@@ -889,17 +904,12 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       incl_genres=hp.get('incl_genres'),
       temperature=hp.get('temperature'),
     )
-  
-    input_shapes = {}
-    # input_shapes[element] = (batch_size,)
-    for element in FEATURE_KEYS:
-      if element == "genres":
-        input_shapes[element] = (None, 1, N_GENRES)
-      else:
-        input_shapes[element] = (None, 1)
     
-    model.build(input_shapes)
-    #print(f"DEBUG: Model metrics names: {[m.name for m in model.metrics]}")
+    # call once to make sure methods are traced. This is purportedly better to use than model.build(inp)
+    print(f'input_signature_trans={input_dataset_element_spec_trans}')
+    fake_trans_ds = create_fake_transformed_batch(input_dataset_element_spec_trans)
+    print(f'fake_trans_ds={fake_trans_ds}')
+    model(fake_trans_ds, training=False)
     
     BATCH_SIZE_PER_REPLICA = hp.get("BATCH_SIZE")
     NUM_EPOCHS = hp.get("NUM_EPOCHS")
@@ -1046,7 +1056,9 @@ def _get_serve_tf_examples_fn(model, tf_transform_output):
 def create_fake_transformed_batch(input_signature):
     dummy_batch = {}
     for feat, config in input_signature.items():
-        shape = [_ if _ is not None else 1 for _ in config.shape]
+        raw_shape = config.shape.as_list() if hasattr(config.shape, 'as_list') else []
+        shape = [1] + [dim if dim is not None else 1 for dim in raw_shape[1:]]
+        #shape = [_ if _ is not None else 1 for _ in config.shape]
         dtype = config.dtype
         if dtype == tf.string:
             dummy_batch[feat] = tf.constant([[""]], dtype=tf.string)
@@ -1244,6 +1256,8 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   input_signature_trans = convert_feature_spec_to_tensor_spec(tf_transform_output.transformed_feature_spec())
   del input_signature_raw[LABEL_KEY]
   del input_signature_trans[LABEL_KEY]
+  print(f'RUN_FN:  yr_z in trans: {"yr_z" in input_signature_trans} ')
+  print(f'RUN_FN: input_signature_trans={input_signature_trans}')
 
   try:
       _ = hp.get('input_dataset_element_spec_trans_ser')
@@ -1263,7 +1277,10 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
     fn_args.data_accessor,
     tf_transform_output,
     GLOBAL_BATCH_SIZE)
-    
+  
+  for batch in train_dataset.take(1):
+      print( f"RUN_FN Dataset keys: {batch[0].keys()}")  # batch[0] is typically the feature dict
+  
   #the model is built and compiled in strategy scope:
   model = _make_2tower_keras_model(hp)
   # model = _make_2tower_keras_model(hp, tf_transform_output)
@@ -1436,12 +1453,9 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   signatures["serving_query_dict"] = other_sigs["serving_query_dict"]
   signatures["serving_candidate_dict"] = other_sigs["serving_candidate_dict"]
   
-  #call once to make sure methods are traced.  we need a raw data example, batched
-  fake_trans_ds = create_fake_transformed_batch(input_signature_trans)
-  #print(f'fake_trans_ds={fake_trans_ds}')
-  model(fake_trans_ds)
-  
   tf.saved_model.save(model, fn_args.serving_model_dir, signatures=signatures)
+  
+  print(f'SAVED MODEL')
   
   #the model signatures expected as input are positional keywords ordere.
   # to see the epected order, use saved_model_cli show --dir <path_to_format-serving-dir> --all
@@ -1521,6 +1535,8 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
   input_signature_trans = convert_feature_spec_to_tensor_spec(transform_graph.transformed_feature_spec())
   del input_signature_raw[LABEL_KEY]
   del input_signature_trans[LABEL_KEY]
+  print(f'TUNER_FN:  yr_z in trans: {"yr_z" in input_signature_trans} ')
+  print(f'TUNER_FN: input_signature_trans={input_signature_trans}')
   
   hp.Fixed('input_dataset_element_spec_raw_ser',
       (base64.b64encode(pickle.dumps(input_signature_raw))).decode('utf-8'))
@@ -1558,6 +1574,9 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
     fn_args.data_accessor,
     transform_graph,
     GLOBAL_BATCH_SIZE)
+  
+  for batch in train_dataset.take(1):
+      print(f"TUNER_FN Dataset keys: {batch[0].keys()}")  # batch[0] is typically the feature dict
   
   # the objective must be must be a name that appears in the logs
   # returned by the model.fit() method during training.
