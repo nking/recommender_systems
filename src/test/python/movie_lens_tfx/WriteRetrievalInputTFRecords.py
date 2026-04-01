@@ -6,7 +6,7 @@ from apache_beam.transforms.stats import ApproximateQuantiles
 import io
 import csv
 """
-This writes various files that I need for the retrieval project.
+This writes various files needed for the retrieval project.
 It really should be refactored into components and unit tests...
 
 One of the output files holds the Bayesian shrinkage estimates, for this snapshot in time.
@@ -663,7 +663,71 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
     result = pipeline.run()
     
     return result
+  
+  def test_write_all_movies_to_tfrecords(self):
+      """
+      writes movies.dat to movies*tfrecord*gz
+      """
+      in_file_path = os.path.join(get_project_dir(), "src/main/resources/ml-1m/movies.dat")
+      out_file_path = os.path.join(get_bin_dir(), "movies_tfrecords")
+      os.makedirs(out_file_path, exist_ok=True)
+      out_file_prefix = f'{out_file_path}/movies'
 
+      pipeline1 = beam.Pipeline(options=self.pipeline_options)
+      
+      (pipeline1 | "read movies.dat" >>
+            beam.io.ReadFromText(in_file_path, skip_header_lines=0, coder=CustomUTF8Coder())
+            | "parse movies.dat" >> beam.Map(lambda line: line.split("::"))
+            | "create serialized movie examples" >> beam.Map(create_serialized_example_for_movies)
+            | 'WriteToTFRecord for movies' >> beam.io.tfrecordio.WriteToTFRecord(
+               file_path_prefix=out_file_prefix, file_name_suffix='.tfrecord')
+       )
+      
+  def test_write_all_ratings_to_tfrecords(self):
+      """
+      writes all ratings*dat to ratings*tfrecord*gz
+      """
+      for file_name in ["ratings", "ratings_train", "ratings_val", "ratings_test",
+          "ratings_train_liked", "ratings_val_liked", "ratings_test_liked"]:
+          
+          in_file_path = os.path.join(get_project_dir(), f"src/main/resources/ml-1m/{file_name}.dat")
+          out_file_path = os.path.join(get_bin_dir(), "ratings_tfrecords")
+          os.makedirs(out_file_path, exist_ok=True)
+          out_file_prefix = f'{out_file_path}/{file_name}'
+    
+          pipeline1 = beam.Pipeline(options=self.pipeline_options)
+          
+          (pipeline1 | f"read {file_name}.dat" >>
+                beam.io.ReadFromText(in_file_path, skip_header_lines=0, coder=CustomUTF8Coder())
+                | f"parse {file_name}.dat" >> beam.Map(lambda line: line.split("::"))
+                | f"create serialized {file_name} examples" >> beam.Map(create_serialized_example_for_movies)
+                | f'WriteToTFRecord for {file_name}' >> beam.io.tfrecordio.WriteToTFRecord(
+                   file_path_prefix=out_file_prefix, file_name_suffix='.tfrecord')
+           )
+  
+  def test_write_all_users_to_tfrecords(self):
+      """
+      writes users.dat to users*tfrecord*gz
+      """
+      in_file_path = os.path.join(get_project_dir(),
+          "src/main/resources/ml-1m/users.dat")
+      out_file_path = os.path.join(get_bin_dir(), "users_tfrecords")
+      os.makedirs(out_file_path, exist_ok=True)
+      out_file_prefix = f'{out_file_path}/users'
+      
+      pipeline1 = beam.Pipeline(options=self.pipeline_options)
+      
+      (pipeline1 | "read users.dat" >>
+       beam.io.ReadFromText(in_file_path, skip_header_lines=0,
+           coder=CustomUTF8Coder())
+       | "parse users.dat" >> beam.Map(lambda line: line.split("::"))
+       | "create serialized users examples" >> beam.Map(
+                  create_serialized_example_for_users)
+       | 'WriteToTFRecord for users' >> beam.io.tfrecordio.WriteToTFRecord(
+                  file_path_prefix=out_file_prefix,
+                  file_name_suffix='.tfrecord')
+       )
+      
 class WeightedRating(beam.DoFn):
   def __init__(self, prior_rating_column_name:str):
     super().__init__()
@@ -778,6 +842,61 @@ class _PivotCombineFn(beam.CombineFn):
   
   def extract_output(self, accumulator):
     return accumulator
+
+def create_serialized_example_for_movies(element):
+    movie_id = int(element[0])
+    title = element[1].encode('utf-8')
+    genres = element[2].encode('utf-8')
+    feature = {
+        'movie_id': tf.train.Feature(
+            int64_list=tf.train.Int64List(value=[movie_id])),
+        'title': tf.train.Feature(
+            bytes_list=tf.train.BytesList(value=[title])),
+        'genres': tf.train.Feature(
+            bytes_list=tf.train.BytesList(value=[genres])),
+    }
+    example_proto = tf.train.Example(features=tf.train.Features(feature=feature))
+    return example_proto.SerializeToString()
+
+def create_serialized_example_for_users(element):
+    user_id = int(element[0])
+    gender = element[1].encode('utf-8')
+    age = int(element[2])
+    occupation = int(element[3])
+    zipcode = element[4].encode('utf-8')
+    feature = {
+        'user_id': tf.train.Feature(
+            int64_list=tf.train.Int64List(value=[user_id])),
+        'gender': tf.train.Feature(
+            bytes_list=tf.train.BytesList(value=[gender])),
+        'age': tf.train.Feature(
+            bytes_list=tf.train.Int64List(value=[age])),
+        'occupation': tf.train.Feature(
+            bytes_list=tf.train.Int64List(value=[occupation])),
+        'zipcode': tf.train.Feature(
+            bytes_list=tf.train.BytesList(value=[zipcode])),
+    }
+    example_proto = tf.train.Example(features=tf.train.Features(feature=feature))
+    return example_proto.SerializeToString()
+
+def create_serialized_example_for_ratings_dat(element):
+    user_id = int(element[0])
+    movie_id = int(element[1])
+    rating = int(element[2])
+    timestamp = int(element[3])
+    feature = {
+        'user_id': tf.train.Feature(
+            int64_list=tf.train.Int64List(value=[user_id])),
+        'movie_id': tf.train.Feature(
+            bytes_list=tf.train.Int64List(value=[movie_id])),
+        'rating': tf.train.Feature(
+            bytes_list=tf.train.Int64List(value=[rating])),
+        'timestamp': tf.train.Feature(
+            bytes_list=tf.train.Int64List(value=[timestamp])),
+    }
+    example_proto = tf.train.Example(features=tf.train.Features(feature=feature))
+    return example_proto.SerializeToString()
+
 
 def create_example_with_fake_for_missing(row,
   inp_column_name_type_list: List[Tuple[str, Any]],
