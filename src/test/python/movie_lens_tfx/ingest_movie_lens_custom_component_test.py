@@ -118,7 +118,6 @@ class IngestMovieLensCustomComponentTest(tf.test.TestCase):
     for key, value in ratings_example_gen.outputs.items():
       logging.debug(f'key={key}, value={value}')
 
-    #editing
     # creates output_examples.uri=
     # PIPELINE_ROOT/IngestMovieLensComponent/output_examples/1/
     # files are Split-train/data_*, etc
