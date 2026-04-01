@@ -480,7 +480,7 @@ def _make_movie_metadata_model(hp: keras_tuner.HyperParameters) -> tf.keras.Mode
   return model
 
 
-def get_default_hyperparameters(custom_config, input_element_spec) -> keras_tuner.HyperParameters:
+def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   """Returns hyperparameters for building Keras model."""
   #print(f'get_default_hyperparameters: custom_config={custom_config}')
   hp = keras_tuner.HyperParameters()
