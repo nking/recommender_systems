@@ -45,6 +45,23 @@ class TransformFnTest(unittest.TestCase):
       y = int(y.numpy().item())
       self.assertEqual(x, y)
     
+  def test_month_floordiv(self):
+      import numpy as np
+      
+      days_since_1970 = tf.constant([0, 30, 360, 390], dtype=tf.int64)
+      
+      days_since_1970_2 = tf.constant([0 + 1*365, 30 + 2*365, 360+ 3*365, 390+ 4*365], dtype=tf.int64)
+      
+      expected_months = [0, 1, 0, 1]
+      
+      total_months = tf.math.floordiv(days_since_1970, tf.constant(30, dtype=tf.int64))
+      month_of_year = tf.math.mod(total_months, 12)
+      self.assertTrue(np.array_equal(month_of_year, expected_months))
+      
+      total_months = tf.math.floordiv(days_since_1970_2,
+          tf.constant(30, dtype=tf.int64))
+      month_of_year = tf.math.mod(total_months, 12)
+      self.assertTrue(np.array_equal(month_of_year, expected_months))
 
 if __name__ == '__main__':
   unittest.main()

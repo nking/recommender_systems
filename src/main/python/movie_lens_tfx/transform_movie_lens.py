@@ -98,8 +98,8 @@ def _transform_timestamp(timestamp, outputs:dict):
   31 days: all the rest except Feb,
   February has 28 days, except leap year has 29 days
   """
-  outputs["month"] = tf.math.floordiv(days_since_1970,
-    tf.constant(30, dtype=tf.int64))
+  outputs["month"] = tf.math.mod(tf.math.floordiv(days_since_1970,
+    tf.constant(30, dtype=tf.int64)), 12)
   outputs['month'] = tf.cast(outputs['month'], dtype=tf.float32)
 
 def preprocessing_fn(inputs):
