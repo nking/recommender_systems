@@ -42,6 +42,14 @@ but using keras_tuner.RandomSearch, i.e. results could be improved.
 then changing to use keras_tuner.BayesianOptimization results in
 NHR = 1.74
 
+Then adding another feature and changing the ordinal embeddings 
+such that Query features are user_id, age, a cross of hr of day
+and weekday, occupation, gender, and year of rating while
+Candidate features are movie_id, and movie genres.  Increased
+the alpha parameter to 1E-2 in keras_tuner.BayesianOptimization to 
+encourage more exploration.
+NHR = 1.93
+
 For downstream metrics, we will calculate for the
 Retriver, Ranker, and Re-Ranker:
    NHR, NDCG, long tail recall, and intra-list diversity

@@ -12,7 +12,8 @@ goal of the recommender systems notebook:
     inference option.  Each stage should have ability to
     persist and track artifacts.
   - for monitoring, provide the details and how to, espec
-    with code where possible. 
+    with code where possible.  include triggers for retraining
+    and alerts.
 
 metrics:
   - the model will be a Two-Tower bi-encoder and will

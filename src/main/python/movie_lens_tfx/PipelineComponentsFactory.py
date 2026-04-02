@@ -140,7 +140,7 @@ class PipelineComponentsFactory():
       'n_users': self.n_users,
       'n_movies': self.n_movies,
       'n_genres': self.n_genres,
-      'feature_acronym': "ahos",
+      'feature_acronym': "ahosy",
       'run_eagerly': False,
       'incl_genres': True,
       'BATCH_SIZE':self.batch_size,

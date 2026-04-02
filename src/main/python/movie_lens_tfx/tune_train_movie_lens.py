@@ -93,7 +93,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   
   input_dataset_element_spec_trans = hp.get("input_dataset_element_spec_trans_ser")
   input_dataset_element_spec_trans = pickle.loads(base64.b64decode(input_dataset_element_spec_trans.encode('utf-8')))
-  print(f'in MAKE MODEL: yr_z in input_dataset_element_spec_trans:{"yr_z" in input_dataset_element_spec_trans}')
   
   @keras.utils.register_keras_serializable(package=package)
   class CyclicalEncoding(keras.layers.Layer):
@@ -896,10 +895,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       temperature=hp.get('temperature'),
     )
     
-    # call once to make sure methods are traced. This is purportedly better to use than model.build(inp)
-    print(f'input_signature_trans={input_dataset_element_spec_trans}')
+    # call once to trace methods. 
     fake_trans_ds = create_fake_transformed_batch(input_dataset_element_spec_trans)
-    print(f'fake_trans_ds={fake_trans_ds}')
     model(fake_trans_ds, training=False)
     
     BATCH_SIZE_PER_REPLICA = hp.get("BATCH_SIZE")
@@ -1227,8 +1224,6 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   input_signature_trans = convert_feature_spec_to_tensor_spec(tf_transform_output.transformed_feature_spec())
   del input_signature_raw[LABEL_KEY]
   del input_signature_trans[LABEL_KEY]
-  print(f'RUN_FN:  yr_z in trans: {"yr_z" in input_signature_trans} ')
-  print(f'RUN_FN: input_signature_trans={input_signature_trans}')
 
   try:
       _ = hp.get('input_dataset_element_spec_trans_ser')
@@ -1248,9 +1243,6 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
     fn_args.data_accessor,
     tf_transform_output,
     GLOBAL_BATCH_SIZE)
-  
-  for batch in train_dataset.take(1):
-      print( f"RUN_FN Dataset keys: {batch[0].keys()}")  # batch[0] is typically the feature dict
   
   #the model is built and compiled in strategy scope:
   model = _make_2tower_keras_model(hp)
@@ -1426,8 +1418,6 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   
   tf.saved_model.save(model, fn_args.serving_model_dir, signatures=signatures)
   
-  print(f'SAVED MODEL')
-  
   #the model signatures expected as input are positional keywords ordere.
   # to see the epected order, use saved_model_cli show --dir <path_to_format-serving-dir> --all
   
@@ -1506,8 +1496,6 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
   input_signature_trans = convert_feature_spec_to_tensor_spec(transform_graph.transformed_feature_spec())
   del input_signature_raw[LABEL_KEY]
   del input_signature_trans[LABEL_KEY]
-  print(f'TUNER_FN:  yr_z in trans: {"yr_z" in input_signature_trans} ')
-  print(f'TUNER_FN: input_signature_trans={input_signature_trans}')
   
   hp.Fixed('input_dataset_element_spec_raw_ser',
       (base64.b64encode(pickle.dumps(input_signature_raw))).decode('utf-8'))
@@ -1546,12 +1534,10 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
     transform_graph,
     GLOBAL_BATCH_SIZE)
   
-  for batch in train_dataset.take(1):
-      print(f"TUNER_FN Dataset keys: {batch[0].keys()}")  # batch[0] is typically the feature dict
-  
   # the objective must be must be a name that appears in the logs
   # returned by the model.fit() method during training.
   #val_logs has keys 'val_loss' and 'val_compile_metrics'
+  '''
   tuner = keras_tuner.RandomSearch(
     _make_2tower_keras_model,
     max_trials=hp.get('MAX_TUNE_TRIALS'),
@@ -1562,6 +1548,7 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
     objective=keras_tuner.Objective(f'val_hit_rate', 'max'),
     directory=fn_args.working_dir,
     project_name='movie_lens_2t_tuning_r')
+  '''
   
   '''
   tuner = keras_tuner.Hyperband(
@@ -1576,19 +1563,20 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
     directory=fn_args.working_dir,
     project_name='movie_lens_2t_tuning_hb')
   '''
-  '''
+  
   tuner = keras_tuner.BayesianOptimization(
       _make_2tower_keras_model,
       objective=keras_tuner.Objective(f'val_hit_rate', 'max'),
       hyperparameters=hp,
-      alpha=1e-4, # 1e-3 for more exploration. alpha >= (change we want to detect)**2, so for batchsize 1024, alpha ~ (0.004)**2
+      #alpha=1e-4, # 1e-3 for more exploration. alpha >= (change we want to detect)**2, so for batchsize 1024, alpha ~ (0.004)**2
+      alpha=1e-2, 
       beta=5.0, #defaut 2.6;  4.0 for more exploration.  sqrt(alpha) = 1./batch_size
       num_initial_points=20, #30
       max_trials=50, #should be 2 to 3 times num_initial_points
       allow_new_entries=False,
       directory=fn_args.working_dir,
       project_name='movie_lens_2t_tuning_bayesian')
-  '''
+  
   return tfx.components.TunerFnResult(
     tuner=tuner,
     fit_kwargs={
