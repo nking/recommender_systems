@@ -4,7 +4,7 @@ which is in the test python source code.
 use_bias_cor was fixed to True and the Tuner used keras_tuner.Hyberband
 to find the best hyper-parameters.
 
-The validation metrics:
+The test metrics:
    val_hit_rate = 0.00188
    normalized for batch_size=1024 gives NHR = 1.93
    which is better than an NHR of 1 for random.
@@ -45,5 +45,6 @@ metrics, so can be compared with the Netflix competition
 which won with a model with RMSE of 0.8567, improving 
 upon the Netflix standard by 10%.
 The metadata model with batch_size 32 has RMSE 0.25
-on this project's validation dataset.
+on this project's test dataset (which a train, val, test 
+split of the train dataset)
 

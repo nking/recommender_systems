@@ -30,12 +30,9 @@ from absl import logging
 logging.set_verbosity(logging.WARNING)
 logging.set_stderrthreshold(logging.WARNING)
 
-DEFAULT_BATCH_SIZE = 64
+DEFAULT_BATCH_SIZE = 32
 DEFAULT_NUM_EPOCHS = 20
 DEFAULT_NUM_EXAMPLES = 100000
-
-LOSS_FN = keras.losses.MeanSquaredError() #name=mean_squared_error
-METRIC_FN = keras.metrics.RootMeanSquaredError()
 
 MAX_TUNE_TRIALS_DEFAULT = 10
 
@@ -323,7 +320,16 @@ def _make_movie_metadata_model(hp: keras_tuner.HyperParameters) -> tf.keras.Mode
       self.layer_sizes = layer_sizes
       self.embed_out_dim = embed_out_dim
       self.drop_rate = drop_rate
+      self.loss_mse = keras.losses.MeanSquaredError(name="loss")
+      self.mean_loss_metric = keras.metrics.Mean(name="mean_loss")
+      self.mae_metric = keras.metrics.MeanAbsoluteError(name="mae")
+      self.rmse_metric = keras.metrics.RootMeanSquaredError(name="rmse")
     
+    @property
+    def metrics(self):
+        # OVERRIDE to workaround tf.keras handling of validation metrics
+        return [self.mean_loss_metric, self.mae_metric, self.rmse_metric]
+
     @tf.function(input_signature=[input_dataset_element_spec_trans])
     def call(self, inputs):
       #logging.debug(f'call {self.name} inputs={inputs}\n')
@@ -373,32 +379,28 @@ def _make_movie_metadata_model(hp: keras_tuner.HyperParameters) -> tf.keras.Mode
       x, y = batch
       with tf.GradientTape() as tape:
         y_pred = self.call(x)  # Forward pass
-        loss = self.compute_loss(y=y, y_pred=y_pred)
+        #loss = self.compute_loss(y=y, y_pred=y_pred)
+        loss = self.loss_mse(y, y_pred)
       
       trainable_vars = self.trainable_variables
       gradients = tape.gradient(loss, trainable_vars)
       # Update weights
       self.optimizer.apply_gradients(zip(gradients, trainable_vars))
       
-      # Update metrics
-      for metric in self.metrics:
-        if metric.name == "loss":
-          metric.update_state(loss)
-        else:
-          metric.update_state(y, y_pred)
-      
+      self.mean_loss_metric.update_state(loss)
+      self.mae_metric.update_state(y, y_pred)
+      self.rmse_metric.update_state(y, y_pred)
+
       # Return a dict mapping metric names to current value.
       return {m.name: m.result() for m in self.metrics}
     
     def test_step(self, data):
       x, y = data
       y_pred = self(x, training=False) #self.predict or self.evaluate?
-      loss = self.compute_loss(y=y, y_pred=y_pred)
-      for metric in self.metrics:
-        if metric.name == "loss":
-          metric.update_state(loss)
-        else:
-          metric.update_state(y, y_pred)
+      loss = self.loss_mse(y, y_pred)
+      self.mean_loss_metric.update_state(loss)
+      self.mae_metric.update_state(y, y_pred)
+      self.rmse_metric.update_state(y, y_pred)
       # Return a dict mapping metric names to current value.
       # Note that it will include the loss (tracked in self.metrics).
       return {m.name: m.result() for m in self.metrics}
@@ -454,9 +456,11 @@ def _make_movie_metadata_model(hp: keras_tuner.HyperParameters) -> tf.keras.Mode
     #  so consider MAE
     #  so consider MAE
     model.compile(
-      loss=LOSS_FN,
+      loss=None, #internally fixed
       optimizer=optimizer,
-      metrics=[METRIC_FN, keras.metrics.MeanAbsoluteError()],
+      #these were hard wired into model to workaround tf.keras losing
+      # the metrics for test_step
+      #metrics=[METRIC_FN, keras.metrics.MeanAbsoluteError(name="mae")],
       run_eagerly=hp.get("run_eagerly")
     )
     
@@ -756,16 +760,16 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
     log_dir=fn_args.model_run_dir, update_freq='epoch')
   
   stop_early = keras.callbacks.EarlyStopping(
-    monitor=f'val_loss', min_delta=1E-4, patience=3)
+    monitor=f'val_mean_loss', mode='min', min_delta=1E-4, patience=3)
   
   """
   checkpoint_dir = os.path.join(fn_args.serving_model_dir, 'checkpoint')
   filepath = os.path.join(
-    checkpoint_dir, 'best_model_{epoch:02d}-{val_loss:.2f}'  # Using val_loss is common
+    checkpoint_dir, 'best_model_{epoch:02d}-{val_mean_loss:.2f}'  # Using val_loss is common
   )
   tf.io.gfile.makedirs(checkpoint_dir)
   callback = tf.keras.callbacks.ModelCheckpoint(
-    filepath=filepath, monitor='val_loss', verbose=1, mode='min', save_best_only=True,
+    filepath=filepath, monitor='val_mean_loss', verbose=1, mode='min', save_best_only=True,
     save_weights_only=False, save_freq='epoch')
   """
   history = model.fit(
@@ -1045,7 +1049,7 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
     overwrite=True,
     hyperparameters=hp,
     allow_new_entries=False,
-    objective=keras_tuner.Objective(f'val_loss', 'min'),
+    objective=keras_tuner.Objective(f'val_mean_loss', 'min'),
     # objective=keras_tuner.Objective('val_loss', 'min'),
     directory=fn_args.working_dir,
     project_name='movie_lens_metadata_tuning')

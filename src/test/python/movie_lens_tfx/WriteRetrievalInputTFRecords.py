@@ -682,6 +682,7 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
             | 'WriteToTFRecord for movies' >> beam.io.tfrecordio.WriteToTFRecord(
                file_path_prefix=out_file_prefix, file_name_suffix='.tfrecord')
        )
+      pipeline1.run()
       
   def test_write_all_ratings_to_tfrecords(self):
       """
@@ -704,6 +705,7 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
                 | f'WriteToTFRecord for {file_name}' >> beam.io.tfrecordio.WriteToTFRecord(
                    file_path_prefix=out_file_prefix, file_name_suffix='.tfrecord')
            )
+          pipeline1.run()
   
   def test_write_all_users_to_tfrecords(self):
       """
@@ -718,15 +720,14 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
       pipeline1 = beam.Pipeline(options=self.pipeline_options)
       
       (pipeline1 | "read users.dat" >>
-       beam.io.ReadFromText(in_file_path, skip_header_lines=0,
+        beam.io.ReadFromText(in_file_path, skip_header_lines=0,
            coder=CustomUTF8Coder())
-       | "parse users.dat" >> beam.Map(lambda line: line.split("::"))
-       | "create serialized users examples" >> beam.Map(
-                  create_serialized_example_for_users)
-       | 'WriteToTFRecord for users' >> beam.io.tfrecordio.WriteToTFRecord(
-                  file_path_prefix=out_file_prefix,
-                  file_name_suffix='.tfrecord')
-       )
+        | "parse users.dat" >> beam.Map(lambda line: line.split("::"))
+        | "create serialized users examples" >> beam.Map(create_serialized_example_for_users)
+        | 'WriteToTFRecord for users' >> beam.io.tfrecordio.WriteToTFRecord(
+                  file_path_prefix=out_file_prefix, file_name_suffix='.tfrecord'))
+      pipeline1.run()
+      
       
 class WeightedRating(beam.DoFn):
   def __init__(self, prior_rating_column_name:str):
@@ -859,6 +860,7 @@ def create_serialized_example_for_movies(element):
     return example_proto.SerializeToString()
 
 def create_serialized_example_for_users(element):
+    print(f'element={element}')
     user_id = int(element[0])
     gender = element[1].encode('utf-8')
     age = int(element[2])
@@ -870,9 +872,9 @@ def create_serialized_example_for_users(element):
         'gender': tf.train.Feature(
             bytes_list=tf.train.BytesList(value=[gender])),
         'age': tf.train.Feature(
-            bytes_list=tf.train.Int64List(value=[age])),
+            int64_list=tf.train.Int64List(value=[age])),
         'occupation': tf.train.Feature(
-            bytes_list=tf.train.Int64List(value=[occupation])),
+            int64_list=tf.train.Int64List(value=[occupation])),
         'zipcode': tf.train.Feature(
             bytes_list=tf.train.BytesList(value=[zipcode])),
     }
@@ -888,11 +890,11 @@ def create_serialized_example_for_ratings_dat(element):
         'user_id': tf.train.Feature(
             int64_list=tf.train.Int64List(value=[user_id])),
         'movie_id': tf.train.Feature(
-            bytes_list=tf.train.Int64List(value=[movie_id])),
+            int64_list=tf.train.Int64List(value=[movie_id])),
         'rating': tf.train.Feature(
-            bytes_list=tf.train.Int64List(value=[rating])),
+            int64_list=tf.train.Int64List(value=[rating])),
         'timestamp': tf.train.Feature(
-            bytes_list=tf.train.Int64List(value=[timestamp])),
+            int64_list=tf.train.Int64List(value=[timestamp])),
     }
     example_proto = tf.train.Example(features=tf.train.Features(feature=feature))
     return example_proto.SerializeToString()

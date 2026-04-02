@@ -86,6 +86,7 @@ def _transform_timestamp(timestamp, outputs:dict):
   outputs["yr"] = tf.add(tf.add(tf.constant(1972, dtype=tf.int64), n_ly), n_non_ly)
   outputs["yr"] = tf.cast(outputs["yr"], tf.float32)
   
+  #min-max scaling
   outputs["yr_z"] = tf.math.divide(tf.subtract(outputs["yr"], MIN_YEAR), (MAX_YEAR - MIN_YEAR))
   outputs["yr_z"] = tf.clip_by_value(outputs["yr_z"], 0.0, 1.0)
   

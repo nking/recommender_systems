@@ -749,16 +749,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         self.loss_tracker.update_state(loss)
         self.hit_rate_metric.update_state(y_true=labels, y_pred=logits, sample_weight=y)
         return {m.name: m.result() for m in self.metrics}
-        '''
-        for metric in self.metrics:
-            if metric.name == "loss":
-                metric.update_state(loss)
-            else:
-                # labels: [0, 1, 2...]
-                # logits: [B, B] matrix of dot products
-                metric.update_state(labels, logits, sample_weight=y)
-        return {m.name: m.result() for m in self.metrics}
-        '''
     
     def test_step(self, data):
         x, y = data
@@ -786,15 +776,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         self.loss_tracker.update_state(loss)
         self.hit_rate_metric.update_state(y_true=labels, y_pred=logits, sample_weight=y)
         return {m.name: m.result() for m in self.metrics}
-        '''
-        for metric in self.metrics:
-            if metric.name == "loss":
-                metric.update_state(loss)
-            else:
-                # Important: Use y as sample_weight if you want to respect ratings
-                metric.update_state(labels, logits, sample_weight=y)
-        return {m.name: m.result() for m in self.metrics}
-        '''
     
     def get_config(self):
       config = super(TwoTowerDNN, self).get_config()

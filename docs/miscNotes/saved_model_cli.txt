@@ -1,0 +1,14 @@
+for examining the SavedModel, see
+https://github.com/tensorflow/docs/blob/master/site/en/r1/guide/saved_model.md#cli-to-inspect-and-execute-savedmodel
+
+to see the signatures and their inputs:
+    saved_model_cli show --dir <path_to_saved_model_dir> --all
+    
+to see a specific signature:
+    saved_model_cli show --dir {model_export_path} --tag_set serve --signature_def serving_default
+
+
+saved_model_cli run --dir /tmp/saved_model_dir --tag_set serve \
+--signature_def x1_x2_to_y --inputs x1=/tmp/my_data1.npz[x] \
+--input_exprs 'x2=np.ones((3,1))'
+
