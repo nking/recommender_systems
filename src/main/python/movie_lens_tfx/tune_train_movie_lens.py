@@ -110,7 +110,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   @keras.utils.register_keras_serializable(package=package)
   class UserModel(keras.Model):
     # for init from a load, arguments are present for the compositional instance members too
-    def __init__(self, max_user_id: int, n_age_groups: int,
+    def __init__(self, max_user_id: int,
                  embed_out_dim: int = 32,
                  feature_acronym: str = "",
                  **kwargs):
@@ -134,7 +134,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       self.embed_out_dim = embed_out_dim
       self.max_user_id = max_user_id
       self.feature_acronym = feature_acronym
-      self.n_age_groups = n_age_groups
       
       #NOTE: it is up to the using component to filter for OOV values
       #      to avoid using this incorrectly
@@ -272,7 +271,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     def get_config(self):
       config = super(UserModel, self).get_config()
       config.update({"max_user_id": self.max_user_id,
-                     'n_age_groups': self.n_age_groups,
                      "embed_out_dim": self.embed_out_dim,
                      "feature_acronym": self.feature_acronym,
                      })
@@ -368,7 +366,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     """Model for encoding user queries."""
     
     # for init from a load, arguments are present for the compositional instance members too
-    def __init__(self, n_users: int, n_age_groups: int,
+    def __init__(self, n_users: int,
                  layer_sizes: list,
                  embed_out_dim: int = 32,
                  regl2:float = 0.0,
@@ -386,7 +384,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       self.regl2 = regl2
       
       self.embedding_model = UserModel(max_user_id=n_users,
-                                       n_age_groups=n_age_groups,
                                        embed_out_dim=embed_out_dim,
                                        feature_acronym=feature_acronym)
       if isinstance(layer_sizes, str):
@@ -413,7 +410,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       self.dense_layers.add(keras.layers.UnitNormalization(axis=-1))
       
       self.n_users = n_users
-      self.n_age_groups = n_age_groups
       self.feature_acronym = feature_acronym
       self.embed_out_dim = embed_out_dim
       self.layer_sizes = layer_sizes
@@ -449,7 +445,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     def get_config(self):
       config = super(QueryModel, self).get_config()
       config.update({"n_users": self.n_users,
-                     'n_age_groups': self.n_age_groups,
                      "embed_out_dim": self.embed_out_dim,
                      "drop_rate": self.drop_rate,
                      "layer_sizes": self.layer_sizes,
@@ -579,7 +574,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     """
     
     # for init from a load, arguments are present for the compositional instance members too
-    def __init__(self, n_users: int, n_movies: int, movies_offset: int, n_age_groups: int,
+    def __init__(self, n_users: int, n_movies: int, movies_offset: int,
          n_genres: int,
          layer_sizes: list, embed_out_dim: int,
          regl2: float = 0.0,
@@ -595,7 +590,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         layer_sizes = json.loads(layer_sizes)
       
       self.query_model = QueryModel(n_users=n_users,
-                                    n_age_groups=n_age_groups,
                                     layer_sizes=layer_sizes,
                                     embed_out_dim=embed_out_dim,
                                     regl2=regl2,
@@ -619,7 +613,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       self.regl2 = regl2
       
       self.n_users = n_users
-      self.n_age_groups = n_age_groups
       self.n_movies = n_movies
       self.movies_offset = movies_offset
       self.n_genres = n_genres
@@ -808,7 +801,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       config = super(TwoTowerDNN, self).get_config()
       config.update({"n_users": self.n_users, "n_movies": self.n_movies,
         "movies_offset" : self.movies_offset,
-        "n_age_groups": self.n_age_groups,
         "n_genres": self.n_genres,
         "embed_out_dim": self.embed_out_dim,
         "drop_rate": self.drop_rate,
@@ -892,7 +884,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       n_users=hp.get("n_users") + 1,
       n_movies=hp.get("n_movies") + 1,
       movies_offset = hp.get("n_users") + 1,
-      n_age_groups=hp.get("n_age_groups") + 1,
       n_genres=hp.get("n_genres"),
       layer_sizes=hp.get('layer_sizes'),
       embed_out_dim=hp.get('embed_out_dim'),
@@ -978,7 +969,6 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
       hp.Choice("temperature", values=[1.0], default=1.0)
   hp.Fixed('n_users', value=custom_config["n_users"])
   hp.Fixed('n_movies', custom_config["n_movies"])
-  hp.Fixed('n_age_groups', custom_config["n_age_groups"])
   hp.Fixed('n_genres', custom_config["n_genres"])
   hp.Fixed('run_eagerly', custom_config["run_eagerly"])
   hp.Fixed('device', custom_config.get("device", 'CPU'))
@@ -1202,25 +1192,6 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       getattr(fn_args, attr_name)):
       attr_value = getattr(fn_args, attr_name)
       logging.debug(f"{attr_name}: {attr_value}")
-  """
-  content of fn_args:
-    base_model: None
-    custom_config: {'device': 'CPU'}
-    data_accessor: DataAccessor(tf_dataset_factory=<function get_tf_dataset_factory_from_artifact.<locals>.dataset_factory at 0x7b3c529c4b80>, record_batch_factory=<function get_record_batch_factory_from_artifact.<locals>.record_batch_factory at 0x7b3c529c4550>, data_view_decode_fn=None)
-    eval_files: ['/<pipeline_path>/Transform/transformed_examples/4/Split-eval/*']
-    eval_model_dir: /<pipeline_path>/Trainer/model/6/Format-TFMA
-    eval_steps: 5
-    hyperparameters: {'space': [{'class_name': 'Choice', 'config': {'name': 'learning_rate', 'default': 0.0001, 'conditions': [], 'values': [0.0001], 'ordered': True}}, {'class_name': 'Choice', 'config': {'name': 'regl2', 'default': 0.0, 'conditions': [], 'values': [0.0, 0.001, 0.01], 'ordered': True}}, {'class_name': 'Float', 'config': {'name': 'drop_rate', 'default': 0.5, 'conditions': [], 'min_value': 0.1, 'max_value': 0.5, 'step': None, 'sampling': 'linear'}}, {'class_name': 'Choice', 'config': {'name': 'embed_out_dim', 'default': 32, 'conditions': [], 'values': [32], 'ordered': True}}, {'class_name': 'Choice', 'config': {'name': 'layer_sizes', 'default': '[32]', 'conditions': [], 'values': ['[32]'], 'ordered': False}}, {'class_name': 'Fixed', 'config': {'name': 'feature_acronym', 'conditions': [], 'value': 'h'}}, {'class_name': 'Fixed', 'config': {'name': 'incl_genres', 'conditions': [], 'value': True}}, {'class_name': 'Fixed', 'config': {'name': 'num_epochs', 'conditions': [], 'value': 10}}, {'class_name': 'Fixed', 'config': {'name': 'batch_size', 'conditions': [], 'value': 2}}, {'class_name': 'Fixed', 'config': {'name': 'use_bias_corr', 'conditions': [], 'value': False}}, {'class_name': 'Fixed', 'config': {'name': 'n_users', 'conditions': [], 'value': 6040}}, {'class_name': 'Fixed', 'config': {'name': 'n_movies', 'conditions': [], 'value': 3952}}, {'class_name': 'Fixed', 'config': {'name': 'n_age_groups', 'conditions': [], 'value': 7}}, {'class_name': 'Fixed', 'config': {'name': 'n_genres', 'conditions': [], 'value': 18}}, {'class_name': 'Fixed', 'config': {'name': 'run_eagerly', 'conditions': [], 'value': True}}], 'values': {'learning_rate': 0.0001, 'regl2': 0.0, 'drop_rate': 0.11706263861763477, 'embed_out_dim': 32, 'layer_sizes': '[32]', 'feature_acronym': 'h', 'incl_genres': True, 'num_epochs': 10, 'batch_size': 2, 'use_bias_corr': False, 'user_id_max': 6040, 'n_movies': 3952, 'n_age_groups': 7, 'n_genres': 18, 'run_eagerly': True}}
-    model_run_dir: /<pipeline_path>/Trainer/model_run/6
-    schema_file: /<pipeline_path>/SchemaGen/schema/3/schema.pbtxt
-    schema_path: /<pipeline_path>/SchemaGen/schema/3/schema.pbtxt
-    serving_model_dir: /<pipeline_path>/Trainer/model/6/Format-Serving
-    train_files: ['/<pipeline_path>/Transform/transformed_examples/4/Split-train/*']
-    train_steps: 5
-    transform_graph_path:/<pipeline_path>/Transform/transform_graph/4
-    transform_output: /<pipeline_path>/Transform/transform_graph/4
-    working_dir: None
-  """
   
   if not fn_args.hyperparameters:
     raise ValueError('hyperparameters must be provided')

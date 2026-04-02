@@ -36,7 +36,6 @@ class PipelinesTest(tf.test.TestCase):
         self.n_users = 6040
         self.n_movies = 3952
         self.n_genres = N_GENRES
-        self.n_age_groups = N_AGE_GROUPS
         self.n_occupations = 21
         self.MIN_EVAL_SIZE = 50  # make this larger for production pipeline
         self.name = 'test run of pipelines'
@@ -94,7 +93,7 @@ class PipelinesTest(tf.test.TestCase):
             output_config_ser=None,
             transform_dir=tr_dir, n_users=self.n_users,
             n_movies=self.n_movies,
-            n_genres=self.n_genres, n_age_groups=self.n_age_groups,
+            n_genres=self.n_genres,
             min_eval_size=self.MIN_EVAL_SIZE,
             batch_size=self.BATCH_SIZE, num_epochs=2, device="CPU",
             serving_model_dir=serving_model_dir)
@@ -382,7 +381,7 @@ class PipelinesTest(tf.test.TestCase):
                 output_config_ser=None,
                 transform_dir=tr_dir, n_users=self.n_users,
                 n_movies=self.n_movies,
-                n_genres=self.n_genres, n_age_groups=self.n_age_groups,
+                n_genres=self.n_genres,
                 min_eval_size=self.MIN_EVAL_SIZE,
                 batch_size=self.BATCH_SIZE, num_epochs=2, device="CPU",
                 serving_model_dir=model_uri)
@@ -530,7 +529,7 @@ class PipelinesTest(tf.test.TestCase):
             output_config_ser=output_config_ser,
             transform_dir=tr_dir, n_users=self.n_users,
             n_movies=self.n_movies,
-            n_genres=self.n_genres, n_age_groups=self.n_age_groups,
+            n_genres=self.n_genres,
             min_eval_size=self.MIN_EVAL_SIZE,
             batch_size=self.BATCH_SIZE, num_epochs=2, device="CPU",
             serving_model_dir=serving_model_dir,

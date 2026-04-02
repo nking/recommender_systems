@@ -30,7 +30,6 @@ class TuneTrainTest(tf.test.TestCase):
     self.n_users = 6040
     self.n_movies = 3952
     self.n_genres = N_GENRES
-    self.n_age_groups = N_AGE_GROUPS
     self.n_occupations = 21
     self.name = 'test run of ratings transform'
     self.num_examples = 80_000
@@ -75,7 +74,7 @@ class TuneTrainTest(tf.test.TestCase):
       infiles_dict_ser=self.infiles_dict_of_dicts_ser,
       output_config_ser=None,
       transform_dir=tr_dir, n_users=self.n_users, n_movies=self.n_movies,
-      n_genres=self.n_genres, n_age_groups=self.n_age_groups,
+      n_genres=self.n_genres,
       min_eval_size=self.MIN_EVAL_SIZE,
       batch_size=32, num_epochs=2, device="CPU", serving_model_dir=serving_model_dir)
     

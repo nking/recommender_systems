@@ -33,7 +33,6 @@ class TuneTrainTest(tf.test.TestCase):
     self.n_users = 6040
     self.n_movies = 3952
     self.n_genres = N_GENRES
-    self.n_age_groups = N_AGE_GROUPS
     self.n_occupations = 21
     self.name = 'test run of ratings transform'
 
@@ -69,7 +68,6 @@ class TuneTrainTest(tf.test.TestCase):
       'n_users' : self.n_users,
       'n_movies' : self.n_movies,
       'n_genres' : self.n_genres,
-      'n_age_groups' : self.n_age_groups,
       'run_eagerly' : True,
       'incl_genres':False,
       'feature_acronym':"",
