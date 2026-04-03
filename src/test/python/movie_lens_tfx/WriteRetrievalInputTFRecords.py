@@ -5,6 +5,7 @@ from apache_beam.transforms.combiners import Top
 from apache_beam.transforms.stats import ApproximateQuantiles
 import io
 import csv
+import glob
 """
 This writes various files needed for the retrieval project.
 It really should be refactored into components and unit tests...
@@ -123,7 +124,6 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
       return tf.io.parse_single_example(example_proto, feature_spec)
     
     #===== check self.output_uri0 =====
-    import glob
     file_paths = glob.glob(f'{self.output_uri0}/tfrecord*')
     ds_ser = tf.data.TFRecordDataset(file_paths, compression_type="GZIP")
     i = 0
@@ -682,30 +682,82 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
             | 'WriteToTFRecord for movies' >> beam.io.tfrecordio.WriteToTFRecord(
                file_path_prefix=out_file_prefix, file_name_suffix='.tfrecord')
        )
-      pipeline1.run()
+      result = pipeline1.run()
+      result.wait_until_finish()
+      
+      ## assert recrods are readable
+      feature_spec = {
+          "movie_id": tf.io.FixedLenFeature([], tf.int64),
+          "title": tf.io.FixedLenFeature([], tf.string),
+          "genres": tf.io.FixedLenFeature([], tf.string),
+      }
+      
+      def _parse_function(example_proto):
+          return tf.io.parse_single_example(example_proto, feature_spec)
+      
+      t = f'{out_file_prefix}*.tfrecord'
+      file_paths = glob.glob(t)
+      dataset = tf.data.TFRecordDataset(file_paths)
+      parsed_dataset = dataset.map(_parse_function)
+      t = None
+      for x in parsed_dataset.batch(1):
+          t = x
+          self.assertTrue('movie_id' in x)
+          self.assertTrue('title' in x)
+          self.assertTrue('genres' in x)
+          break
+      self.assertIsNotNone(t)
       
   def test_write_all_ratings_to_tfrecords(self):
       """
       writes all ratings*dat to ratings*tfrecord*gz
       """
+      
+      pipeline1 = beam.Pipeline(options=self.pipeline_options)
+      
+      outfile_patterns = []
       for file_name in ["ratings", "ratings_train", "ratings_val", "ratings_test",
           "ratings_train_liked", "ratings_val_liked", "ratings_test_liked"]:
           
           in_file_path = os.path.join(get_project_dir(), f"src/main/resources/ml-1m/{file_name}.dat")
-          out_file_path = os.path.join(get_bin_dir(), "ratings_tfrecords")
+          out_file_path = os.path.join(get_bin_dir(), f"{file_name}_tfrecords")
           os.makedirs(out_file_path, exist_ok=True)
           out_file_prefix = f'{out_file_path}/{file_name}'
-    
-          pipeline1 = beam.Pipeline(options=self.pipeline_options)
           
           (pipeline1 | f"read {file_name}.dat" >>
                 beam.io.ReadFromText(in_file_path, skip_header_lines=0, coder=CustomUTF8Coder())
                 | f"parse {file_name}.dat" >> beam.Map(lambda line: line.split("::"))
-                | f"create serialized {file_name} examples" >> beam.Map(create_serialized_example_for_movies)
+                | f"create serialized {file_name} examples" >> beam.Map(create_serialized_example_for_ratings_dat)
                 | f'WriteToTFRecord for {file_name}' >> beam.io.tfrecordio.WriteToTFRecord(
                    file_path_prefix=out_file_prefix, file_name_suffix='.tfrecord')
-           )
-          pipeline1.run()
+          )
+          outfile_patterns.append(f'{out_file_prefix}*.tfrecord')
+
+      result = pipeline1.run()
+      result.wait_until_finish()
+      
+      feature_spec = {
+          "user_id": tf.io.FixedLenFeature([], tf.int64),
+          "movie_id": tf.io.FixedLenFeature([], tf.int64),
+          "rating": tf.io.FixedLenFeature([], tf.int64),
+          "timestamp": tf.io.FixedLenFeature([], tf.int64),
+      }
+      def _parse_function(example_proto):
+          return tf.io.parse_single_example(example_proto, feature_spec)
+      
+      for pattern in outfile_patterns:
+          file_paths = glob.glob(pattern)
+          dataset = tf.data.TFRecordDataset(file_paths)
+          parsed_dataset = dataset.map(_parse_function)
+          t = None
+          for x in parsed_dataset.batch(1):
+              t = x
+              self.assertTrue('user_id' in x)
+              self.assertTrue('movie_id' in x)
+              self.assertTrue('rating' in x)
+              self.assertTrue('timestamp' in x)
+              break
+          self.assertIsNotNone(t)
   
   def test_write_all_users_to_tfrecords(self):
       """
@@ -726,8 +778,34 @@ class WriteRetrievalInputTFRecords(tf.test.TestCase):
         | "create serialized users examples" >> beam.Map(create_serialized_example_for_users)
         | 'WriteToTFRecord for users' >> beam.io.tfrecordio.WriteToTFRecord(
                   file_path_prefix=out_file_prefix, file_name_suffix='.tfrecord'))
-      pipeline1.run()
+      result = pipeline1.run()
+      result.wait_until_finish()
       
+      feature_spec = {
+        "user_id": tf.io.FixedLenFeature([], tf.int64),
+        "gender": tf.io.FixedLenFeature([], tf.string),
+        "age": tf.io.FixedLenFeature([], tf.int64),
+        "occupation": tf.io.FixedLenFeature([], tf.int64),
+        "zipcode": tf.io.FixedLenFeature([], tf.string),
+      }
+      
+      def _parse_function(example_proto):
+          return tf.io.parse_single_example(example_proto, feature_spec)
+      
+      t = f'{out_file_prefix}*.tfrecord'
+      file_paths = glob.glob(t)
+      dataset = tf.data.TFRecordDataset(file_paths)
+      parsed_dataset = dataset.map(_parse_function)
+      t = None
+      for x in parsed_dataset.batch(1):
+          t = x
+          self.assertTrue('user_id' in x)
+          self.assertTrue('gender' in x)
+          self.assertTrue('age' in x)
+          self.assertTrue('occupation' in x)
+          self.assertTrue('zipcode' in x)
+          break
+      self.assertIsNotNone(t)
       
 class WeightedRating(beam.DoFn):
   def __init__(self, prior_rating_column_name:str):
@@ -860,7 +938,6 @@ def create_serialized_example_for_movies(element):
     return example_proto.SerializeToString()
 
 def create_serialized_example_for_users(element):
-    print(f'element={element}')
     user_id = int(element[0])
     gender = element[1].encode('utf-8')
     age = int(element[2])
