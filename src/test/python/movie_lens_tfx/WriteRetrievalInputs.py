@@ -14,17 +14,19 @@ import tempfile
 This writes various files needed for the retrieval project.
 It really should be refactored into components and unit tests...
 
-One of the output files holds the Bayesian shrinkage estimates, for this snapshot in time.
-see below self.output_bayesian_est_uri.
-  bayesian shrinkage columns:
-    ['movie_id', '1', '2', '3', '4', '5', 'prediction_mm', 'total_votes', 'movie_ratings_mean', 'weighted_rating']
-   
-   - "5","4","total_votes", and "movie_ratings_mean" all give popular results.
-   - "prediction_mm" gives interesting results among the popular genre Drama,
-      but less watched movies.
-   - "weighted_rating" is strange as it returns movies that were loved but
-      by fewer people (which is what weighting by votes and the prior does).
-      Horror movies are all the top 10.
+TODO: write a movie pivot table for rated movies, and include the not rated movies
+with columns 'title', 'movie_id', '1', '2', '3', '4', '5'
+where the values in the later are the number of ratings of star '1' for 'movie_id', etc.
+e.g.
+data = {
+      'title': ['loved_many', 'loved_few', 'loved_and_hated', 'hated', 'new_unrated',  'hated_few'],
+      'movie_id': [1, 2, 3, 4, 5, 6],
+      '1': [500,   2,  4000, 800, 0, 40],
+      '2': [100,   1,  1000, 100, 0, 5],
+      '3': [200,   0,  500,   50, 0, 0],
+      '4': [3000,  5,  1000,  20, 0, 0],
+      '5': [8000, 40,  4000,  10, 0, 0]
+    }
 """
 
 from apache_beam.options.pipeline_options import PipelineOptions
@@ -504,7 +506,168 @@ class WriteRetrievalInputs(tf.test.TestCase):
             self.assertTrue('zipcode' in x)
             break
         self.assertIsNotNone(t)
+    
+    def test_write_movies_pivot_table(self):
+        dir_path = os.path.join(get_bin_dir(), 'movies_pivot_table')
+        file_name = "movie_ratings_pivot_table"
+        if not self.rewrite_all:
+            files1 = glob.glob(os.path.join(dir_path, f'{file_name}.array_record*'))
+            files2 = glob.glob(os.path.join(dir_path, f'{file_name}.tfrecrod*'))
+            if len(files1) > 0 and len(files2) > 0:
+                return None
         
+        try:
+            shutil.rmtree(dir_path)
+        except Exception as ex:
+            pass
+        os.makedirs(dir_path, exist_ok=True)
+        
+        #input_column_name_type_list = [('user_id', int), ('movie_id', int),
+        #    ('rating', int), ('timestamp', int)]
+        
+        pipeline = beam.Pipeline(options=self.pipeline_options)
+        
+        # read in and merge the train tainted ratings files: user_id::movie_id::rating::timestamp
+        pc1 = (pipeline | f"read_train_ratings" >>
+             beam.io.ReadFromText(os.path.join(get_project_dir(), f"src/main/resources/ml-1m/ratings_train.dat"),
+                 skip_header_lines=0, coder=CustomUTF8Coder())
+             | f'parse_train_ratings' >> beam.Map(lambda line: line.split("::")))
+             
+        pc2 = (pipeline | f"read_val_ratings" >>
+            beam.io.ReadFromText(os.path.join(get_project_dir(), f"src/main/resources/ml-1m/ratings_val.dat"),
+            skip_header_lines=0, coder=CustomUTF8Coder())
+            | f'parse_val_ratings' >> beam.Map(lambda line: line.split("::")))
+        
+        ratings_pc = (pc1, pc2) | "merge train and val ratings" >> beam.Flatten()
+        
+        #ratings_pc | 'print ratings_pc' >> beam.Map(lambda x: print(f'rpc={x}'))
+        
+        # create PC of "movie_id", "1", "2", "3", "4", "5"
+        movie_key = 1
+        rating_key = 2
+        keyed_pc = ratings_pc | f'MapToKeyedRatings' >> beam.Map(
+            lambda element: (
+                int(element[movie_key]),
+                (1, 0, 0, 0, 0) if element[rating_key] == "1" else
+                (0, 1, 0, 0, 0) if element[rating_key] == "2" else
+                (0, 0, 1, 0, 0) if element[rating_key] == "3" else
+                (0, 0, 0, 1, 0) if element[rating_key] == "4" else
+                (0, 0, 0, 0, 1) if element[rating_key] == "5" else
+                (0, 0, 0, 0, 0)  # Handle other ratings safely
+            )
+        )
+        #keyed_pc | 'print keyed_pc' >> beam.Map( lambda x: print(f'kpc={x}'))
+        
+        # each keyed element is like: keyed=(3430, (0, 0, 0, 1, 0))
+        combined_pc = (
+            keyed_pc | f'CombineByMovie' >> beam.CombinePerKey(_PivotCombineFn()))
+        
+        #combined_pc | 'print combined_pc' >> beam.Map(lambda x: print(f'cpc={x}'))
+        
+        # each pivoted row is like {'movie_id': 7122, '1': 30, '2': 125, '3': 431, '4': 838, '5': 699}
+        pivoted = (
+            combined_pc | 'MapToPivotSchema'
+            >> beam.Map(
+                lambda kv: {
+                    'movie_id': kv[0], '1': kv[1][0], '2': kv[1][1],
+                    '3': kv[1][2], '4': kv[1][3], '5': kv[1][4],
+                }
+            ))
+        
+        #pivoted | 'print pivoted' >> beam.Map( lambda x: print(f'pivoted={x}'))
+        
+        ## ==== create entries for movies not rated =====
+        
+        ## read in the movies as movie_id only, filter to keep only the movie_id, while making a key value tuple needed for set difference
+        movies_pc = (pipeline | f"read_movies.dat" >>
+            beam.io.ReadFromText(self.input_path1, skip_header_lines=0,
+            coder=CustomUTF8Coder())
+            | f'parse_movie_from_movies_.dat' >> beam.Map(lambda line: line.split("::"))
+            | 'filter_movies_to_id_only' >> beam.Map(lambda row: (int(row[0]), None)))
+        
+        ratings_movies_pc = ratings_pc | 'filter_ratings_to_id_only' >> beam.Map(lambda row: (int(row[1]), None))
+        grouped = {'p1': movies_pc, 'p2': ratings_movies_pc} | beam.CoGroupByKey()
+        # entry is (movie_id, {'p1': [None], 'p2': []})
+        unrated_movies_pc = (grouped | "Find Unique to p1" >> beam.Filter(
+            lambda x: x[1]['p1'] and not x[1]['p2'])
+            | "Get Movie ID" >> beam.Map(lambda x: x[0])
+        )
+        #debug:
+        movie_count = unrated_movies_pc | "Count Movies" >> beam.combiners.Count.Globally()
+        movie_count | "Print Count" >> beam.Map(lambda x: print(f'count of movies not rated = {x}'))
+
+        #write {'movie_id': 7122, '1': 0, '2': 0, '3': 0, '4': 0, '5': o}
+        unrated_pivoted = (unrated_movies_pc | 'write_unrated_movies' >>
+            beam.Map(lambda x: {'movie_id' : x, '1':0, '2':0, '3':0, '4':0, '5':0}))
+        
+        final_pivot = (pivoted, unrated_pivoted) | "merge_rated_and_unrated_pivots" >> beam.Flatten()
+
+        #final_pivot | "print_final_pivot" >> beam.Map(lambda x: print(f'final pivot = {x}'))
+        
+        # write to tfrecords file
+        (final_pivot | f'pivot_ToTFExample_ser_{random.randint(0, 1000000000000)}'
+            >> beam.ParDo(_PivotExampleMaker())
+            | f"write_merged_ratings_pivot_to_tfrecord"
+            >> beam.io.tfrecordio.WriteToTFRecord(
+                    file_path_prefix=f"{dir_path}/{file_name}.tfrecord",
+                    file_name_suffix='.gz'))
+        
+        # write to array_record
+        (final_pivot | f"serialize_merged_ratings_pivot_with_msgpack_{file_name}"
+            >> beam.Map(msgpack.packb)
+            | f'write_array_record_{file_name}'>> arrayrecordio.WriteToArrayRecord(
+            file_path_prefix=f"{dir_path}/{file_name}.array_record", num_shards=1))
+        
+        # <apache_beam.runners.portability.fn_api_runner.fn_runner.RunnerResult object
+        result = pipeline.run()
+        result.wait_until_finish()
+        
+        # ==== assert file contents ====
+        feature_spec = {
+            'movie_id': tf.io.FixedLenFeature([], tf.int64),
+            '1': tf.io.FixedLenFeature([], tf.int64),
+            '2': tf.io.FixedLenFeature([], tf.int64),
+            '3': tf.io.FixedLenFeature([], tf.int64),
+            '4': tf.io.FixedLenFeature([], tf.int64),
+            '5': tf.io.FixedLenFeature([], tf.int64),
+        }
+        
+        def _parse_function(example_proto):
+            return tf.io.parse_single_example(example_proto, feature_spec)
+        
+        t = f"{dir_path}/{file_name}.tfrecord*"
+        file_paths = glob.glob(t)
+        dataset = tf.data.TFRecordDataset(file_paths, compression_type='GZIP')
+        parsed_dataset = dataset.map(_parse_function)
+        t = None
+        for x in parsed_dataset.batch(1):
+            t = x
+            for key in ['movie_id', '1', '2', '3', '4', '5']:
+                self.assertTrue(key in x)
+                val = x[key].numpy()[0]
+                #print(f'type val={type(val)}')
+                self.assertTrue(isinstance(val, np.int64))
+            break
+        self.assertIsNotNone(t)
+        
+        ## assert array_record
+        t = f"{dir_path}/{file_name}.array_record*"
+        file_paths = glob.glob(t)
+        outfile_path = f"{dir_path}/{file_name}.array_record"
+        shutil.move(file_paths[0], outfile_path)
+        reader = None
+        try:
+            reader = array_record_module.ArrayRecordReader(outfile_path)
+            record: list = msgpack.unpackb(reader.read(), use_list=False)
+            for key in ['movie_id', '1', '2', '3', '4', '5']:
+                self.assertTrue(key in record)
+                self.assertTrue(isinstance(record[key], int))
+        except Exception as ex:
+            raise ex
+        finally:
+            if reader is not None:
+                reader.close()
+    
     def _find_mean_timestamp(self):
         file_path = self.train_full_uri
         
@@ -671,6 +834,47 @@ class _QueryEmbeddingMaker(beam.DoFn):
         pred = pred.numpy()[0].tolist()
         yield (u_id, pred)
 
+class _PivotExampleMaker(beam.DoFn):
+    def __init__(self):
+        self.inp_column_name_type_dict = None
+    
+    def setup(self):
+        """
+        Called once per DoFn instance (per worker process) after being unpickled.
+        This is where you load heavy, non-serializable resources.
+        """
+        self.inp_column_name_type_dict = {'movie_id': int, '1': int, '2': int,
+            '3': int, '4': int, '5': int}
+    
+    def process(self, row:Dict):
+        feature_map = {}
+        for key, value in row.items():
+            try:
+                element_type = self.inp_column_name_type_dict[key]
+                if element_type == float:
+                    feature_map[key] = tf.train.Feature(
+                        float_list=tf.train.FloatList(value=[float(value)]))
+                elif element_type == int or element_type == bool:
+                    feature_map[key] = tf.train.Feature(
+                        int64_list=tf.train.Int64List(value=[int(value)]))
+                elif element_type == str:
+                    feature_map[key] = tf.train.Feature(
+                        bytes_list=tf.train.BytesList(
+                            value=[value.encode('utf-8')]))
+                else:
+                    raise ValueError(
+                        f"element_type={element_type}, but only float, int, and str classes are handled.")
+            except Exception as ex:
+                print(
+                    f'ERROR: row={row},\nkey={key}, value={value}, type of value={type(value)}\n'
+                    f' element_type={element_type}\nEXCEPTION={ex}')
+                #alternatively, could instead of raise ex:
+                #yield beam.pvalue.TaggedOutput('errors', (row, str(e)))
+                raise ex
+        example = tf.train.Example(
+            features=tf.train.Features(feature=feature_map))
+        yield example.SerializeToString()
+        
 class _ParseSerializedExamples(beam.DoFn):
     """
     converts string serialized examples into dictionaries of tensors, then converts
@@ -755,6 +959,29 @@ def create_serialized_example_for_ratings_dat(element):
         features=tf.train.Features(feature=feature))
     return example_proto.SerializeToString()
 
+
+class _PivotCombineFn(beam.CombineFn):
+    def create_accumulator(self):
+        return (0, 0, 0, 0, 0)
+    
+    def add_input(self, accumulator, input_rating_count_tuple):
+        c1, c2, c3, c4, c5 = accumulator
+        i1, i2, i3, i4, i5 = input_rating_count_tuple
+        return (c1 + i1, c2 + i2, c3 + i3, c4 + i4, c5 + i5)
+    
+    def merge_accumulators(self, accumulators):
+        c1_sum, c2_sum, c3_sum, c4_sum, c5_sum = 0, 0, 0, 0, 0
+        for c1, c2, c3, c4, c5 in accumulators:
+            c1_sum += c1
+            c2_sum += c2
+            c3_sum += c3
+            c4_sum += c4
+            c5_sum += c5
+        return (c1_sum, c2_sum, c3_sum, c4_sum, c5_sum)
+    
+    def extract_output(self, accumulator):
+        return accumulator
+    
 def convert_tensor_to_scalar(row: Dict[str, tf.Tensor]) -> Dict[
     str, Any]:
     transformed_row = {}
