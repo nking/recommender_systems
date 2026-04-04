@@ -38,11 +38,11 @@ embedding models.  The training is optimized using Contrastive Learning for a
 Listwise Discriminative Model.
 
 The run_fn defines the model, compile, fit and signatures.
-The tuner_fn specifies that the custom metric "val_ndcg_20" should be used
+The tuner_fn specifies that the custom metric "val_hit_rate" should be used
 to decide which model is best.
 '''
 
-DEFAULT_BATCH_SIZE = 1024
+DEFAULT_BATCH_SIZE = 32
 DEFAULT_NUM_EPOCHS = 20
 DEFAULT_NUM_EXAMPLES = 100000
 
@@ -606,12 +606,9 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
                                             **kwargs)
       
       self.dot_layer = keras.layers.Dot(axes=1)
-      self.loss_function = HeuristicLambdaLoss(temperature=temperature)
-      self.mean_loss_metric = keras.metrics.Mean(name="mean_loss")
-      self.mrr_k_metric = MeanReciprocalRankAtK()
-      self.ndcg_k_metric = NDCGAtKForInBatchNegatives()
-      self.recall_k_metric = RecallAtKForInBatchNegatives()
-
+      self.loss_tracker = tf.keras.metrics.Mean(name="loss")
+      self.hit_rate_metric = InBatchHitRate(name="hit_rate")
+      
       self.regl2 = regl2
       
       self.n_users = n_users
@@ -643,7 +640,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     def metrics(self):
         # OVERRIDE to workaround tf.keras handling of validation metrics
         # It tells the model: "When you finish an epoch, pull results from these two."
-        return [self.mean_loss_metric, self.mrr_k_metric, self.ndcg_k_metric, self.recall_k_metric]
+        return [self.loss_tracker, self.hit_rate_metric]
     
     @tf.function(input_signature=[input_dataset_element_spec_trans])
     def call(self, inputs):
@@ -732,12 +729,14 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
                 # Broad-casting log_q across the batch
                 logits = logits - tf.expand_dims(log_q, axis=0)
             
+            logits = logits / self.temperature
             # Define Targets
             # In-Batch Softmax target is the diagonal (user i liked movie i)
             batch_size = tf.shape(logits)[0]
             labels = tf.range(batch_size)
-            
-            per_example_loss = self.loss_function(tf.eye(batch_size), logits)
+            labels = tf.reshape(labels, [-1])  # Forces it to be a 1D vector
+            per_example_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
+                labels=labels, logits=logits)
             # Multiply by your scaled ratings (y)
             # If y is 0.1, the gradient for that user is tiny.
             # If y is 1.0, the gradient is full strength.
@@ -746,12 +745,9 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         # Optimization...
         gradients = tape.gradient(loss, self.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
-
-        self.mean_loss_metric.update_state(loss)
-        self.mrr_k_metric.update_state(labels, logits)
-        self.ndcg_k_metric.update_state(labels, logits)
-        self.recall_k_metric.update_state(labels, logits)
         
+        self.loss_tracker.update_state(loss)
+        self.hit_rate_metric.update_state(y_true=labels, y_pred=logits, sample_weight=y)
         return {m.name: m.result() for m in self.metrics}
     
     def test_step(self, data):
@@ -767,20 +763,18 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
             p_i = self.table_B.lookup(movie_ids_keys)
             logits = logits - tf.expand_dims(tf.math.log(p_i), axis=0)
         
+        logits = logits / self.temperature
         # Define Ranking Labels
         batch_size = tf.shape(logits)[0]
         labels = tf.range(batch_size)
+        labels = tf.reshape(labels, [-1])  # Forces it to be a 1D vector
         
-        per_example_loss = self.loss_function(tf.eye(batch_size), logits)
-        # Multiply by your scaled ratings (y)
-        # If y is 0.1, the gradient for that user is tiny.
-        # If y is 1.0, the gradient is full strength.
-        loss = tf.reduce_mean(per_example_loss * tf.cast(y, tf.float32))
-        self.mean_loss_metric.update_state(loss)
-        self.mrr_k_metric.update_state(labels, logits)
-        self.ndcg_k_metric.update_state(labels, logits)
-        self.recall_k_metric.update_state(labels, logits)
-        
+        # Calculate Loss (Weighted by y if you used that in train_step)
+        loss = tf.reduce_mean(
+            tf.nn.sparse_softmax_cross_entropy_with_logits(labels=labels, logits=logits)
+        )
+        self.loss_tracker.update_state(loss)
+        self.hit_rate_metric.update_state(y_true=labels, y_pred=logits, sample_weight=y)
         return {m.name: m.result() for m in self.metrics}
     
     def get_config(self):
@@ -805,168 +799,52 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       return cls(**config)
   
   @keras.utils.register_keras_serializable(package=package)
-  class HeuristicLambdaLoss(keras.losses.Loss):
-      """
-      a loss for use in systems that do not have a re-ranker
-      """
-      def __init__(self, name="heuristic_lambda", temperature:float=0.07, **kwargs):
-          super(HeuristicLambdaLoss, self).__init__(name=name, **kwargs)
-          self.temperature = temperature
-      
-      def call(self, y_true, y_pred):
-          """
-          y_true: [batch_size, batch_size], is not used.  is assumed to be identity matric
-          y_pred:  [batch_size, batch_size].  the result of matmul Q_embedd, C_embed^T
-          """
-          logits = y_pred/self.temperature
-          pos_indices = tf.range(tf.shape(logits)[0])
-          pos_scores = tf.linalg.diag_part(logits)
-          
-          #current rank of pos item in its row.
-          # use a differentiable approx or stop gradient for the rank
-          ranks = tf.reduce_sum(tf.cast(logits > pos_scores[:, tf.newaxis], tf.float32), axis=1)
-
-          #heuristic rank: 1/(log2(1 + rank)
-          # compute stop gradient to avoid bacpro thru rank logic
-          weights = 1.0/tf.math.log1p(tf.stop_gradient(ranks) + 1.0)
-          
-          #cross entropy scaled by weights
-          loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=pos_indices, logits=logits)
-          
-          return tf.reduce_mean(loss * weights)
-      
-      def get_config(self):
-          config = super(HeuristicLambdaLoss, self).get_config()
-          config.update({
-              "temperature": self.temperature,
-          })
-          return config
-      
-  @keras.utils.register_keras_serializable(package=package)
-  class MeanReciprocalRankAtK(keras.metrics.Metric):
-      """
-      """
-      def __init__(self, name="mrr", k:int=10,**kwargs):
-          name = f"{name}_{k}"
-          super(MeanReciprocalRankAtK, self).__init__(name=name, **kwargs)
-          self.k = tf.cast(k, tf.float32)
-          self.mrr_sum = self.add_weight(name="mrr_sum", initializer="zeros")
-          self.count = self.add_weight(name="count", initializer="zeros")
-
-      def update_state(self, y_true, y_pred, sample_weight=None):
-          """
-          y_true: Ignored here (internally generated as tf.range), or used for weights.  use an identity
-                  matrix with same shape as y_pred
-          y_pred: The [Batch, Batch] logits matrix result of matmul Q_embedd * C_embed^T
-          """
-          pos_scores = tf.linalg.diag_part(y_pred)[:, tf.newaxis]
-          ranks = tf.reduce_sum(tf.cast(y_pred >= pos_scores, tf.float32), axis=1) + 1.0
-          
-          reciprocal_rank = tf.where(
-              ranks <= self.k, 1.0/ranks, 0.0
-          )
-          self.mrr_sum.assign_add(tf.reduce_sum(reciprocal_rank))
-          self.count.assign_add(tf.cast(tf.shape(y_pred)[0], tf.float32))
-         
-      def result(self):
-          return self.mrr_sum / self.count
-      
-      def reset_state(self):
-          self.mrr_sum.assign(0.0)
-          self.count.assign(0.0)
-          
-      def get_config(self):
-          config = super(MeanReciprocalRankAtK, self).get_config()
-          config.update({
-              "k": float(self.k.numpy())
-          })
-          return config
-      
-  @keras.utils.register_keras_serializable(package=package)
-  class NDCGAtKForInBatchNegatives(keras.metrics.Metric):
-      """
-      """
-      def __init__(self, name="ndcg", k: int = 20, **kwargs):
-          name = f"{name}_{k}"
-          super(NDCGAtKForInBatchNegatives, self).__init__(name=name, **kwargs)
-          self.k = tf.cast(k, tf.float32)
-          self.ndcg_sum = self.add_weight(name="ndcg_sum",
+  class InBatchHitRate(keras.metrics.Metric):
+      def __init__(self, name="batch_hit_rate", **kwargs):
+          super(InBatchHitRate, self).__init__(name=name, **kwargs)
+          self.hits = self.add_weight(name="total_hits",
               initializer="zeros")
-          self.count = self.add_weight(name="count", initializer="zeros")
+          self.count = self.add_weight(name="total_count",
+              initializer="zeros")
       
       def update_state(self, y_true, y_pred, sample_weight=None):
           """
-          y_true: Ignored here (internally generated as tf.range), or used for weights.  use an identity
-                  matrix with same shape as y_pred
-          y_pred: The [Batch, Batch] logits matrix result of matmul Q_embedd * C_embed^T
+          y_true: Ignored here (internally generated as tf.range), or used for weights
+          y_pred: The [Batch, Batch] logits matrix
+          sample_weight: Your ratings (y) from the dataset
           """
-          pos_scores = tf.linalg.diag_part(y_pred)[:, tf.newaxis]
-          ranks = tf.reduce_sum(tf.cast(y_pred >= pos_scores, tf.float32),
-              axis=1) + 1.0
-          log2_rank = tf.math.log(ranks + 1.0) / tf.math.log(2.0)
-          dcg = 1./ log2_rank
+          # 1. Get the current batch size dynamically
+          batch_size = tf.shape(y_pred)[0]
           
-          #IDCG is 1.0 because best possible rank is 1. for in batch negatives
-          ndcg_at_k = tf.where(
-              ranks <= self.k, dcg, 0.0
-          )
-          self.ndcg_sum.assign_add(tf.reduce_sum(ndcg_at_k))
-          self.count.assign_add(tf.cast(tf.shape(y_pred)[0], tf.float32))
+          # 2. Find the predicted index (the movie with the highest similarity)
+          # y_pred shape: [Batch, Batch] -> preds shape: [Batch]
+          preds = tf.argmax(y_pred, axis=-1, output_type=tf.int32)
+          
+          # 3. Create the ground truth (the diagonal indices)
+          targets = tf.range(batch_size, dtype=tf.int32)
+          
+          # 4. Compare: [Batch] boolean vector
+          is_correct = tf.equal(preds, targets)
+          is_correct = tf.cast(is_correct, tf.float32)
+          
+          # 5. Apply your ratings as weights if provided
+          if sample_weight is not None:
+              sample_weight = tf.cast(sample_weight, tf.float32)
+              # Ensure sample_weight is 1D to match is_correct
+              sample_weight = tf.reshape(sample_weight, [-1])
+              is_correct = tf.multiply(is_correct, sample_weight)
+              self.count.assign_add(tf.reduce_sum(sample_weight))
+          else:
+              self.count.assign_add(tf.cast(batch_size, tf.float32))
+          
+          self.hits.assign_add(tf.reduce_sum(is_correct))
       
       def result(self):
-          return self.ndcg_sum / self.count
-      
-      def reset_state(self):
-          self.ndcg_sum.assign(0.0)
-          self.count.assign(0.0)
-      
-      def get_config(self):
-          config = super(NDCGAtKForInBatchNegatives, self).get_config()
-          config.update({
-              "k": float(self.k.numpy())
-          })
-          return config
-      
-  @keras.utils.register_keras_serializable(package=package)
-  class RecallAtKForInBatchNegatives(keras.metrics.Metric):
-      """
-      same as hit_rate_at_k for in batch negatives
-      """
-      def __init__(self, name="ndcg", k: int = 100, **kwargs):
-          name = f"{name}_{k}"
-          super(RecallAtKForInBatchNegatives, self).__init__(name=name, **kwargs)
-          self.k = tf.cast(k, tf.float32)
-          self.hits = self.add_weight(name="hits", initializer="zeros")
-          self.count = self.add_weight(name="count", initializer="zeros")
-      
-      def update_state(self, y_true, y_pred, sample_weight=None):
-          """
-          y_true: Ignored here (internally generated as tf.range), or used for weights.  use an identity
-                  matrix with same shape as y_pred
-          y_pred: The [Batch, Batch] logits matrix result of matmul Q_embedd * C_embed^T
-          """
-          pos_scores = tf.linalg.diag_part(y_pred)[:, tf.newaxis]
-          ranks = tf.reduce_sum(tf.cast(y_pred >= pos_scores, tf.float32),
-              axis=1)
-          
-          is_hit = tf.cast(ranks <= self.k, tf.float32)
-          
-          self.hits.assign_add(tf.reduce_sum(is_hit))
-          self.count.assign_add(tf.cast(tf.shape(y_pred)[0], tf.float32))
-      
-      def result(self):
-          return self.hits / self.count
+          return tf.math.divide_no_nan(self.hits, self.count)
       
       def reset_state(self):
           self.hits.assign(0.0)
           self.count.assign(0.0)
-      
-      def get_config(self):
-          config = super(RecallAtKForInBatchNegatives, self).get_config()
-          config.update({
-              "k": float(self.k.numpy())
-          })
-          return config
   
   # use strategy
   d = hp.get("device")
@@ -1356,7 +1234,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
     log_dir=fn_args.model_run_dir, update_freq='epoch')
   
   stop_early = keras.callbacks.EarlyStopping(
-    monitor=f'val_ndcg_20', min_delta=1E-4, patience=7, mode="max",
+    monitor=f'val_hit_rate', min_delta=1E-4, patience=3, mode="max",
     restore_best_weights=True)
   
   """
@@ -1648,7 +1526,7 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
     overwrite=True,
     hyperparameters=hp,
     allow_new_entries=False,
-    objective=keras_tuner.Objective(f'val_ndcg_20', 'max'),
+    objective=keras_tuner.Objective(f'val_hit_rate', 'max'),
     directory=fn_args.working_dir,
     project_name='movie_lens_2t_tuning_r')
   '''
@@ -1656,7 +1534,7 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
   '''
   tuner = keras_tuner.Hyperband(
     _make_2tower_keras_model,
-    objective=keras_tuner.Objective(f'val_ndcg_20', 'max'),
+    objective=keras_tuner.Objective(f'val_hit_rate', 'max'),
     max_epochs=8,
     factor=4,
     hyperband_iterations=3,
@@ -1669,7 +1547,7 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
   
   tuner = keras_tuner.BayesianOptimization(
       _make_2tower_keras_model,
-      objective=keras_tuner.Objective(f'val_ndcg_20', 'max'),
+      objective=keras_tuner.Objective(f'val_hit_rate', 'max'),
       hyperparameters=hp,
       #alpha=1e-4, # 1e-3 for more exploration. alpha >= (change we want to detect)**2, so for batchsize 1024, alpha ~ (0.004)**2
       alpha=1e-2,
