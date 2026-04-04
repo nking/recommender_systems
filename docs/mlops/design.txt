@@ -61,3 +61,13 @@ SECURITY:
 
 METRICS:
     - hit rate, normalized hit rate, NDCG@K, recall_tail@K, and intra-list diversity
+
+APP_DEVELOPMENT:
+    - out of scope for this project, but here are notes about containerizing 
+      the model instead of using the bulk inference component in a TFX
+      pipeline (see PipelineComponetsFactor)
+      - basically, a Docker image, kubectl and kubernetes
+    - see also:
+      https://www.tensorflow.org/tfx/serving/docker
+      https://keras.io/examples/keras_recipes/tf_serving/
+    - fastapi and uvicorn in a docker image...
