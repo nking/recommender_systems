@@ -846,6 +846,36 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
           self.hits.assign(0.0)
           self.count.assign(0.0)
   
+  #@keras.utils.register_keras_serializable(package=package)
+  class HeuristicLambdaLoss(keras.losses.Loss):
+      """
+      a loss for use in systems that do not have a re-ranker
+      """
+      def __init__(self, name="heuristic_lambda", temperature:float=0.07, **kwargs):
+          super(HeuristicLambdaLoss, self).__init__(name=name, **kwargs)
+          self.temperature = temperature
+      
+      def call(self, y_true, y_pred):
+          """
+          y_true: similarity matrix [batch_size, batch_size]
+          y_pred: Tidentify matrix [batch_size, batch_size]
+          """
+          logits = y_pred/self.temperature
+          pos_indices = tf.range(tf.shape(logits)[0])
+          pos_scores = tf.linalg.diag_part(logits)
+          
+          #current rank of pos item in its row.
+          # use a differentiable approx or stop gradient for the rank
+          ranks = tf.reduce_sum(tf.cast(logits > pos_scores[:, tf.newaxis]), axis=1)
+          
+          #heuristic rank: 1/(log2(1 + rank)
+          # compute stop gradient to avoid bacpro thru rank logic
+          weights = 1.0/tf.math.log1p(tf.stop_gradient(ranks) + 1.0)
+          
+          #cross entropy scaled by weights
+          loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=pos_indices, logits=logits)
+          
+          return tf.reduce_mean(loss * weights)
   # use strategy
   d = hp.get("device")
   if d == "GPU":
