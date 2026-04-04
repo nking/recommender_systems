@@ -23,6 +23,13 @@ TFX is compatible with a restricted range of python and tensorflow.
 see https://pypi.org/project/tfx/
 use python 3.9 or 3.10
 
+Note that the compatibilities of versions are such that
+tensorflow 2.16 is used.
+That makes cannot use tensorflow ranking because 
+TFR 0.6.0 is needed for tf 2.16 and then the
+versions of keras would conflict.
+So any ranking metrics and losses used here are implemented.
+
 Data distributed data pre-processing and transformation:
 - data ingestion:
   - apache beam components in TFX pipeline are highly distibutable
