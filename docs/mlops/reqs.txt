@@ -41,3 +41,26 @@ TFX and some knowledge of Apache-Beam.
 the install process should carefully control library versions to avoid
 conflict between libraries.
 
+---------------------------------------
+This repository is part of several repositories used to
+build an entire recommender system:
+   - Retrieval : returns 1000 top K recommendations
+   - Ranker : pares down 1000 to 100 top K recommendations
+   - Re-Ranker: parse down 100 to 10 top K recommendations
+
+This repository builds the bi-encoder used by Retrieval
+by using an MLOps pipeline.
+
+The Retrieval is at
+https://www.github.com/nking/nking/retrieval.git
+
+The Ranker is at:
+https://www.github.com/nking/nking/ranker.git
+
+The Re-Ranker is at:
+https://www.github.com/nking/nking/reranker.git
+
+Different versions are in progress for different
+technology implementations, but they might be
+incomplete and not public.
+
