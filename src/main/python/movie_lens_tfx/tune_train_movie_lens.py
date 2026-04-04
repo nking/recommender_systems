@@ -846,7 +846,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
           self.hits.assign(0.0)
           self.count.assign(0.0)
   
-  #@keras.utils.register_keras_serializable(package=package)
+  @keras.utils.register_keras_serializable(package=package)
   class HeuristicLambdaLoss(keras.losses.Loss):
       """
       a loss for use in systems that do not have a re-ranker
@@ -857,8 +857,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       
       def call(self, y_true, y_pred):
           """
-          y_true: similarity matrix [batch_size, batch_size]
-          y_pred: Tidentify matrix [batch_size, batch_size]
+          y_true: [batch_size, batch_size], is not used.  is assumed to be identity matric
+          y_pred:  [batch_size, batch_size].  the result of matmul Q_embedd, C_embed^T
           """
           logits = y_pred/self.temperature
           pos_indices = tf.range(tf.shape(logits)[0])
@@ -876,6 +876,140 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
           loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=pos_indices, logits=logits)
           
           return tf.reduce_mean(loss * weights)
+      
+      def get_config(self):
+          config = super(HeuristicLambdaLoss, self).get_config()
+          config.update({
+              "temperature": self.temperature,
+          })
+          return config
+      
+  @keras.utils.register_keras_serializable(package=package)
+  class MeanReciprocalRankAtK(keras.metrics.Metric):
+      """
+      """
+      def __init__(self, name="mrr", k:int=10,**kwargs):
+          name = f"{name}_k{k}"
+          super(MeanReciprocalRankAtK, self).__init__(name=name, **kwargs)
+          self.k = tf.cast(k, tf.float32)
+          self.mrr_sum = self.add_weight(name="mrr_sum", initializer="zeros")
+          self.count = self.add_weight(name="count", initializer="zeros")
+
+      def update_state(self, y_true, y_pred, sample_weight=None):
+          """
+          y_true: Ignored here (internally generated as tf.range), or used for weights.  use an identity
+                  matrix with same shape as y_pred
+          y_pred: The [Batch, Batch] logits matrix result of matmul Q_embedd * C_embed^T
+          """
+          pos_scores = tf.linalg.diag_part(y_pred)[:, tf.newaxis]
+          ranks = tf.reduce_sum(tf.cast(y_pred >= pos_scores, tf.float32), axis=1) + 1.0
+          
+          reciprocal_rank = tf.where(
+              ranks <= self.k, 1.0/ranks, 0.0
+          )
+          self.mrr_sum.assign_add(tf.reduce_sum(reciprocal_rank))
+          self.count.assign_add(tf.cast(tf.shape(y_pred)[0], tf.float32))
+         
+      def result(self):
+          return self.mrr_sum / self.count
+      
+      def reset_state(self):
+          self.mrr_sum.assign(0.0)
+          self.count.assign(0.0)
+          
+      def get_config(self):
+          config = super(MeanReciprocalRankAtK, self).get_config()
+          config.update({
+              "k": float(self.k.numpy())
+          })
+          return config
+      
+  @keras.utils.register_keras_serializable(package=package)
+  class NDCGAtKForInBatchNegatives(keras.metrics.Metric):
+      """
+      """
+      def __init__(self, name="ndcg", k: int = 20, **kwargs):
+          name = f"{name}_k{k}"
+          super(NDCGAtKForInBatchNegatives, self).__init__(name=name, **kwargs)
+          self.k = tf.cast(k, tf.float32)
+          self.ndcg_sum = self.add_weight(name="ndcg_sum",
+              initializer="zeros")
+          self.count = self.add_weight(name="count", initializer="zeros")
+      
+      def update_state(self, y_true, y_pred, sample_weight=None):
+          """
+          y_true: Ignored here (internally generated as tf.range), or used for weights.  use an identity
+                  matrix with same shape as y_pred
+          y_pred: The [Batch, Batch] logits matrix result of matmul Q_embedd * C_embed^T
+          """
+          pos_scores = tf.linalg.diag_part(y_pred)[:, tf.newaxis]
+          ranks = tf.reduce_sum(tf.cast(y_pred >= pos_scores, tf.float32),
+              axis=1) + 1.0
+          log2_rank = tf.math.log(ranks + 1.0) / tf.math.log(2.0)
+          dcg = 1./ log2_rank
+          
+          #IDCG is 1.0 because best possible rank is 1. for in batch negatives
+          ndcg_at_k = tf.where(
+              ranks <= self.k, dcg, 0.0
+          )
+          self.ndcg_sum.assign_add(tf.reduce_sum(ndcg_at_k))
+          self.count.assign_add(tf.cast(tf.shape(y_pred)[0], tf.float32))
+      
+      def result(self):
+          return self.ndcg_sum / self.count
+      
+      def reset_state(self):
+          self.ndcg_sum.assign(0.0)
+          self.count.assign(0.0)
+      
+      def get_config(self):
+          config = super(NDCGAtKForInBatchNegatives, self).get_config()
+          config.update({
+              "k": float(self.k.numpy())
+          })
+          return config
+      
+  @keras.utils.register_keras_serializable(package=package)
+  class RecallAtKForInBatchNegatives(keras.metrics.Metric):
+      """
+      same as hit_rate_at_k for in batch negatives
+      """
+      def __init__(self, name="ndcg", k: int = 100, **kwargs):
+          name = f"{name}_k{k}"
+          super(RecallAtKForInBatchNegatives, self).__init__(name=name, **kwargs)
+          self.k = tf.cast(k, tf.float32)
+          self.hits = self.add_weight(name="hits", initializer="zeros")
+          self.count = self.add_weight(name="count", initializer="zeros")
+      
+      def update_state(self, y_true, y_pred, sample_weight=None):
+          """
+          y_true: Ignored here (internally generated as tf.range), or used for weights.  use an identity
+                  matrix with same shape as y_pred
+          y_pred: The [Batch, Batch] logits matrix result of matmul Q_embedd * C_embed^T
+          """
+          pos_scores = tf.linalg.diag_part(y_pred)[:, tf.newaxis]
+          ranks = tf.reduce_sum(tf.cast(y_pred >= pos_scores, tf.float32),
+              axis=1)
+          
+          is_hit = tf.cast(ranks <= self.k, tf.float32)
+          
+          self.hits.assign_add(tf.reduce_sum(is_hit))
+          self.count.assign_add(tf.cast(tf.shape(y_pred)[0], tf.float32))
+      
+      def result(self):
+          return self.hits / self.count
+      
+      def reset_state(self):
+          self.hits.assign(0.0)
+          self.count.assign(0.0)
+      
+      def get_config(self):
+          config = super(RecallAtKForInBatchNegatives, self).get_config()
+          config.update({
+              "k": float(self.k.numpy())
+          })
+          return config
+  
   # use strategy
   d = hp.get("device")
   if d == "GPU":
@@ -906,7 +1040,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       temperature=hp.get('temperature'),
     )
     
-    # call once to trace methods. 
+    # call once to trace methods.
     fake_trans_ds = create_fake_transformed_batch(input_dataset_element_spec_trans)
     model(fake_trans_ds, training=False)
     
@@ -1580,7 +1714,7 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
       objective=keras_tuner.Objective(f'val_hit_rate', 'max'),
       hyperparameters=hp,
       #alpha=1e-4, # 1e-3 for more exploration. alpha >= (change we want to detect)**2, so for batchsize 1024, alpha ~ (0.004)**2
-      alpha=1e-2, 
+      alpha=1e-2,
       beta=5.0, #defaut 2.6;  4.0 for more exploration.  sqrt(alpha) = 1./batch_size
       num_initial_points=20, #30
       max_trials=50, #should be 2 to 3 times num_initial_points
