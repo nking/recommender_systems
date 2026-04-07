@@ -1,0 +1,19 @@
+Training the TwoTowerDNN with a listwise constrastive
+loss function called HueristicLambdaLoss and using the
+metric ndcg@20 on the validation set for early stopping
+and model selection by the keras tuner BayesianOptimization.
+
+with batch_size of 1024 and k=20, can expect these metric
+results
+
+Metric	      Random Calculation                Expected Random  Healthy Learning  suspicious
+Recall@20     k/BatchSize = 20/1024             ~0.0195          0.15 - 0.4        >= 0.7
+MRR@20        (1/BatchSize)*sum_{i=1,k}(1/i)    ~0.0035          0.05 - 0.15       > 0.4
+NDCG@20       Random DCG /IDCG                  ~0.0050          0.08 - 0.20
+NormHitRate   batchsize*(1/batchsize)            1.0             >~ 3              > 15
+
+On first attempts, I used an embed_out_dim=32 and layer_sizes=[32]
+but found that ndcg_20 was not better than random.
+
+After increasing the embed_out_dim to 128, the best model found had hyperparameters:
+<in progress>

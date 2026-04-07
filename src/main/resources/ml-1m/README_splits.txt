@@ -1,13 +1,11 @@
 The ratings train, val and test splits were made by
-the file train_val_test_splitter.py in the test branch.
+the file in the test branch called write_train_val_splits.py
 
-The first split is by time such that (train and val) are < test in timestamps.
+The splits are proportions percents 80:10:10 for
+train:10:10 where the partitions are formed for
+data ordered iby increasing timestamp.
 
-The second split is by user_id such that roughly 88.89% of the
-(train and val) users are in train and the remaining are in
-the val partition where train and val have no users in common.
-
-The time split enables forecasting.
-The user split enables a check that the model generalizes well
-to unseen data.
+The time split enables forecasting and easier shift
+of window upon model iterations as data is acquired
+over time.
 

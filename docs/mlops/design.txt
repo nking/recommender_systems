@@ -4,10 +4,8 @@ DATA
     - used RenumberIds.py to reassign movie_ids to begin
       at n_users + 1 and end at n_users + 1 + n_movies
     - used write_train_val_test_splits.py to split the
-      data by time into (train + val) and (test)
-      then spiit (train + val) into (train) and (val) 
-      by unique user_ids.
-      the splits are roughly 80:10:10 for train:val:test.
+      data by time into train, val, and test
+      such that percentages are train:val:test is 80:10:10.
 - preprocessing data in TFX pipeline transform preprocessing_fn
     - change categorical to nominal indices
     - change gender to nominal indices

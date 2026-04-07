@@ -90,7 +90,7 @@ monitoring:
 
 listwise evaluation metrics:
   - comparing current model to previous:
-    - NHR
+    - normalized hit rate (NHR)
   - comparing each model in the series of Retrieval, Ranking, and Re-Ranking
     for improvments in ability to provide relevant ranked recommendations
     to a user:

@@ -68,10 +68,53 @@ def get_contrastive_split_infiles_set(use_small:bool=True) -> Dict[str, str]:
             version=1)
         dicts_ser[split_name] = serialize_to_string(infiles_dict)
     return dicts_ser
+
+def get_pos_and_neg_split_infiles_set(use_small: bool = True) -> Dict[
+    str, str]:
+    prefix_main = os.path.join(get_project_dir(), "src/main/resources/ml-1m/")
+    ratings_col_names = ["user_id", "movie_id", "rating", "timestamp"]
+    ratings_col_types = [int, int, int,
+        int]  # for some files, ratings are floats
+    movies_col_names = ["movie_id", "title", "genres"]
+    movies_col_types = [int, str, str]
+    users_col_names = ["user_id", "gender", "age", "occupation", "zipcode"]
+    users_col_types = [int, str, int, int, str]
+    if (use_small):
+        ratings_prefix = os.path.join(get_project_dir(),
+            "src/test/resources/ml-1m/small/")
+    else:
+        ratings_prefix = prefix_main
+    movies_dict = create_infile_dict(for_file='movies',
+        uri=os.path.join(prefix_main, "movies.dat"),
+        col_names=movies_col_names,
+        col_types=movies_col_types,
+        headers_present=False, delim="::")
     
+    users_dict = create_infile_dict(for_file='users',
+        uri=os.path.join(prefix_main, "users.dat"),
+        col_names=users_col_names,
+        col_types=users_col_types,
+        headers_present=False, delim="::")
+    
+    dicts_ser = {}
+    for split_name in ["train", "val", "test"]:
+        ratings_uri = os.path.join(ratings_prefix,
+            f"ratings_{split_name}.dat")
+        ratings_dict = create_infile_dict(for_file='ratings',
+            uri=ratings_uri,
+            col_names=ratings_col_names,
+            col_types=ratings_col_types,
+            headers_present=False, delim="::")
+        infiles_dict = create_infiles_dict(ratings_dict=ratings_dict,
+            movies_dict=movies_dict.copy(),
+            users_dict=users_dict.copy(),
+            version=1)
+        dicts_ser[split_name] = serialize_to_string(infiles_dict)
+    return dicts_ser
 
 def get_test_data(use_small=True) -> Tuple[str, str, list[str]]:
   """
+  gets test data that includes only a single ratings file, not the 3 ratings splits.
   :param use_small:
   :param kaggle:
   :return: Tuple of infiles_dict serialized to string,

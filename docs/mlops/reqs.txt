@@ -41,6 +41,8 @@ TFX and some knowledge of Apache-Beam.
 the install process should carefully control library versions to avoid
 conflict between libraries.
 
+iterations over the model over time to adapt to data and concept drift.
+
 ---------------------------------------
 This repository is part of several repositories used to
 build an entire recommender system:
