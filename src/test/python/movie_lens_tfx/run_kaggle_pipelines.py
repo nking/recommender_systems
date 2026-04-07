@@ -19,6 +19,7 @@ logging.set_verbosity(logging.WARNING)
 logging.set_stderrthreshold(logging.WARNING)
 
 infiles_dict_of_dicts_ser = get_contrastive_split_infiles_set(use_small=False)
+#infiles_dict_of_dicts_ser = get_pos_and_neg_split_infiles_set(use_small=False)
 
 n_users = 6040
 n_movies = 3952
@@ -27,7 +28,7 @@ n_occupations = 21
 MIN_EVAL_SIZE = 50  # make this larger for production pipeline
 
 BATCH_SIZE = 1024
-NUM_EPOCHS = 20
+NUM_EPOCHS = 40
 
 num_examples = 463548
 

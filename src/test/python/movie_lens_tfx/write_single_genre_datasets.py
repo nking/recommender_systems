@@ -121,7 +121,7 @@ commented out, but not used:
 
 #train+val, test partitions
 # for each user, make 80:10:10 splits randomly with at least 1 row to each parittion for each user
-df_ratings_filtered = df_ratings_filtered.sample(fraction=1.0, shuffle=True, seed=42)
+df_ratings_filtered = df_ratings_filtered.sample(fraction=1.0, is_train=True, seed=42)
 
 # Add ranking and total count columns per user
 df_split = df_ratings_filtered.with_columns([

@@ -1,13 +1,13 @@
 '''
-splitting the data into 80:10:10 for train:val_test ratings datasets
+splitting the data into 80:10:10 for train:val:test ratings datasets
+by time.
 
-The first split is by time for (train + val) split from test.
+The splits make the data compatible for downstream stages of the system such
+as the cross-encoding Ranker.
 
-The second split is by user between train and val.
-
-The temporal split avoids leakage of user data between train and test.
-The user split allows the validation dataset to truly check for generalization
-of the trained model.
+Note that originall, I split the train and validation from one another by user
+because it forced the model to learn features, essentially ignoring the user IDs,
+but such a spit isn't compatible with training the cross-encoder.
 '''
 from collections import OrderedDict
 
@@ -40,29 +40,15 @@ with open(file_path, "r", encoding='iso-8859-1') as file:
 
 #order by time and take last 10% for test
 df = df.sort("timestamp")
-train_val_size = int(len(df) * 0.9)
-df1 = df.head(train_val_size)
-df_test = df.tail(len(df) - train_val_size)
-
-# split df1 by user_id, into partitions that are 88.89% : 11.11%
-# subsetsum is np-hard, so use an approx solution instead
-
-def choose_randomly(df1):
-    unique_users = df1.select("user_id").unique()
-    unique_users = unique_users.sample(fraction=1.0, shuffle=True, seed=42)
-    
-    split_idx = int(len(unique_users) * 0.8889)
-    train_user_ids = unique_users.head(split_idx)
-    val_user_ids = unique_users.tail(len(unique_users) - split_idx)
-    
-    df_train = df1.filter(pl.col("user_id").is_in(train_user_ids["user_id"].implode()))
-    df_val = df1.filter(pl.col("user_id").is_in(val_user_ids["user_id"].implode()))
-    return df_train, df_val
-
-df_train, df_val = choose_randomly(df1)
+train_size = int(len(df) * 0.8)
+df_train = df.head(train_size)
+df2 = df.tail(len(df) - train_size)
+val_size = len(df2)//2
+df_val = df2.head(val_size)
+df_test = df2.tail(len(df2) - val_size)
 
 #print(f'{len(df_train)} train samples,  {len(df_val)}')
-print(f'{len(df_train)} train2 samples,  {len(df_val)}, ratio = {len(df_val)/len(df_train)}')
+print(f'#train: {len(df_train)}, #val:{len(df_val)}, #test:{len(df_test)}')
 
 # array records are written in WriteRamkerInputArrayRecords
 # parquet records are written in WriteRetrievalInputParquet.py
@@ -83,4 +69,5 @@ for df_write, prefix in zip([df_train, df_val, df_test], ['train', 'val', 'test'
         include_header=False,
         quote_style="never"
     )
+    
     

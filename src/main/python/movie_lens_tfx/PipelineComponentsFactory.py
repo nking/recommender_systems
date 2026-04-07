@@ -591,14 +591,22 @@ class PipelineComponentsFactory():
                   value_threshold=tfma.GenericValueThreshold(
                     lower_bound={'value': self.min_eval_size}
                   ))),
-              tfma.MetricConfig(class_name='MeanAbsoluteError',
-                # rating scale 0:5 is 0.:1.0 so error of 1 in a rating is 0.20. fail for error of 2 in a rating = 0.4
-                threshold=tfma.MetricThreshold(
-                  change_threshold=tfma.GenericChangeThreshold(
-                    direction=tfma.MetricDirection.LOWER_IS_BETTER,
-                    absolute={'value': 0.4}
-                  ))),
-              tfma.MetricConfig(class_name='MeanSquaredError'),
+              tfma.MetricConfig(class_name='NDCGAtKForInBatchNegatives',
+                  module='ttdnn',
+                  config={'k':20, 'name':'ndcg'},
+                  ),
+              tfma.MetricConfig(class_name='MeanReciprocalRankAtK',
+                    module='ttdnn',
+                    config={'k': 20, 'name': 'mrr'},
+                ),
+              tfma.MetricConfig(class_name='RecallAtKForInBatchNegatives',
+                    module='ttdnn',
+                    config={'k': 20, 'name': 'recall'},
+                ),
+              tfma.MetricConfig(class_name='InBatchHitRate',
+                    module='ttdnn',
+                    config={'name': 'hit_rate'},
+                ),
             ]
           )
         ])
