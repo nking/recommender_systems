@@ -82,10 +82,10 @@ def input_fn(file_pattern: List[str], data_accessor: tfx.components.DataAccessor
       return (data_accessor.tf_dataset_factory(
         file_pattern,
         tfxio.TensorFlowDatasetOptions(batch_size=batch_size,
-        shuffle=True, shuffle_buffer_size=20000, label_key=LABEL_KEY),
+        shuffle=True, shuffle_buffer_size=5000, label_key=LABEL_KEY),
         tf_transform_output.transformed_metadata.schema)
         .repeat()
-        .shuffle(buffer_size=20000, reshuffle_each_iteration=True)
+        .shuffle(buffer_size=5000, reshuffle_each_iteration=True)
         .prefetch(tf.data.AUTOTUNE))
   return (data_accessor.tf_dataset_factory(
         file_pattern,
@@ -144,27 +144,32 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       
       #NOTE: it is up to the using component to filter for OOV values
       #      to avoid using this incorrectly
+      #output dimension calculated following advice in 
+      # https://developers.googleblog.com/introducing-tensorflow-feature-columns/
+      user_embed_out_dim = round(self.max_user_id**0.25) #9
       self.user_embedding = keras.Sequential([
-        keras.layers.Embedding(self.max_user_id + 1, embed_out_dim),
+        keras.layers.Embedding(self.max_user_id + 1, user_embed_out_dim),
         keras.layers.Flatten(data_format='channels_last'),
       ], name="user_emb")
       
       # ordinal, dist between items matters
       self.age_embedding = None
       if self.feature_acronym.find("a") > -1:
+        age_embed_out_dim = 7
         self.age_embedding = keras.Sequential([
-          keras.layers.Dense(embed_out_dim, activation='swish',
-              kernel_initializer='he_normal', use_bias=False),
+          keras.layers.Dense(age_embed_out_dim, activation='swish',
+          kernel_initializer='he_normal', use_bias=False),
           keras.layers.Flatten(data_format='channels_last'),
         ], name="age_emb")
         
-      # ordinal, dist between items matters
+      # ordinal, dist between items matters.
       self.yr_z_embedding = None
       if self.feature_acronym.find("y") > -1:
+        yr_embed_out_dim = round(50**0.25) #3
         self.yr_z_embedding = keras.Sequential([
-          keras.layers.Dense(embed_out_dim, activation='swish',
-                kernel_initializer='he_normal',
-                use_bias=False),
+          keras.layers.Dense(yr_embed_out_dim, activation='swish',
+            kernel_initializer='he_normal', use_bias=False,
+            kernel_regularizer=keras.regularizers.l2(1e-3)),
             keras.layers.Flatten(data_format='channels_last'),
         ], name="yr_z_emb")
       
@@ -188,20 +193,18 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       self.occupation_embedding = None
       if self.feature_acronym.find("o") > -1:
         self.occupation_embedding = keras.layers.CategoryEncoding(
-          # num_tokens=21, \
-          num_tokens=embed_out_dim,
+          num_tokens=21, \
           output_mode="one_hot", name="occupation_emb")
       
       # categorical
       self.gender_embedding = None
       if self.feature_acronym.find("s") > -1:
         self.gender_embedding = keras.layers.CategoryEncoding(
-          # num_tokens=2,
-          num_tokens=embed_out_dim,
+          num_tokens=2,
           output_mode="one_hot", name="gender_emb")
     
     def build(self, input_shape):
-      # print(f'build {self.name} input_shape={input_shape}\n')
+      #print(f'build {self.name} input_shape={input_shape}\n')
       self.user_embedding.build(input_shape['user_id'])
       if self.age_embedding:
         self.age_embedding.build(input_shape['age'])
@@ -215,11 +218,11 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         self.occupation_embedding.build(input_shape['occupation'])
       if self.gender_embedding:
         self.gender_embedding.build(input_shape['gender'])
-      # print(f'build {self.name} User {self.embed_out_dim} =>{self.user_embedding.compute_output_shape(input_shape['user_id'])}\n')
+      #print(f'build {self.name} User {self.embed_out_dim} =>{self.user_embedding.compute_output_shape(input_shape['user_id'])}\n')
       self.built = True
     
     def compute_output_shape(self, input_shape):
-      # print(f'compute_output_shape {self.name} input_shape={input_shape}\n')
+      #print(f'compute_output_shape {self.name} input_shape={input_shape}\n')
       # This is invoked after build by QueryModel.
       # return (None, self.embed_out_dim)
       _shape = self.user_embedding.compute_output_shape(input_shape['user_id'])
@@ -254,7 +257,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       # Take the input dictionary, pass it through each input layer,
       # and concatenate the result.
       # arrays are: 'user_id',  'gender', 'age_group', 'occupation','movie_id', 'rating'
-      # print(f'call {self.name} type={type(inputs)}\n')
+      #print(f'call {self.name} type={type(inputs)}\n')
       # tf.print(inputs)
       results = []
       results.append(self.user_embedding(inputs['user_id']))
@@ -306,18 +309,20 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       
       #NOTE: it is up to the using component to filter for OOV values
       #      to avoid using this incorrectly
+      movie_embed_out_dim = round(self.n_movies**0.25) #8
       self.movie_embedding = keras.Sequential([
         keras.layers.IntegerLookup(
             vocabulary=[i for i in range(movies_offset+1, movies_offset + n_movies + 1)],
             output_mode="int"),
-        keras.layers.Embedding(self.n_movies + 1, self.embed_out_dim),
+        keras.layers.Embedding(self.n_movies + 1, movie_embed_out_dim),
         keras.layers.Flatten(data_format='channels_last'),
       ], name="movie_emb")
       
       if self.incl_genres:
         # expand to embed_out_dim for concatenation
+        genres_embed_out_dim = 8# 18
         self.genres_embedding = keras.Sequential([
-          keras.layers.Dense(self.embed_out_dim, use_bias=False),
+          keras.layers.Dense(genres_embed_out_dim, use_bias=False),
           keras.layers.Flatten(data_format='channels_last'),
         ], name="genres_emb")
     
@@ -331,7 +336,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       self.built = True
     
     def compute_output_shape(self, input_shape):
-      # print(f'compute_output_shape {self.name} input_shape={input_shape}\n')
+      #print(f'compute_output_shape {self.name} input_shape={input_shape}\n')
       # This is invoked after build by CandidateModel
       _shape = self.movie_embedding.compute_output_shape(input_shape['movie_id'])
       total_length = _shape[-1]
@@ -343,8 +348,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     def call(self, inputs, **kwargs):
       # Take the input dictionary, pass it through each input layer,
       # and concatenate the result.
-      # print(f'call {self.name} type={type(inputs)}, kwargs={kwargs}\n')
-      # print(f'    spec={inputs.element_spec}\n')
+      #print(f'call {self.name} type={type(inputs)}, kwargs={kwargs}\n')
+      #print(f'    spec={inputs.element_spec}\n')
       x = tf.cast(inputs['movie_id'], dtype=tf.int32)
       results = [self.movie_embedding(x)]
       # shape is (batch_size, x, out_dim)
@@ -424,14 +429,14 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       self.drop_rate = drop_rate
     
     def build(self, input_shape):
-      # print(f'build {self.name} input_shape={input_shape}\n')
+      #print(f'build {self.name} input_shape={input_shape}\n')
       self.embedding_model.build(input_shape)
       input_shape_2 = self.embedding_model.compute_output_shape(input_shape)
       self.dense_layers.build(input_shape_2)
       self.built = True
     
     def compute_output_shape(self, input_shape):
-      # print(f'compute_output_shape {self.name} input_shape={input_shape}, {input_shape['user_id'][0]}, {self.layer_sizes[-1:]}\n')
+      #print(f'compute_output_shape {self.name} input_shape={input_shape}, {input_shape['user_id'][0]}, {self.layer_sizes[-1:]}\n')
       # This is invoked after build by TwoTower
       # return self.output_shapes[0]
       input_shape_3 = self.dense_layers.compute_output_shape(
@@ -523,14 +528,14 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       self.layer_sizes = layer_sizes
       
     def build(self, input_shape):
-      # print(f'build {self.name} input_shape={input_shape}\n')
+      #print(f'build {self.name} input_shape={input_shape}\n')
       self.embedding_model.build(input_shape)
       input_shape_2 = self.embedding_model.compute_output_shape(input_shape)
       self.dense_layers.build(input_shape_2)
       self.built = True
     
     def compute_output_shape(self, input_shape):
-      # print(f'compute_output_shape {self.name} input_shape={input_shape}\n')
+      #print(f'compute_output_shape {self.name} input_shape={input_shape}\n')
       # This is invoked after build by TwoTower
       input_shape_3 = self.dense_layers.compute_output_shape(
         self.embedding_model.compute_output_shape(input_shape))
@@ -617,7 +622,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       
       self.dot_layer = keras.layers.Dot(axes=1)
       #to use HeuristicLambdaLoss, train with the positives of the dataset splits
-      self.loss_function = HeuristicLambdaLoss()
+      #self.loss_function = HeuristicLambdaLoss()
       #to use LambdaSoftmaxLoss, train with full dataset splits
       #self.loss_function = LambdaSoftmaxLoss(temperature = temperature)
       self.mean_loss_metric = keras.metrics.Mean(name="mean_loss")
@@ -686,7 +691,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       return self.candidate_model(inputs)  #
     
     def build(self, input_shape):
-      # print(f'build {self.name} input_shape={input_shape}\n')
+      #print(f'build {self.name} input_shape={input_shape}\n')
       # logging.debug(f'build {self.name} input_shape={input_shape}\n')
       self.query_model.build(input_shape)
       self.candidate_model.build(input_shape)
@@ -708,7 +713,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       # return (None,)
     
     def _update_frequencies(self, movie_ids):
-        """Streaming frequency estimation logic from Yi et al."""
+        """frequency estimation logic from Yi et al."""
         self.global_step.assign_add(1.0)
         t = self.global_step
         
@@ -716,21 +721,45 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         movie_ids_flat = tf.reshape(movie_ids_int, [-1])
         
         last_t = self.table_A.lookup(movie_ids_flat)
-        p_old = self.table_B.lookup(movie_ids_flat)
+        B_old = self.table_B.lookup(movie_ids_flat)
         
         delta_t = tf.cast(t - last_t, tf.float32)
 
         # B = (1 - alpha) * B + alpha * (t - last_t)
-        p_new = (1.0 - self.bias_corr_alpha) * p_old + self.bias_corr_alpha * (1.0/tf.maximum(delta_t, 1.0))
+        B_new = (1.0 - self.bias_corr_alpha) * B_old + self.bias_corr_alpha * delta_t
         
         self.table_A.insert(movie_ids_flat, tf.fill(tf.shape(movie_ids_flat), t))
-        self.table_B.insert(movie_ids_flat, p_new)
-        return p_new
+        self.table_B.insert(movie_ids_flat, B_new)
+        return 1.0/tf.maximum(B_new, 1.0)
+
+    def in_batch_softmax_loss_function(self, y_true, logits):
+        """
+        y_true: The original ratings (used as sample weights) [Batch]
+        logits: The [Batch, Batch] matrix after Log-Q correction and Temperature
+        """
+        batch_size = tf.shape(logits)[0]
+    
+        # The correct movie for each user is at the same index (the diagonal)
+        labels = tf.range(batch_size)
+
+        # We use Categorical Crossentropy. 
+        # Each row is a distribution over all movies in the batch.
+        loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
+            labels=labels, logits=logits)
+
+        #Force y_true to be (batch_size,) to avoid the [B, B] broadcasting trap
+        weights = tf.cast(tf.reshape(y_true, [-1]), tf.float32)
+        #Compute weighted mean for more stable gradients
+        weighted_loss = loss * weights
+        # prevent the loss from "shrinking" if the ratings are scaled [0, 1]
+        return tf.math.divide_no_nan(
+            tf.reduce_sum(weighted_loss),
+            tf.reduce_sum(weights)
+        )
     
     def train_step(self, batch):
         x, y = batch  # y is typically not used in pure In-Batch Softmax (identity matrix is the target)
         movie_ids = x['movie_id']
-        
         with tf.GradientTape() as tape:
             user_embeddings = self.query_model(x)  # [Batch, Dim]
             movie_embeddings = self.candidate_model(x)  # [Batch, Dim]
@@ -752,18 +781,40 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
                 # Broad-casting log_q across the batch
                 logits = logits - tf.expand_dims(log_q, axis=0)
             
-            loss = self.loss_function(y, logits)
+            #logits is [batch_size x batch_size] to use non-diagonal elements as negatives for the
+            #diagonal elements.
+            # but to avoid counting the same user's other ratings as negative and to avoid counting
+            # the same movie rated by the user as having more than one rating, masks are made to
+            # assure those elements are not considered in the rank calculations that are in the
+            # in batch loss and metric functions
+            #shapes: batch_Size x batch_size
+            user_mask = tf.equal(tf.expand_dims(x['user_id'], 0), tf.expand_dims(x['user_id'], 1))
+            movie_mask = tf.equal(tf.expand_dims(movie_ids, 0), tf.expand_dims(movie_ids, 1))
+            user_mask = tf.squeeze(user_mask, axis=-1)
+            movie_mask = tf.squeeze(movie_mask, axis=-1)
+            mask = tf.logical_or(user_mask, movie_mask)
+            # if diagonal got masked, unmask it
+            batch_size = tf.shape(logits)[0]
+            identity_mask = tf.eye(batch_size, dtype=tf.bool)
+            mask = tf.logical_and(mask, tf.logical_not(identity_mask))
+            masked_logits = tf.where(mask, tf.constant(-1e9, dtype=logits.dtype), logits)
+            #print(f'logits shape={tf.shape(logits)}')
+            #print(f'masked_logits shape={tf.shape(masked_logits)}')
+            #print(f'y shape={tf.shape(y)}')
+            #loss = self.loss_function(y, logits)
+            loss = self.in_batch_softmax_loss_function(y, masked_logits)
             
         gradients = tape.gradient(loss, self.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
 
         self.mean_loss_metric.update_state(loss)
-        batch_size = tf.shape(logits)[0]
+        
         labels = tf.range(batch_size)
-        self.mrr_k_metric.update_state(labels, logits, sample_weight=y)
-        self.ndcg_k_metric.update_state(labels, logits, sample_weight=y)
-        self.recall_k_metric.update_state(labels, logits, sample_weight=y)
-        self.in_batch_hit_rate_metric(y_true=labels, y_pred=logits, sample_weight=y)
+        
+        self.mrr_k_metric.update_state(labels, masked_logits, sample_weight=y)
+        self.ndcg_k_metric.update_state(labels, masked_logits, sample_weight=y)
+        self.recall_k_metric.update_state(labels, masked_logits, sample_weight=y)
+        self.in_batch_hit_rate_metric(y_true=labels, y_pred=masked_logits, sample_weight=y)
         
         output = {m.name: m.result() for m in self.metrics}
         #DEBUG: =====
@@ -782,24 +833,38 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         user_embeddings = self.query_model(x, training=False)
         movie_embeddings = self.candidate_model(x, training=False)
         logits = tf.matmul(user_embeddings, movie_embeddings, transpose_b=True) / self.temperature
+        batch_size = tf.shape(logits)[0]
         
         if self.use_bias_corr:
             # We use the frequencies learned during training
             movie_ids_keys = tf.cast(tf.reshape(x['movie_id'], [-1]),
                 tf.int32)
             p_i = self.table_B.lookup(movie_ids_keys)
-            logits = logits - tf.expand_dims(tf.math.log(p_i), axis=0)
+            log_q = tf.math.log(tf.clip_by_value(p_i, 1e-6, 1.))
+            logits = logits - tf.expand_dims(log_q, axis=0)
         
         # Define Ranking Labels
-        batch_size = tf.shape(logits)[0]
-        loss = self.loss_function(y, logits)
+        user_mask = tf.equal(tf.expand_dims(x['user_id'], 0),
+            tf.expand_dims(x['user_id'], 1))
+        movie_mask = tf.equal(tf.expand_dims(x['movie_id'], 0),
+            tf.expand_dims(x['movie_id'], 1))
+        user_mask = tf.squeeze(user_mask, axis=-1)
+        movie_mask = tf.squeeze(movie_mask, axis=-1)
+        mask = tf.logical_or(user_mask, movie_mask)
+        #if diagonal got masked, unmask it
+        identity_mask = tf.eye(batch_size, dtype=tf.bool)
+        mask = tf.logical_and(mask, tf.logical_not(identity_mask))
+        masked_logits = tf.where(mask, tf.constant(-1e9, dtype=logits.dtype),
+            logits)
+        #loss = self.loss_function(y, logits)
+        loss = self.in_batch_softmax_loss_function(y, masked_logits)
         
         labels = tf.range(batch_size)
         self.mean_loss_metric.update_state(loss)
-        self.mrr_k_metric.update_state(labels, logits, sample_weight=y)
-        self.ndcg_k_metric.update_state(labels, logits, sample_weight=y)
-        self.recall_k_metric.update_state(labels, logits, sample_weight=y)
-        self.in_batch_hit_rate_metric.update_state(y_true=labels, y_pred=logits, sample_weight=y)
+        self.mrr_k_metric.update_state(labels, masked_logits, sample_weight=y)
+        self.ndcg_k_metric.update_state(labels, masked_logits, sample_weight=y)
+        self.recall_k_metric.update_state(labels, masked_logits, sample_weight=y)
+        self.in_batch_hit_rate_metric.update_state(y_true=labels, y_pred=masked_logits, sample_weight=y)
         
         output = {m.name: m.result() for m in self.metrics}
         # DEBUG: =====
@@ -851,10 +916,12 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       Heuristic Lambda Rank uses that as a weight to push the item
       towards its correct rank.  It is an O(N=batch_size) algorithm
       while LambdaRank is O(N^2).
+      It avoids the vanishing gradient problem.
 
       Heuristic Lambda Rank is commonly seen in systems like Two-Tower Retrieval,
       especially with large datasets.  It trains the bi-encoders to produce
       a topk similarity list that is rank aware.
+      NOTE: when training, the datasets should include all ratings, 1-5.
       """
       def __init__(self, name="heuristic_lambda", **kwargs):
           super(HeuristicLambdaLoss, self).__init__(name=name, **kwargs)
@@ -865,20 +932,24 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
           y_pred:  [batch_size, batch_size].  the result of matmul Q_embedd, C_embed^T
           """
           logits = y_pred
+          batch_size = tf.shape(logits)[0]
           pos_indices = tf.range(tf.shape(logits)[0])
           pos_scores = tf.linalg.diag_part(logits)[:, tf.newaxis]
           
           #current rank of pos item in its row.
           # use a differentiable approx or stop gradient for the rank
-          ranks = tf.reduce_sum(tf.cast(logits > (pos_scores + 1e-6), tf.float32), axis=1)
-
+          is_greater_equal = tf.cast(logits >= (pos_scores - 1e-6), tf.float32)
+          ranks = tf.reduce_sum(is_greater_equal, axis=1) - 1.0
+          ranks = tf.stop_gradient(tf.maximum(ranks, 0.0))
+          
           #heuristic rank: 1/(log2(1 + rank)
-          # compute stop gradient to avoid bacprop thru rank logic
-          weights = 1.0/tf.math.log1p(tf.stop_gradient(ranks) + 1.0)
+          # compute stop gradient to avoid backprop thru rank logic
+          weights = 1.0 / tf.math.log1p(ranks + 1.0)
 
           #cross entropy scaled by weights
           loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=pos_indices, logits=logits)
-          loss = loss * weights * tf.reshape(tf.cast(y_true, tf.float32), [-1])
+          relevance = tf.cast(tf.reshape(y_true, [-1]), tf.float32)
+          loss = loss * weights * relevance
           return tf.reduce_mean(loss)
       
       def get_config(self):
@@ -889,11 +960,10 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   class LambdaSoftmaxLoss(keras.losses.Loss):
       """
       Listwise loss that weights the softmax cross-entropy by the
-      potential Delta NDCG of the positive item.
+      potential Delta NDCG of the positive item...a hybrid of LambdaRank and Softmax Cross-Entropy
       """
-      def __init__(self, temperature: float = 0.07, name="lambda_softmax", **kwargs):
+      def __init__(self, name="lambda_softmax", **kwargs):
           super().__init__(name=name, **kwargs)
-          self.temperature = temperature
       
       def call(self, y_true, y_pred):
           """
@@ -903,12 +973,13 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
           logits = y_pred
           batch_size = tf.shape(logits)[0]
           
-          # the positive score (diagonal)
+          # the positive score (diagonal).  [batch_size, 1]
           pos_scores = tf.linalg.diag_part(logits)[:, tf.newaxis]
           
           # Calculate current Rank (1-based)
           # Count how many items in the batch have a higher score than the positive
-          ranks = tf.reduce_sum(tf.cast(logits > pos_scores, tf.float32), axis=1) + 1.0
+          is_greater_equal = tf.cast(logits >= (pos_scores - 1e-6), tf.float32)
+          ranks = tf.reduce_sum(is_greater_equal, axis=1)
           ranks = tf.stop_gradient(ranks)
           
           # Calculate Relevance Gain (using the ratings y)
@@ -921,11 +992,11 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
           # We calculate the benefit of moving the item from its current rank to Rank 1
           log_2 = tf.math.log(tf.cast(2, ranks.dtype))
           current_discount = 1.0 / (tf.math.log(ranks + 1.0)/log_2)
-          ideal_discount = 1.0 / (tf.math.log(1.0 + 1.0)/log_2) #1.0
-          delta_ndcg = tf.abs(gain * (ideal_discount - current_discount))
+          ideal_discount = 1.0# 1.0 / (tf.math.log(1.0 + 1.0)/log_2) #1.0
+          delta_ndcg = (gain * (ideal_discount - current_discount)) + 1.0
           
           # 6. Weighted Cross Entropy
-          pos_indices = tf.range(batch_size) #index of the "1" positive in the row of the batch.  it;s the column in Indentity matrix where 1 is.
+          pos_indices = tf.range(batch_size) #index of the "1" positive in the row of the batch.  it's the column in Indentity matrix where 1 is.
           ce_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
               labels=pos_indices, logits=logits)
           
@@ -934,9 +1005,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
           
       def get_config(self):
           config = super(LambdaSoftmaxLoss, self).get_config()
-          config.update({
-              "temperature": self.temperature,
-          })
           return config
   
   @keras.utils.register_keras_serializable(package=package)
@@ -968,17 +1036,13 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
           is_correct = tf.equal(preds, targets)
           is_correct = tf.cast(is_correct, tf.float32)
           
-          # 5. Apply your ratings as weights if provided
-          if sample_weight is not None:
-              sample_weight = tf.cast(sample_weight, tf.float32)
-              # Ensure sample_weight is 1D to match is_correct
-              sample_weight = tf.reshape(sample_weight, [-1])
-              is_correct = tf.multiply(is_correct, sample_weight)
-              self.count.assign_add(tf.reduce_sum(sample_weight))
+          weights = sample_weight if sample_weight is not None else y_true
+          if weights is not None:
+              weights = tf.cast(tf.reshape(weights, [-1]), tf.float32)
+              is_correct = is_correct * weights
+              self.count.assign_add(tf.reduce_sum(weights))
           else:
               self.count.assign_add(tf.cast(batch_size, tf.float32))
-          
-          self.hits.assign_add(tf.reduce_sum(is_correct))
       
       def result(self):
           return tf.math.divide_no_nan(self.hits, self.count)
@@ -1006,20 +1070,15 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
           sample_wieght: use the ground truth labels here, i.e. y
           """
           pos_scores = tf.linalg.diag_part(y_pred)[:, tf.newaxis]
-          ranks = tf.reduce_sum(tf.cast(y_pred >= pos_scores, tf.float32), axis=1)
+          is_greater_equal = tf.cast(y_pred >= (pos_scores - 1e-6), tf.float32)
+          ranks = tf.reduce_sum(is_greater_equal, axis=1)
+          reciprocal_rank = 1.0 / ranks
+          reciprocal_rank = tf.where(ranks <= self.k, reciprocal_rank, 0.0)
           
-          reciprocal_rank = tf.where(
-              ranks <= self.k, 1.0/ranks, 0.0
-          )
           weights = sample_weight if sample_weight is not None else y_true
-          weights = tf.cast(weights, tf.float32)
-          weights = tf.reshape(weights, [-1])  # Ensure [Batch] shape
+          weights = tf.cast(tf.reshape(weights, [-1]), tf.float32)
           
-          # Apply weights to the sum and the counter
-          # weighted_mrr = sum(relevance_i * RR_i) / sum(relevance_i)
-          weighted_rr = tf.multiply(reciprocal_rank, weights)
-          
-          self.mrr_sum.assign_add(tf.reduce_sum(weighted_rr))
+          self.mrr_sum.assign_add(tf.reduce_sum(tf.multiply(reciprocal_rank, weights)))
           self.count.assign_add(tf.reduce_sum(weights))
          
       def result(self):
@@ -1055,13 +1114,12 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
           y_pred: The [Batch, Batch] logits matrix result of matmul Q_embedd * C_embed^T
           weights: the actual ground truth, y_true vector should be set here
           """
+          #[batch_sie, 1]
           pos_scores = tf.linalg.diag_part(y_pred)[:, tf.newaxis]
-          ranks = tf.reduce_sum(tf.cast(y_pred >= pos_scores, tf.float32), axis=1)
-          
-          relevant_mask = tf.cast(ranks <= self.k, tf.float32)
-          
+          is_greater_equal = tf.cast(y_pred >= (pos_scores - 1e-6), tf.float32)
+          ranks = tf.reduce_sum(is_greater_equal,  axis=1)  # wehere relevance is > diagonal
           log2_rank = tf.math.log(ranks + 1.0) / tf.math.log(2.0)
-          
+          relevant_mask = tf.cast(ranks <= self.k, tf.float32)
           # NDCG = (1 / log2(rank + 1)) / IDCG. Since IDCG is 1.0 here:
           ndcg = (1.0 / log2_rank) * relevant_mask
           
@@ -1106,22 +1164,24 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
                   matrix with same shape as y_pred
           y_pred: The [Batch, Batch] logits matrix result of matmul Q_embedd * C_embed^T
           """
+          #[batch_Size, 1]
           pos_scores = tf.linalg.diag_part(y_pred)[:, tf.newaxis]
-          ranks = tf.reduce_sum(tf.cast(y_pred >= pos_scores, tf.float32),
-              axis=1)
+          is_greater_equal = tf.cast(y_pred >= (pos_scores - 1e-6), tf.float32)
+          ranks = tf.reduce_sum(is_greater_equal, axis=1)
           
           is_hit = tf.cast(ranks <= self.k, tf.float32)
           
-          weights = sample_weight if sample_weight is not None else y_true
-          weights = tf.cast(weights, tf.float32)
-          weights = tf.reshape(weights, [-1])  # Ensure shape is [Batch]
+          if sample_weight is not None:
+              w = tf.cast(tf.reshape(sample_weight, [-1]), tf.float32)
+          elif y_true is not None and tf.rank(y_true) == 1:
+              # Likely a vector of ratings
+              w = tf.cast(y_true, tf.float32)
+          else:
+              # Unweighted: every row in the batch counts as 1
+              w = tf.ones_like(is_hit)
           
-          # Apply weights to hits and total count
-          # weighted_hit_rate = sum(hit_i * weight_i) / sum(weight_i) <== the division is handled by method def result
-          weighted_hits = tf.multiply(is_hit, weights)
-          
-          self.hits.assign_add(tf.reduce_sum(weighted_hits))
-          self.count.assign_add(tf.reduce_sum(weights))
+          self.hits.assign_add(tf.reduce_sum(tf.multiply(is_hit, w)))
+          self.count.assign_add(tf.reduce_sum(w))
       
       def result(self):
           return tf.math.divide_no_nan(self.hits, self.count)
@@ -1196,9 +1256,16 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         loss=None, # internally fixed to sparse softmax cross entropy for logits
         optimizer=optimizer,
         run_eagerly=hp.get("run_eagerly")
+        #run_eagerly=True,
     )
   
   model.summary(print_fn=logging.info)
+  print('MODEL SUMMARY:') 
+  trainable_count = sum([keras.backend.count_params(w) for w in model.trainable_weights])
+  non_trainable_count = sum([keras.backend.count_params(w) for w in model.non_trainable_weights])
+  print(f"Total Trainable Params: {trainable_count}")
+  print(f"Total Non-Trainable Params: {non_trainable_count}")
+  #model.summary(expand_nested=True)
   
   is_tf_dot_keras_model = isinstance(model, tf.keras.Model)
   is_keras_model = isinstance(model, keras.Model)
@@ -1216,13 +1283,14 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   #print(f'get_default_hyperparameters: custom_config={custom_config}')
   hp = keras_tuner.HyperParameters()
   # Defines search space.
-  hp.Float('learning_rate', 1e-4, 1e-2, sampling='log')
+  hp.Float('learning_rate', 1e-4, 5e-3, sampling='log')
   hp.Float('weight_decay', 1e-6, 1e-2, sampling='log')
-  hp.Float('regl2', 1e-6, 1e-4, sampling="log")
+  hp.Float('regl2', 1e-5, 1e-2, sampling="log")
   hp.Float('drop_rate', min_value=0.1, max_value=0.3, default=0.5)
-  hp.Choice("embed_out_dim", values=[128], default=128)
+  hp.Choice("embed_out_dim", values=[32], default=32)
   #layers_sizes is a list of ints, so encode each list as a string, chices can only be int,float,bool,str
-  hp.Choice("layer_sizes", values=[json.dumps([128]), json.dumps([128, 64]), json.dumps([128, 64, 32])], default=json.dumps([128]))
+  hp.Choice("layer_sizes", values=[json.dumps([64,32]), json.dumps([32])], default=json.dumps([64,32]))
+  #hp.Fixed("layer_sizes", value=json.dumps([64, 32]))
   # ahmos for "age", "hr_wk", "month", "occupation", "gender"
   hp.Fixed("feature_acronym", custom_config.get("feature_acronym", "h"))
   hp.Fixed("incl_genres", custom_config["incl_genres"])
@@ -1232,7 +1300,7 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   use_bias_corr = hp.Fixed("use_bias_corr", value=True)
   if use_bias_corr:
       hp.Choice("bias_corr_alpha", values=[0.01, 0.05, 0.1], default=0.05) #0.01, 0.05, 0.1
-      hp.Float('temperature', 0.05, 0.2, step=0.05)
+      hp.Float('temperature', 0.05, 0.12, step=0.01)
       #hp.Fixed('temperature', value=1.0)
   else:
       hp.Choice("bias_corr_alpha", values=[0.1], default=0.05)  # 0.01, 0.05, 0.1
@@ -1844,9 +1912,9 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
       #alpha=1e-4, # 1e-3 for more exploration and regularization
       #for val_hit_rate, use 1e-2 though could use 1E-3.  for val_ndcg_20 use 1E-2
       alpha=1e-2,
-      beta=5.0, #defaut 2.6;  4.0 for more exploration.  alpha = sqrt(1./batch_size) for val_hit_rate
-      num_initial_points=20, #30
-      max_trials=50, #should be 2 to 3 times num_initial_points
+      beta=3.5, #defaut 2.6;  4.0 for more exploration.  alpha = sqrt(1./batch_size) for val_hit_rate
+      num_initial_points=15, #30
+      max_trials=40, #should be 2 to 3 times num_initial_points
       allow_new_entries=False,
       directory=fn_args.working_dir,
       project_name='movie_lens_2t_tuning_bayesian')
