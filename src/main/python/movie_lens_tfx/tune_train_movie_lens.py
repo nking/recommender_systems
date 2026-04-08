@@ -82,10 +82,10 @@ def input_fn(file_pattern: List[str], data_accessor: tfx.components.DataAccessor
       return (data_accessor.tf_dataset_factory(
         file_pattern,
         tfxio.TensorFlowDatasetOptions(batch_size=batch_size,
-        shuffle=True, shuffle_buffer_size=5000, label_key=LABEL_KEY),
+        shuffle=True, shuffle_buffer_size=10000, label_key=LABEL_KEY),
         tf_transform_output.transformed_metadata.schema)
         .repeat()
-        .shuffle(buffer_size=5000, reshuffle_each_iteration=True)
+        .shuffle(buffer_size=10000, reshuffle_each_iteration=True)
         .prefetch(tf.data.AUTOTUNE))
   return (data_accessor.tf_dataset_factory(
         file_pattern,
@@ -1020,17 +1020,15 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
           """
           y_true: Ignored here (internally generated as tf.range), or used for weights
           y_pred: The [Batch, Batch] logits matrix
-          sample_weight: Your ratings (y) from the dataset
+          sample_weight: normalized ratings (y) from the dataset
           """
-          # 1. Get the current batch size dynamically
           batch_size = tf.shape(y_pred)[0]
           
-          # 2. Find the predicted index (the movie with the highest similarity)
+          targets = tf.range(batch_size, dtype=tf.int32)
+          
+          # Find the predicted index (the movie with the highest similarity)
           # y_pred shape: [Batch, Batch] -> preds shape: [Batch]
           preds = tf.argmax(y_pred, axis=-1, output_type=tf.int32)
-          
-          # 3. Create the ground truth (the diagonal indices)
-          targets = tf.range(batch_size, dtype=tf.int32)
           
           # 4. Compare: [Batch] boolean vector
           is_correct = tf.equal(preds, targets)
@@ -1043,6 +1041,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
               self.count.assign_add(tf.reduce_sum(weights))
           else:
               self.count.assign_add(tf.cast(batch_size, tf.float32))
+          self.hits.assign_add(tf.reduce_sum(is_correct))
       
       def result(self):
           return tf.math.divide_no_nan(self.hits, self.count)
