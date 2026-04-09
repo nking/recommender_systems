@@ -9,6 +9,8 @@ bin/
 tt?
 src/test/resources/ml-1m/*parquet
 
+*.ipynb
+
 # C extensions
 *.so
 
@@ -299,3 +301,6 @@ http-client.private.env.json
 .idea/.cache/.Apifox_Helper
 .idea/ApifoxUploaderProjectSetting.xml
 
+/recommenders_with_tfx_pipeline_local.ipynb
+/recommender-systems.ipynb
+/recommender-systems-with-tfx-pipelines.ipynb
