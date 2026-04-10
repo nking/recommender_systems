@@ -12,9 +12,6 @@ val ndcg@20 = 0.047
 val mrr@20 = 0.046
 val recall@20 = 0.051
 
-*note that this should have test metric numbers, but I didn't have 
-them in evalconfig yet. so will update these...
-
 The ndcg@20 is 10 times random performance.
 The mrr@20 is > 10 times random performance.
 The recall@20 is 2.5 times random performance.
