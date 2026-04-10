@@ -29,7 +29,7 @@ n_genres = N_GENRES
 n_occupations = 21
 MIN_EVAL_SIZE = 50  # make this larger for production pipeline
 
-BATCH_SIZE = 1024
+BATCH_SIZE = 2048
 NUM_EPOCHS = 40
 
 num_examples = 463548

@@ -2,8 +2,10 @@
 
 This is a project holding a TFX MLOps pipeline to train a
 Two-Tower DNN (bi-encoder) using a contrastive listwise 
-loss and item sampling bias corrections.  Hit_rate on the
+loss and making item sampling bias corrections.  NDCG@20 on the
 validation dataset was used to choose the best model.
+
+The results are in docs/mlops/ subdirectory.
 
 The kaggle notebook is at:
 https://www.kaggle.com/code/nicholeasuniquename/recommender-systems to use MLOps
@@ -14,9 +16,10 @@ The in-batch negatives and item popularity bias corrections
 follow the Yi et al. 2019 "Sampling-bias-corrected neural modeling
 for large corpus item recommendations".
 The model trains Query and Candidate models that produce
-embeddings that live in the same space, hence can be used
-to look-up one another when stored in an approximate
-nearest neighbor indexer (in the Retrieval project).
+embeddings that live in the same embedding reference space, 
+hence can be used to look-up one another when stored in an 
+approximate nearest neighbor indexer like Scann or Faiss
+(the Retrieval project builds the retriever).
 
 This repository is source code used in Kaggle notebooks (in progress):
 
@@ -24,9 +27,11 @@ https://www.kaggle.com/code/nicholeasuniquename/recommender-systems-with-tfx-pip
 
 https://www.kaggle.com/code/nicholeasuniquename/recommender-systems/
 
+Using TFX requires a careful control of library versions for compatibility,
 see library versions compatible with tfx 1.16.0
 #see dependencies https://github.com/tensorflow/transform
-those are installed to a conda virtual environment based on python 3.10
+those are installed to a conda virtual environment that has python 3.10
+as the fixed installed python version.
 
 to create a virtual environment to install the TFX compatible
 libraries, can use conda or virtualenv.
@@ -104,6 +109,9 @@ ingest components:
 
     IngestMovieLensComponent from ingest_movie_lens_custom_component.py
 
+Then a third python function component was made so that splits
+could be performed before use in the pipeline.
+    MovieLensSplitExampleGen from ingest_already_split_movie_lens_component.py
 
 =======
 

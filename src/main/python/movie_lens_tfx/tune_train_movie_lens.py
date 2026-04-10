@@ -798,10 +798,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
             identity_mask = tf.eye(batch_size, dtype=tf.bool)
             mask = tf.logical_and(mask, tf.logical_not(identity_mask))
             masked_logits = tf.where(mask, tf.constant(-1e9, dtype=logits.dtype), logits)
-            #print(f'logits shape={tf.shape(logits)}')
-            #print(f'masked_logits shape={tf.shape(masked_logits)}')
-            #print(f'y shape={tf.shape(y)}')
-            #loss = self.loss_function(y, logits)
             loss = self.in_batch_softmax_loss_function(y, masked_logits)
             
         gradients = tape.gradient(loss, self.trainable_variables)
@@ -902,7 +898,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   @keras.utils.register_keras_serializable(package=package)
   class HeuristicLambdaLoss(keras.losses.Loss):
       """
-      a rank-weighted InfoNCE loss.   focuses the model's gradient on pairs 
+      a rank-weighted InfoNCE loss.   focuses the model's gradient on pairs
       where the positive item is currently at a lower rank than negatives.
 
       softmax cross entropy loss treats the retrieval as one-vs-all classification
@@ -911,7 +907,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       LambdaRank (Burgess from MS) created to work around non-differentiable
       NDCG.  It uses a differentiable smooth loss function like Softmax,
       multiplies the gradient of it by the change in ndcg from the swapping
-      of item positions. 
+      of item positions.
       
       Heuristic Lambda Rank uses that as a weight to push the item
       towards its correct rank.  It is an O(N=batch_size) algorithm
@@ -1282,13 +1278,15 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   #print(f'get_default_hyperparameters: custom_config={custom_config}')
   hp = keras_tuner.HyperParameters()
   # Defines search space.
-  hp.Float('learning_rate', 1e-4, 5e-3, sampling='log')
-  hp.Float('weight_decay', 1e-6, 1e-2, sampling='log')
-  hp.Float('regl2', 1e-5, 1e-2, sampling="log")
+  hp.Float('learning_rate', 1e-4, 1e-3, sampling='log')
+  hp.Float('weight_decay', 1e-4, 1e-2, sampling='log')
+  #let AdamW weight decay handle the regularization, so set regl2 to 0:
+  #hp.Float('regl2', 1e-5, 1e-2, sampling="log")
+  hp.Fixed('regl2', 0.0)
   hp.Float('drop_rate', min_value=0.1, max_value=0.3, default=0.5)
   hp.Choice("embed_out_dim", values=[32], default=32)
   #layers_sizes is a list of ints, so encode each list as a string, chices can only be int,float,bool,str
-  hp.Choice("layer_sizes", values=[json.dumps([64,32]), json.dumps([32])], default=json.dumps([64,32]))
+  hp.Choice("layer_sizes", values=[json.dumps([16])], default=json.dumps([16]))
   #hp.Fixed("layer_sizes", value=json.dumps([64, 32]))
   # ahmos for "age", "hr_wk", "month", "occupation", "gender"
   hp.Fixed("feature_acronym", custom_config.get("feature_acronym", "h"))
@@ -1297,9 +1295,10 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   hp.Fixed('NUM_EPOCHS', custom_config.get("NUM_EPOCHS", DEFAULT_NUM_EPOCHS))
   #use_bias_corr = hp.Choice("use_bias_corr", values=[True, False], default=True)
   use_bias_corr = hp.Fixed("use_bias_corr", value=True)
+  #if batch_size=1024, max temp should be about 0.2;  if batch_size is 2048, temp max ~ 0.4
   if use_bias_corr:
       hp.Choice("bias_corr_alpha", values=[0.01, 0.05, 0.1], default=0.05) #0.01, 0.05, 0.1
-      hp.Float('temperature', 0.05, 0.12, step=0.01)
+      hp.Float('temperature', 0.07, 0.25, step=0.01)
       #hp.Fixed('temperature', value=1.0)
   else:
       hp.Choice("bias_corr_alpha", values=[0.1], default=0.05)  # 0.01, 0.05, 0.1
@@ -1592,8 +1591,9 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   tensorboard_callback = keras.callbacks.TensorBoard(
     log_dir=fn_args.model_run_dir, update_freq='epoch')
   
+  #use patience=3 with batch_size 1024, and patience=5 with batch_size 2048
   stop_early = keras.callbacks.EarlyStopping(
-    monitor=f'val_ndcg_20', min_delta=1E-4, patience=7, mode="max",
+    monitor=f'val_ndcg_20', min_delta=1E-4, patience=5, mode="max",
     restore_best_weights=True)
   
   """

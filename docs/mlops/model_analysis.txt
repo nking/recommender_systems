@@ -2,73 +2,57 @@ Training the TwoTowerDNN with an inbatch softmax loss
 and using the metric ndcg@20 on the validation set for early stopping
 and model selection by the keras tuner BayesianOptimization.
 
+The model learning looks healthy.
+  - The train vs validation curves for loss and metrics can be seen
+    in the sub-directory best_fitting_model_stats.  
+The best fitting hyperparameters are also in that subdirectory
+
+Best fitting model used a batch size of 1024:
+val ndcg@20 = 0.047
+val mrr@20 = 0.046
+val recall@20 = 0.051
+
+*note that this should have test metric numbers, but I didn't have 
+them in evalconfig yet. so will update these...
+
+The ndcg@20 is 10 times random performance.
+The mrr@20 is > 10 times random performance.
+The recall@20 is 2.5 times random performance.
+
+Compare to these expected ranges and values for random performance:
 for k=20, can expect these metric results
+Metric  Expected Range      Expected Range    random
+        in SOTA production
+        (batch size=2048)    (full catalog)   to beat
+NDCG@20      0.15 – 0.35     0.08 – 0.18      0.005
+MRR@20       0.10 – 0.25     0.06 – 0.12      0.0035
+Recall@20    0.30 – 0.55     0.25 – 0.40      0.02
+
 
 Metric  Expected Range      Expected Range 
+        in SOTA production
         (batch size=256)    (full catalog)
 NDCG@20    0.45 – 0.65       0.05 – 0.12
 MRR@20     0.35 – 0.50       0.04 – 0.09
 Recall@20  0.60 – 0.85       0.15 – 0.25
 
 Metric  Expected Range      Expected Range 
+        in SOTA production
         (batch size=1024)    (full catalog)
 NDCG@20   0.15-0.35 
 MRR@20    0.05-0.12 
 Recall@20  0.15-0.35
 
 
-Metric  Expected Range      Expected Range    random
-        (batch size=2048)    (full catalog)   to beat
-NDCG@20      0.15 – 0.35     0.08 – 0.18      0.005
-MRR@20       0.10 – 0.25     0.06 – 0.12      0.0035
-Recall@20    0.30 – 0.55     0.25 – 0.40      0.02
-
-Best fitting model has:
-
 ------------------------------------
-Some details of fitting:
+Some details of viewing the fit results:
 
 - view the train and val metrics overplotted:
    tensorboard --logdir=bin/rs_pipeline/Trainer/model_run/19/
 - view the best hyperparameters:
    python3 -m json.tool bin/rs_pipeline/Tuner/best_hyperparameters/18/best_hyperparameters.txt
-
-A look at embedding dimensions:
-emb_dim=64
-layer=[64, 32]
-n_users = 6040
-n_movies = 3883
-user_concat_dim=9 + 7 + 3 + 2 + 2 + 21 + 2
-movie_concat_dim = 8 + 8
-#roughly:
-movie_features=   (n_movies * 8 + 18*8) + movie_concat_dim*layer[0] + 2*layer[0] + (layer[0]*layer[1])
-user_features=   (n_users * 9 + user_concat_dim-9) + user_concat_dim*layer[0] + 2*layer[0] + (layer[0]*layer[1])
-totalnum_params = movie_features + user_features
-param_per_example = total_features/400000
-emb_dim layers      #params    param_per_ex   log2(tot_feat)   log2(400000)  log2(6000) (tot_feat)^0.25
- 16                             
- 32       [32]       87500                 
- 64     [64,32]      94900      
-        128,64,32
- 128   [128,64,32]  114500    
-    
-train dataset size for ratings>4) is about 400,000
+  view the Evaluation 
+   - on CLI:
+     python3 -c "import tensorflow_model_analysis as tfma; print(tfma.load_eval_result('path/to/Evaluator/evaluation/20'))"
 
 ==========================
-==========================
-
-misc notes on calculating expected values
-for batch_size=1024 and k=20:
-
-Expected values:
-recall@20: 0.15-0.35
-NDCG@20:   0.09-0.20
-MRR@20:   0.05-0.12
-
-Random to beat:
-recall@20:  20/1024 = 0.02
-ndcg@20: (1/1024) * sum_{k=1,20}(1/log2(r+1)) 
-       where sum of discounts ~ 7.64
-       ndcg@20 for random = 7.64/1024 = 0.007
-mrr@29:  (1/1024) * sum_{k=1,20}(1/i) = 0.003
-
