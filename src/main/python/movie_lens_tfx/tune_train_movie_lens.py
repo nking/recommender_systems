@@ -407,6 +407,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       for layer_size in layer_sizes[:-1]:
         if self.regl2 > 0.0:
             reg = keras.regularizers.l2(self.regl2)
+        #TODO: consider changing order to: Dense, LayerNorm, Activation(elu), Dropout
         self.dense_layers.add(
           keras.layers.Dense(layer_size, activation="elu",
                              kernel_regularizer=reg,
@@ -504,6 +505,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       for layer_size in layer_sizes[:-1]:
         if self.regl2 > 0.0:
           reg = keras.regularizers.l2(self.regl2)
+        # TODO: consider changing order to: Dense, LayerNorm, Activation(elu), Dropout
         self.dense_layers.add(
           keras.layers.Dense(layer_size, activation="elu",
             kernel_regularizer=reg, kernel_initializer="glorot_normal",

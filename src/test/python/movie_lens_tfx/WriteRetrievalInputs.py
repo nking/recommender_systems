@@ -166,7 +166,7 @@ class WriteRetrievalInputs(tf.test.TestCase):
         (movie_id_and_embeddings
             | f'serialize_movie_emb_example' >> beam.Map(serialize_example)
             | f'write_movie_emb_tfrecord' >> beam.io.tfrecordio.WriteToTFRecord(
-            file_path_prefix=f'{self.output_uri1}/movie_emb', file_name_suffix='.gz'))
+            file_path_prefix=f'{self.output_uri1}/movie_emb', file_name_suffix='.tfrecord.gz'))
         
         result = pipeline.run()
         result.wait_until_finish()
@@ -257,11 +257,13 @@ class WriteRetrievalInputs(tf.test.TestCase):
             | f'create_user_emb_{random.randint(0, 1000000000)}'
             >> beam.ParDo(_QueryEmbeddingMaker(saved_model_path=self.saved_model_path)))
        
+        #user_id_and_embeddings | f'debug print user embeddings' >> beam.Map(lambda x: print(f'X"{x}'))
+        
         # write (movie_id, embeddings) to tfrecord files
         (user_id_and_embeddings
             | f'serialize_user_embedding_example' >> beam.Map(serialize_example)
             | f'write_user_emb_tfrecord' >> beam.io.tfrecordio.WriteToTFRecord(
-            file_path_prefix=f'{self.output_uri2}/user_emb', file_name_suffix='.gz'))
+            file_path_prefix=f'{self.output_uri2}/user_emb', file_name_suffix='.tfrecord.gz'))
         
         result = pipeline.run()
         result.wait_until_finish()
@@ -279,10 +281,12 @@ class WriteRetrievalInputs(tf.test.TestCase):
         raw_dataset = tf.data.TFRecordDataset(files, compression_type='GZIP')
         for raw_record in raw_dataset.take(1):
             parsed_record = _parse_function(raw_record)
+            print(f'parsed_record: {parsed_record}', flush=True)
             u_id = parsed_record['user_id'].numpy()
             emb = parsed_record['embedding'].values.numpy()
             self.assertTrue(isinstance(u_id, np.int64))
             self.assertTrue(emb.shape[0] > 0)
+        tt = 2
    
     def create_example_movie_id_prediction(row):
         # each row is a tuple like:

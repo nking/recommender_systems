@@ -1,7 +1,3 @@
-- consider making another TwoTowerDNN model but use
-  heuristic lambda for the loss.  It would improve
-  the NDCG@K with a minor increase in train time.
-
 - change the bi-encoder to use pretrained LLM for
   the User and Movie properties that are not
   user_id and movie_id.  use a prompt formatting
