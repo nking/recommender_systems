@@ -292,19 +292,21 @@ class PipelinesTest(tf.test.TestCase):
               new_query_embeddings = infer_query_for_dict(
                 age=batch['age'],
                 gender=batch['gender'],
-                genres=batch['genres'],
-                movie_id=batch['movie_id'],
+                #genres=batch['genres'],
+                #movie_id=batch['movie_id'],
                 occupation=batch['occupation'],
                 timestamp=batch['timestamp'],
-                user_id=batch['user_id'])
+                user_id=batch['user_id']
+                )
               new_candidate_embeddings = infer_candidate_for_dict(
-                age=batch['age'],
-                gender=batch['gender'],
+                #age=batch['age'],
+                #gender=batch['gender'],
                 genres=batch['genres'],
                 movie_id=batch['movie_id'],
-                occupation=batch['occupation'],
-                timestamp=batch['timestamp'],
-                user_id=batch['user_id'])
+                #occupation=batch['occupation'],
+                #timestamp=batch['timestamp'],
+                #user_id=batch['user_id']
+                )
               new_rating_predictions = infer_default_for_dict(
                 age=batch['age'],
                 gender=batch['gender'],
@@ -312,7 +314,8 @@ class PipelinesTest(tf.test.TestCase):
                 movie_id=batch['movie_id'],
                 occupation=batch['occupation'],
                 timestamp=batch['timestamp'],
-                user_id=batch['user_id'])
+                user_id=batch['user_id']
+                )
               break
         except Exception as e:
             print(f'ERROR in infer_for_dict: {e}')

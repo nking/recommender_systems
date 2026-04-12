@@ -46,9 +46,6 @@ DEFAULT_BATCH_SIZE = 1024
 DEFAULT_NUM_EPOCHS = 20
 DEFAULT_NUM_EXAMPLES = 100000
 
-MAX_TUNE_TRIALS_DEFAULT = 10
-EXECUTIONS_PER_TRIAL_DEFAULT = 1
-
 #NOTE: could be improved by writing the headers to a file in the Transform stage and reading them here:
 LABEL_KEY = 'rating'
 N_GENRES = 18
@@ -102,6 +99,11 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   input_dataset_element_spec_trans = hp.get("input_dataset_element_spec_trans_ser")
   input_dataset_element_spec_trans = pickle.loads(base64.b64decode(input_dataset_element_spec_trans.encode('utf-8')))
   
+  #divide the spec into query and candidate
+  _cand_keys = {"movie_id", "genres"}
+  input_dataset_element_spec_trans_candidate = {k : input_dataset_element_spec_trans[k] for k in _cand_keys}
+  input_dataset_element_spec_trans_query = {k : v for k,v in input_dataset_element_spec_trans.items() if k not in _cand_keys}
+
   @keras.utils.register_keras_serializable(package=package)
   class CyclicalEncoding(keras.layers.Layer):
     def __init__(self, max_val, **kwargs):
@@ -409,10 +411,11 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
             reg = keras.regularizers.l2(self.regl2)
         #TODO: consider changing order to: Dense, LayerNorm, Activation(elu), Dropout
         self.dense_layers.add(
-          keras.layers.Dense(layer_size, activation="elu",
-                             kernel_regularizer=reg,
-                             kernel_initializer="glorot_normal",
-                            use_bias=False))
+          keras.layers.Dense(layer_size,
+            activation="elu",
+            kernel_regularizer=reg,
+            kernel_initializer="glorot_normal",
+            use_bias=False))
         # self.dense_layers.add(keras.layers.BatchNormalization())
         self.dense_layers.add(keras.layers.LayerNormalization())
         self.dense_layers.add(keras.layers.Dropout(drop_rate))
@@ -505,14 +508,15 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       for layer_size in layer_sizes[:-1]:
         if self.regl2 > 0.0:
           reg = keras.regularizers.l2(self.regl2)
-        # TODO: consider changing order to: Dense, LayerNorm, Activation(elu), Dropout
         self.dense_layers.add(
-          keras.layers.Dense(layer_size, activation="elu",
+          keras.layers.Dense(layer_size,
+            activation="elu",
             kernel_regularizer=reg, kernel_initializer="glorot_normal",
             use_bias=False
             ))
         # self.dense_layers.add(keras.layers.BatchNormalization())
         self.dense_layers.add(keras.layers.LayerNormalization())
+        #self.dense_layers.add(keras.activations.elu())
         self.dense_layers.add(keras.layers.Dropout(drop_rate))
       
       for layer_size in layer_sizes[-1:]:
@@ -1274,14 +1278,17 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   # TO debug, user run_eagerly=False
   return model
 
-
 def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   """Returns hyperparameters for building Keras model."""
   #print(f'get_default_hyperparameters: custom_config={custom_config}')
   hp = keras_tuner.HyperParameters()
   # Defines search space.
-  hp.Float('learning_rate', 1e-4, 1e-3, sampling='log')
-  hp.Float('weight_decay', 1e-4, 1e-2, sampling='log')
+  #hp.Float('learning_rate', 1e-4, 1e-3, sampling='log')
+  #hp.Float('weight_decay', 1e-4, 1e-2, sampling='log')
+  #TEMPORARY:
+  hp.Fixed('learning_rate', 3e-4)
+  hp.Fixed('weight_decay', 0.0018)
+
   #let AdamW weight decay handle the regularization, so set regl2 to 0:
   #hp.Float('regl2', 1e-5, 1e-2, sampling="log")
   hp.Fixed('regl2', 0.0)
@@ -1299,8 +1306,11 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   use_bias_corr = hp.Fixed("use_bias_corr", value=True)
   #if batch_size=1024, max temp should be about 0.2;  if batch_size is 2048, temp max ~ 0.4
   if use_bias_corr:
-      hp.Choice("bias_corr_alpha", values=[0.01, 0.05, 0.1], default=0.05) #0.01, 0.05, 0.1
-      hp.Float('temperature', 0.07, 0.25, step=0.01)
+      #hp.Choice("bias_corr_alpha", values=[0.01, 0.05, 0.1], default=0.05)
+      #hp.Float('temperature', 0.07, 0.15, step=0.01)
+      #TEMPORARY:
+      hp.Fixed("bias_corr_alpha", 0.05)
+      hp.Fixed('temperature', 0.1)
       #hp.Fixed('temperature', value=1.0)
   else:
       hp.Choice("bias_corr_alpha", values=[0.1], default=0.05)  # 0.01, 0.05, 0.1
@@ -1310,8 +1320,6 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   hp.Fixed('n_genres', custom_config["n_genres"])
   hp.Fixed('run_eagerly', custom_config["run_eagerly"])
   hp.Fixed('device', custom_config.get("device", 'CPU'))
-  hp.Fixed('MAX_TUNE_TRIALS', custom_config.get("MAX_TUNE_TRIALS", MAX_TUNE_TRIALS_DEFAULT))
-  hp.Fixed('EXECUTIONS_PER_TRIAL', custom_config.get("EXECUTIONS_PER_TRIAN", EXECUTIONS_PER_TRIAL_DEFAULT))
   num_examples = custom_config.get("num_examples", DEFAULT_NUM_EXAMPLES)
   num_train = int(num_examples * 0.8)
   num_eval = int(num_examples * 0.1)
@@ -1565,7 +1573,10 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   input_signature_trans = convert_feature_spec_to_tensor_spec(tf_transform_output.transformed_feature_spec())
   del input_signature_raw[LABEL_KEY]
   del input_signature_trans[LABEL_KEY]
-
+  _cand_keys = {'movie_id', 'genres'}
+  input_signature_raw_candidate = {k: input_signature_raw[k] for k in _cand_keys}
+  input_signature_raw_query = {k:v for k,v in input_signature_raw.items() if k not in _cand_keys}
+  
   try:
       _ = hp.get('input_dataset_element_spec_trans_ser')
   except Exception:
@@ -1670,17 +1681,43 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       outputs = model(inputs=transformed_features, training=False)
       return {'outputs': outputs}
     
+    def get_relaxed_feature_spec(original_spec):
+        """
+        for the serialized example inputs for Candidate model or Query model, we want to be able to accept
+        just the movie data and provide dummy values to fill the full joined user movie data.
+        the dummy value is ignored by the candidate or query model
+        :param original_spec:
+        :return:
+        """
+        relaxed_spec = {}
+        for key, spec in original_spec.items():
+            if isinstance(spec, tf.io.FixedLenFeature):
+                # We create a new spec with a default_value.
+                # Use 0 for numbers and "" for strings.
+                default = 0 if spec.dtype.is_integer or spec.dtype.is_floating else ""
+                relaxed_spec[key] = tf.io.FixedLenFeature(
+                    shape=spec.shape,
+                    dtype=spec.dtype,
+                    default_value=default
+                )
+            else:
+                # VarLenFeatures (SparseTensors) naturally handle missing keys
+                # by returning an empty SparseTensor rather than crashing.
+                relaxed_spec[key] = spec
+        return relaxed_spec
+    
     @tf.function(input_signature=[tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')])
     def serve_query_tf_examples_fn(serialized_tf_example):
       '''
       Returns the serving signature query embeddings for input being raw examples, not yet transformed to features.
       '''
       raw_feature_spec = tf_transform_output.raw_feature_spec()
+      relaxed_feature_spec = get_relaxed_feature_spec(raw_feature_spec)
       try:
-        raw_feature_spec.pop(LABEL_KEY)
+        relaxed_feature_spec.pop(LABEL_KEY)
       except KeyError as e:
         logging.error(f'ERROR: {e}')
-      raw_features = tf.io.parse_example(serialized_tf_example, raw_feature_spec)
+      raw_features = tf.io.parse_example(serialized_tf_example, relaxed_feature_spec)
       transformed_features = model.tft_layer(raw_features)
       outputs = model.query_model(inputs=transformed_features, training=False)
       return {'outputs': outputs}
@@ -1691,11 +1728,12 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       Returns the serving signature candidate embeddings for input being raw examples, not yet transformed to features.
       '''
       raw_feature_spec = tf_transform_output.raw_feature_spec()
+      relaxed_feature_spec = get_relaxed_feature_spec(raw_feature_spec)
       try:
-        raw_feature_spec.pop(LABEL_KEY)
+        relaxed_feature_spec.pop(LABEL_KEY)
       except KeyError as e:
         logging.error(f'ERROR: {e}')
-      raw_features = tf.io.parse_example(serialized_tf_example, raw_feature_spec)
+      raw_features = tf.io.parse_example(serialized_tf_example, relaxed_feature_spec)
       transformed_features = model.tft_layer(raw_features)
       outputs = model.candidate_model(inputs=transformed_features, training=False)
       return {'outputs': outputs}
@@ -1714,21 +1752,64 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       logging.info('eval_transformed_features = %s',transformed_features)
       return transformed_features
     
-    @tf.function(input_signature=[input_signature_raw])
+    @tf.function(input_signature=[input_signature_raw_query])
     def serve_query_dict_fn(raw_features):
       '''
       given raw inputs dictionary of tensors, transforms the data and returns the outputs of query model on transformed data.
       '''
-      transformed_features = model.tft_layer(raw_features)
+      full_spec = tf_transform_output.raw_feature_spec()
+      
+      any_input = next(iter(raw_features.values()))
+      batch_size = tf.shape(any_input)[0]
+      
+      complete_features = dict(raw_features)
+      for key, spec in full_spec.items():
+          if key not in complete_features:
+              # Create dummy data based on the spec
+              if isinstance(spec, tf.io.FixedLenFeature):
+                  # Handle Dense Tensors
+                  shape = tf.concat([[batch_size], spec.shape], axis=0)
+                  complete_features[key] = tf.zeros(shape=shape,
+                      dtype=spec.dtype)
+              else:
+                  # Handle VarLen (Sparse Tensors)
+                  # TFT expects a SparseTensor if the spec was VarLen
+                  complete_features[key] = tf.SparseTensor(
+                      indices=tf.zeros([0, 2], dtype=tf.int64),
+                      values=tf.zeros([0], dtype=spec.dtype),
+                      dense_shape=tf.cast(tf.stack([batch_size, 0]), tf.int64)
+                  )
+      transformed_features = model.tft_layer(complete_features)
       outputs = model.query_model(inputs=transformed_features, training=False)
       return {'outputs': outputs}
     
-    @tf.function(input_signature=[input_signature_raw])
+    @tf.function(input_signature=[input_signature_raw_candidate])
     def serve_candidate_dict_fn(raw_features):
       '''
       given raw inputs dictionary of tensors, transforms the data and returns the outputs of candidate model on transformed data.
       '''
-      transformed_features = model.tft_layer(raw_features)
+      full_spec = tf_transform_output.raw_feature_spec()
+      
+      any_input = next(iter(raw_features.values()))
+      batch_size = tf.shape(any_input)[0]
+      
+      complete_features = dict(raw_features)
+      for key, spec in full_spec.items():
+          if key not in complete_features:
+              # Create dummy data based on the spec
+              if isinstance(spec, tf.io.FixedLenFeature):
+                  # Handle Dense Tensors
+                  shape = tf.concat([[batch_size], spec.shape], axis=0)
+                  complete_features[key] = tf.zeros(shape=shape, dtype=spec.dtype)
+              else:
+                  # Handle VarLen (Sparse Tensors)
+                  # TFT expects a SparseTensor if the spec was VarLen
+                  complete_features[key] = tf.SparseTensor(
+                      indices=tf.zeros([0, 2], dtype=tf.int64),
+                      values=tf.zeros([0], dtype=spec.dtype),
+                      dense_shape=tf.cast(tf.stack([batch_size, 0]), tf.int64)
+                  )
+      transformed_features = model.tft_layer(complete_features)
       outputs = model.candidate_model(inputs=transformed_features, training=False)
       return {'outputs': outputs}
     
@@ -1882,8 +1963,8 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
   '''
   tuner = keras_tuner.RandomSearch(
     _make_2tower_keras_model,
-    max_trials=hp.get('MAX_TUNE_TRIALS'),
-    executions_per_trial=hp.get('EXECUTIONS_PER_TRIAL'),
+    max_trials=10,
+    executions_per_trial=1,
     overwrite=True,
     hyperparameters=hp,
     allow_new_entries=False,
@@ -1910,12 +1991,16 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
       _make_2tower_keras_model,
       objective=keras_tuner.Objective(f'val_ndcg_20', 'max'),
       hyperparameters=hp,
-      #alpha=1e-4, # 1e-3 for more exploration and regularization
-      #for val_hit_rate, use 1e-2 though could use 1E-3.  for val_ndcg_20 use 1E-2
       alpha=1e-2,
-      beta=3.5, #defaut 2.6;  4.0 for more exploration.  alpha = sqrt(1./batch_size) for val_hit_rate
-      num_initial_points=15, #30
-      max_trials=40, #should be 2 to 3 times num_initial_points
+      beta=3.5, #defaut 2.6;  4.0 for more exploration.  
+
+      #use when fitting
+      #num_initial_points=15, #30
+      #max_trials=40, #should be 2 to 3 times num_initial_points
+      #TEMPORARY when fixing params:
+      num_initial_points=1, #30
+      max_trials=1, #should be 2 to 3 times num_initial_points
+
       allow_new_entries=False,
       directory=fn_args.working_dir,
       project_name='movie_lens_2t_tuning_bayesian')
