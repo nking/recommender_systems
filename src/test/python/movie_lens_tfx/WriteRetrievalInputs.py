@@ -147,14 +147,16 @@ class WriteRetrievalInputs(tf.test.TestCase):
              | f'parse_movie_{random.randint(0, 1000000000000)}' >> \
              beam.Map(lambda line: line.split("::"))
         
-        #create model input, supplying fake data for necessary, but unused keys
+        #pc | "print parsed movies.dat" >> beam.Map(lambda x: print(f"movies dat: {x}"))
+
+        #format inputs for model
         examples_ser = (pc | f'movies_dat_ToTFExample'
-                >> beam.ParDo(_FakeJoinedRatingsExampleMaker("movie", self.mean_train_val_timestamp))
+                >> beam.ParDo(_ExampleMaker("movie"))
                 | f"Serialize_fake_example_movie"
                 >> beam.Map(lambda x: x.SerializeToString()))
         
         #examples_ser | "print ser ex" >> beam.Map(lambda x: print(f"ex ser: {x}"))
-        
+    
         # calculate tuples of movie_id, embeddings
         movie_id_and_embeddings = (examples_ser
             | f'create_movie_emb'
@@ -244,9 +246,9 @@ class WriteRetrievalInputs(tf.test.TestCase):
                  coder=CustomUTF8Coder())
              | f'parse_user_dat' >> beam.Map(lambda line: line.split("::")))
              
-        # create model input, supplying fake data for necessary, but unused keys
+        # create model input
         examples = (pc | f'user_ToTFExample_{random.randint(0, 1000000000000)}'
-            >> beam.ParDo(_FakeJoinedRatingsExampleMaker("user", self.mean_train_val_timestamp)))
+            >> beam.ParDo(_ExampleMaker("user")))
         
         examples_ser = (examples
                 | f"Serialize_{random.randint(0, 1000000000000)}"
@@ -701,10 +703,9 @@ class WriteRetrievalInputs(tf.test.TestCase):
             os.remove(temp_path)
         return int(final_mean) if final_mean else None
 
-class _FakeJoinedRatingsExampleMaker(beam.DoFn):
-    def __init__(self, inp_type: str, timestamp:int):
+class _ExampleMaker(beam.DoFn):
+    def __init__(self, inp_type: str):
         self.inp_type = inp_type
-        self.timestamp = timestamp
         self.outp_column_name_type_list = None
         self.inp_column_name_type_list = None
     
@@ -713,78 +714,41 @@ class _FakeJoinedRatingsExampleMaker(beam.DoFn):
         Called once per DoFn instance (per worker process) after being unpickled.
         This is where you load heavy, non-serializable resources.
         """
-        self.outp_column_name_type_list = [('genres', str), ('age', int),
-            ('gender', str),
-            ('movie_id', int), ('occupation', int), ('rating', int),
-            ('timestamp', int), ('user_id', int)]
         if self.inp_type == "movie":
             self.inp_column_name_type_list = [('movie_id', int),
-                ('movie_title', str),
-                ('genres', str)]
+                ('movie_title', str), ('genres', str)]
+            self.outp_column_name_type_list = [('movie_id', int), ('genres', str)]
         elif self.inp_type == "user":
-            self.inp_column_name_type_list = [('user_id', int), ('gender', str),
-                ('age', int), ('occupation', int), ('zipcode', str)]
+            self.inp_column_name_type_list = [('user_id', int),
+                ('gender', str),('age', int), ('occupation', int), ('zipcode', str), ('timestamp', int)]
+            self.outp_column_name_type_list = [('user_id', int),
+                ('gender', str), ('age', int), ('occupation', int), ('timestamp', int)]
         else:
             raise Exception(f"unknown inp_type {self.inp_type}")
     
     def process(self, row):
-        #ROW=['6041', 'Toy Story (1995)', "Animation|Children's|Comedy"]
+        # ROW=['6041', 'Toy Story (1995)', "Animation|Children's|Comedy"]
         final_keys = set([key for key, type in self.outp_column_name_type_list])
         feature_map = {}
+        # ROW=['6041', 'Toy Story (1995)', "Animation|Children's|Comedy"]
         for i, value in enumerate(row):
-            try:
-                element_type = self.inp_column_name_type_list[i][1]
-                name = self.inp_column_name_type_list[i][0]
-                if name not in final_keys:
-                    continue
-                if element_type == float:
-                    f = tf.train.Feature(
-                        float_list=tf.train.FloatList(value=[float(value)]))
-                elif element_type == int or element_type == bool:
-                    f = tf.train.Feature(
-                        int64_list=tf.train.Int64List(value=[int(value)]))
-                elif element_type == str:
-                    f = tf.train.Feature(bytes_list=tf.train.BytesList(
-                        value=[value.encode('utf-8')]))
-                else:
-                    raise ValueError(
-                        f"element_type={element_type}, but only float, int, and str classes are handled.")
-                feature_map[name] = f
-            except Exception as ex:
-                logging.error(
-                    f"ERROR: {ex}\nrow={row}, name={name}, element_type={element_type}"
-                    f"\ni={i}\ncolumn_name_type_list={self.inp_column_name_type_list}")
-                raise ex
-        # add fake entries to make consistent with the joined ratings file columns
-        for out_name, out_type in self.outp_column_name_type_list:
-            try:
-                if out_name in feature_map:
-                    continue
-                if out_type == float:
-                    f = tf.train.Feature(float_list=tf.train.FloatList(value=[0.0]))
-                elif out_type == int or element_type == bool:
-                    if out_name == "timestamp":
-                        value = self.timestamp
-                    else:
-                        value = 1
-                    f = tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
-                elif out_type == str:
-                    if out_name == "genres":
-                        value = b"Drama"
-                    elif out_name == "gender":
-                        value = random.choice([b"M", b"F"])
-                    else:
-                        value = b""
-                    f = tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
-                else:
-                    raise ValueError(f"out_type={out_type}, but only float, int, and str classes are handled.")
-                feature_map[out_name] = f
-            except Exception as ex:
-                logging.error(
-                    f"ERROR2: {ex}\nrow={row}, out_name={out_name}, out_type={out_type}")
-                raise ex
-        yield tf.train.Example(features=tf.train.Features(feature=feature_map))
-        #ParDo is a 1 to many mapping so yield each example
+            element_type = self.inp_column_name_type_list[i][1]
+            name = self.inp_column_name_type_list[i][0]
+            if name not in final_keys:
+                continue
+            if element_type == float:
+                f = tf.train.Feature(float_list=tf.train.FloatList(value=[float(value)]))
+            elif element_type == int or element_type == bool:
+                f = tf.train.Feature(int64_list=tf.train.Int64List(value=[int(value)]))
+            elif element_type == str:
+                f = tf.train.Feature(bytes_list=tf.train.BytesList(value=[value.encode('utf-8')]))
+            else:
+                raise ValueError(
+                    f"element_type={element_type}, but only float, int, and str classes are handled.")
+            feature_map[name] = f
+        yield tf.train.Example(
+            features=tf.train.Features(feature=feature_map))
+        # ParDo is a 1 to many mapping so yield each example
 
 class _CandidateEmbeddingMaker(beam.DoFn):
     def __init__(self, saved_model_path: str):
