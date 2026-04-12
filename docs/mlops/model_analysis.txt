@@ -8,8 +8,8 @@ The model learning looks healthy.
 The best fitting hyperparameters are also in that subdirectory
 
 Best fitting model used a batch size of 1024:
-val ndcg@20 = 0.047
-val mrr@20 = 0.046
+val ndcg@20 = 0.048
+val mrr@20 = 0.047
 val recall@20 = 0.051
 
 The ndcg@20 is 10 times random performance.
