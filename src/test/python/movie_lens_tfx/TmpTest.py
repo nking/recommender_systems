@@ -164,8 +164,8 @@ class TuneTrainTest(tf.test.TestCase):
       new_query_embeddings = infer_query_for_dict(
         age=batch['age'],
         gender=batch['gender'],
-        genres=batch['genres'],
-        movie_id=batch['movie_id'],
+        #genres=batch['genres'],
+        #movie_id=batch['movie_id'],
         occupation=batch['occupation'],
         timestamp=batch['timestamp'],
         user_id=batch['user_id'])
