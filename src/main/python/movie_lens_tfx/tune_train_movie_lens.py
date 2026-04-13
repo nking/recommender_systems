@@ -1,6 +1,7 @@
 # from
 import base64
 import pickle
+import time
 # some code is adapted from https://github.com/tensorflow/tfx/blob/master/tfx/examples/penguin/penguin_utils_base.py
 # and related files
 # they have co Copyright 2020 Google LLC. All Rights Reserved.
@@ -99,11 +100,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   input_dataset_element_spec_trans = hp.get("input_dataset_element_spec_trans_ser")
   input_dataset_element_spec_trans = pickle.loads(base64.b64decode(input_dataset_element_spec_trans.encode('utf-8')))
   
-  #divide the spec into query and candidate
-  _cand_keys = {"movie_id", "genres"}
-  input_dataset_element_spec_trans_candidate = {k : input_dataset_element_spec_trans[k] for k in _cand_keys}
-  input_dataset_element_spec_trans_query = {k : v for k,v in input_dataset_element_spec_trans.items() if k not in _cand_keys}
-
   @keras.utils.register_keras_serializable(package=package)
   class CyclicalEncoding(keras.layers.Layer):
     def __init__(self, max_val, **kwargs):
@@ -1695,6 +1691,8 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
                 # We create a new spec with a default_value.
                 # Use 0 for numbers and "" for strings.
                 default = 0 if spec.dtype.is_integer or spec.dtype.is_floating else ""
+                if key == 'timestamp':
+                    default = -1
                 relaxed_spec[key] = tf.io.FixedLenFeature(
                     shape=spec.shape,
                     dtype=spec.dtype,
@@ -1718,6 +1716,14 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       except KeyError as e:
         logging.error(f'ERROR: {e}')
       raw_features = tf.io.parse_example(serialized_tf_example, relaxed_feature_spec)
+      
+      raw_timestamp = raw_features['timestamp']
+      raw_features['timestamp'] = tf.where(
+          tf.equal(raw_timestamp, -1),
+          tf.cast(tf.timestamp(), tf.int64),
+          raw_timestamp
+      )
+      
       transformed_features = model.tft_layer(raw_features)
       outputs = model.query_model(inputs=transformed_features, training=False)
       return {'outputs': outputs}
