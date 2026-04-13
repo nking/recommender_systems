@@ -2,7 +2,6 @@ import os
 import shutil
 import numpy as np
 from apache_beam.transforms.combiners import Top
-from apache_beam.transforms.stats import ApproximateQuantiles
 import io
 import csv
 import glob
@@ -10,6 +9,9 @@ from array_record_beam_sdk import arrayrecordio
 import msgpack
 from array_record.python import array_record_module
 import tempfile
+from apache_beam.io.parquetio import WriteToParquet, ReadFromParquet
+import pyarrow.parquet as pq
+
 """
 This writes various files needed for the retrieval project.
 It really should be refactored into components and unit tests...
@@ -357,6 +359,52 @@ class WriteRetrievalInputs(tf.test.TestCase):
             break
         self.assertIsNotNone(t)
     
+    def test_write_all_movies_to_parquet(self):
+        """
+        writes movies.dat to movies*tfrecord*gz
+        """
+        in_file_path = os.path.join(get_project_dir(),
+            "src/main/resources/ml-1m/movies.dat")
+        out_file_path = os.path.join(get_bin_dir(), "movies_parquet")
+        os.makedirs(out_file_path, exist_ok=True)
+        out_file_prefix = f'{out_file_path}/movies'
+        
+        movie_schema = pa.schema([
+            ('movie_id', pa.int64()),
+            ('title', pa.string()),
+            ('genres', pa.string())
+        ])
+        
+        pipeline1 = beam.Pipeline(options=self.pipeline_options)
+        
+        (pipeline1 | "read movies.dat" >>
+         beam.io.ReadFromText(in_file_path, skip_header_lines=0,
+             coder=CustomUTF8Coder())
+         | "parse movies.dat" >> beam.Map(lambda line: line.split("::"))
+         | "movies To Dict" >> beam.Map(lambda x: {
+                    'movie_id': int(x[0]), 'title': x[1], 'genres': x[2] })
+         | "Write movies to Parquet" >> WriteToParquet(
+            file_path_prefix=out_file_prefix,
+            schema=movie_schema,
+            file_name_suffix='.parquet',
+            num_shards=1
+        ))
+        
+        result = pipeline1.run()
+        result.wait_until_finish()
+        
+        ## assert file contents
+        
+        t = f'{out_file_prefix}*.parquet'
+        file_paths = glob.glob(t)
+        table = pq.read_table(file_paths[0])
+        actual_data = table.to_pylist()
+        
+        self.assertTrue(len(actual_data) > 3000)
+        self.assertTrue(isinstance(actual_data[0]['title'], str))
+        self.assertTrue(isinstance(actual_data[0]['genres'], str))
+        self.assertTrue(isinstance(actual_data[0]['movie_id'], int))
+        
     def test_write_ratings_to_array_records(self):
         """
         writes all ratings*dat to ratings*array_record
@@ -546,6 +594,7 @@ class WriteRetrievalInputs(tf.test.TestCase):
         
         ratings_pc = (pc1, pc2) | "merge train and val ratings" >> beam.Flatten()
         
+        #user_id, movie_id, rating, timestamp
         #ratings_pc | 'print ratings_pc' >> beam.Map(lambda x: print(f'rpc={x}'))
         
         # create PC of "movie_id", "1", "2", "3", "4", "5"
@@ -584,14 +633,14 @@ class WriteRetrievalInputs(tf.test.TestCase):
         
         ## ==== create entries for movies not rated =====
         
-        ## read in the movies as movie_id only, filter to keep only the movie_id, while making a key value tuple needed for set difference
+        ## read in from movies.dat, the movies as movie_id only, filter to keep only the movie_id, while making a key value tuple needed for set difference
         movies_pc = (pipeline | f"read_movies.dat" >>
             beam.io.ReadFromText(self.input_path1, skip_header_lines=0,
             coder=CustomUTF8Coder())
             | f'parse_movie_from_movies_.dat' >> beam.Map(lambda line: line.split("::"))
-            | 'filter_movies_to_id_only' >> beam.Map(lambda row: (int(row[0]), None)))
+            | 'filter_movies_to_movie_id_only' >> beam.Map(lambda row: (int(row[0]), None)))
         
-        ratings_movies_pc = ratings_pc | 'filter_ratings_to_id_only' >> beam.Map(lambda row: (int(row[1]), None))
+        ratings_movies_pc = ratings_pc | 'filter_ratings_to_movie_id_only' >> beam.Map(lambda row: (int(row[1]), None))
         grouped = {'p1': movies_pc, 'p2': ratings_movies_pc} | beam.CoGroupByKey()
         # entry is (movie_id, {'p1': [None], 'p2': []})
         unrated_movies_pc = (grouped | "Find Unique to p1" >> beam.Filter(
@@ -664,6 +713,9 @@ class WriteRetrievalInputs(tf.test.TestCase):
         reader = None
         try:
             reader = array_record_module.ArrayRecordReader(outfile_path)
+            count = reader.num_records()
+            print(f"\nTotal records: {count}")#expecting 3883
+            self.assertTrue(count > 3000)
             record: list = msgpack.unpackb(reader.read(), use_list=False)
             for key in ['movie_id', '1', '2', '3', '4', '5']:
                 self.assertTrue(key in record)
