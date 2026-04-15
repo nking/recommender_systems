@@ -18,7 +18,8 @@ file_names = ["ratings_train", "ratings_val", "ratings_test"]
 for file_name in file_names:
     in_file_path = os.path.join(get_project_dir(), f"src/main/resources/ml-1m/{file_name}.dat")
     out_file_path = os.path.join(get_bin_dir(), f"{file_name}_liked.dat")
-
+    out_file_path2 = os.path.join(get_bin_dir(), f"{file_name}_disliked.dat")
+    
     processed_buffer = io.StringIO()
     df = None
     with open(in_file_path, "r", encoding='iso-8859-1') as file:
@@ -46,6 +47,22 @@ for file_name in file_names:
         )
         df_formatted.write_csv(
             out_file_path,
+            include_header=False,
+            quote_style="never"
+        )
+        
+        df_disliked = df.filter(pl.col("rating") < 3)
+        print(f'# disliked = {len(df_disliked)} out of {len(df)}')
+        
+        df_formatted = df_disliked.select(
+            pl.format("{}::{}::{}::{}",
+                pl.col("user_id"),
+                pl.col("movie_id"),
+                pl.col("rating"),
+                pl.col("timestamp")).alias("output")
+        )
+        df_formatted.write_csv(
+            out_file_path2,
             include_header=False,
             quote_style="never"
         )
