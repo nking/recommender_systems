@@ -95,7 +95,7 @@ class WriteRetrievalInputs(tf.test.TestCase):
             "occupation": tf.io.FixedLenFeature([], tf.int64),
             "genres": tf.io.FixedLenFeature([], tf.string)}
     
-    def test_write_movie_emb_tfrecords(self):
+    def test_write_movie_embeddings(self):
         """
         1) reads movies.dat and formats it into the joined ratings format of columns, filling in the missing values
         with 0's etc.
@@ -172,6 +172,12 @@ class WriteRetrievalInputs(tf.test.TestCase):
             | f'write_movie_emb_tfrecord' >> beam.io.tfrecordio.WriteToTFRecord(
             file_path_prefix=f'{self.output_uri1}/movie_emb', file_name_suffix='.tfrecord.gz'))
         
+        (movie_id_and_embeddings
+         | f"serialize_movie_embeddings_with_msgpack" >> beam.Map(msgpack.packb)
+         | f'write_movie_embeddings_array_record' >> arrayrecordio.WriteToArrayRecord(
+            file_path_prefix=f'{self.output_uri1}/movie_emb',
+            num_shards=1, file_name_suffix='.array_record'))
+        
         result = pipeline.run()
         result.wait_until_finish()
         
@@ -183,8 +189,7 @@ class WriteRetrievalInputs(tf.test.TestCase):
         def _parse_function(example_proto):
             return tf.io.parse_single_example(example_proto, feature_spec)
             
-        # 1. Get all files matching your prefix
-        files = glob.glob(f"{self.output_uri1}/movie_emb*.gz")
+        files = glob.glob(f"{self.output_uri1}/movie_emb*tfrecord.gz")
         raw_dataset = tf.data.TFRecordDataset(files, compression_type='GZIP')
         for raw_record in raw_dataset.take(1):
             parsed_record = _parse_function(raw_record)
@@ -193,14 +198,32 @@ class WriteRetrievalInputs(tf.test.TestCase):
             self.assertTrue(isinstance(m_id, np.int64))
             self.assertTrue(emb.shape[0] > 0)
         
-    def test_write_user_emb_tfrecords(self):
+        files = glob.glob(f"{self.output_uri1}/movie_emb*array_record")
+        self.assertTrue(len(files) > 0)
+        for file_path in files:
+            reader = None
+            try:
+                reader = array_record_module.ArrayRecordReader(file_path)
+                record = msgpack.unpackb(reader.read(), use_list=False)
+                self.assertEqual(2, len(record))
+                self.assertTrue(isinstance(record[0], int))
+                self.assertTrue(isinstance(record[1], tuple))
+                self.assertTrue(isinstance(record[1][0], float))
+            except Exception as e:
+                self.fail(e)
+            finally:
+                if reader is not None:
+                    reader.close()
+        
+    def test_write_user_embeddings(self):
         """
         1) reads users.dat and formats it into the joined ratings format of columns, filling in the missing values
         with 0's etc.
            Needs a representative timestamp for the queries
         2) create serialized tfexamples from that
         3) creates user embeddings from the query model
-        4) writes embeddings to output_uri1
+        4) writes embeddings to output_uri1 as tfrecords
+        5) writes embeddings to output_uri1 as array_records
 
         inputs are input_path1, input_path2
         outputs are output_uri1
@@ -269,6 +292,12 @@ class WriteRetrievalInputs(tf.test.TestCase):
             | f'write_user_emb_tfrecord' >> beam.io.tfrecordio.WriteToTFRecord(
             file_path_prefix=f'{self.output_uri2}/user_emb', file_name_suffix='.tfrecord.gz'))
         
+        #write to array_records
+        (user_id_and_embeddings
+            | f"serialize_user_embeddings_with_msgpack" >> beam.Map(msgpack.packb)
+            | f'write_user_embeddings_array_record' >> arrayrecordio.WriteToArrayRecord(
+            file_path_prefix=f'{self.output_uri2}/user_emb', num_shards=1, file_name_suffix='.array_record'))
+        
         result = pipeline.run()
         result.wait_until_finish()
         
@@ -281,7 +310,7 @@ class WriteRetrievalInputs(tf.test.TestCase):
             return tf.io.parse_single_example(example_proto, feature_spec)
             
         # 1. Get all files matching your prefix
-        files = glob.glob(f"{self.output_uri2}/user_emb*.gz")
+        files = glob.glob(f"{self.output_uri2}/user_emb*tfrecord.gz")
         raw_dataset = tf.data.TFRecordDataset(files, compression_type='GZIP')
         for raw_record in raw_dataset.take(1):
             parsed_record = _parse_function(raw_record)
@@ -290,8 +319,23 @@ class WriteRetrievalInputs(tf.test.TestCase):
             emb = parsed_record['embedding'].values.numpy()
             self.assertTrue(isinstance(u_id, np.int64))
             self.assertTrue(emb.shape[0] > 0)
-        tt = 2
-   
+        
+        files = glob.glob(f"{self.output_uri2}/user_emb*array_record")
+        for file_path in files:
+            reader = None
+            try:
+                reader = array_record_module.ArrayRecordReader(file_path)
+                record = msgpack.unpackb(reader.read(), use_list=False)
+                self.assertEqual(2, len(record))
+                self.assertTrue(isinstance(record[0], int))
+                self.assertTrue(isinstance(record[1], tuple))
+                self.assertTrue(isinstance(record[1][0], float))
+            except Exception as e:
+                self.fail(e)
+            finally:
+                if reader is not None:
+                    reader.close()
+                    
     def create_example_movie_id_prediction(row):
         # each row is a tuple like:
         # (parsed_features['movie_id'] is a tensor like: < tf.Tensor: shape=(1,), dtype = int64, numpy = array([7]),
@@ -311,9 +355,9 @@ class WriteRetrievalInputs(tf.test.TestCase):
         row['movie_ratings_mean'] = sums / row['total_votes']
         return row
     
-    def test_write_all_movies_to_tfrecords(self):
+    def test_write_all_movies(self):
         """
-        writes movies.dat to movies*tfrecord*gz
+        writes movies.dat to movies*tfrecord*gz, array_record and parquet
         """
         in_file_path = os.path.join(get_project_dir(),
             "src/main/resources/ml-1m/movies.dat")
@@ -323,16 +367,42 @@ class WriteRetrievalInputs(tf.test.TestCase):
         
         pipeline1 = beam.Pipeline(options=self.pipeline_options)
         
-        (pipeline1 | "read movies.dat" >>
-         beam.io.ReadFromText(in_file_path, skip_header_lines=0,
-             coder=CustomUTF8Coder())
-         | "parse movies.dat" >> beam.Map(lambda line: line.split("::"))
-         | "create serialized movie examples" >> beam.Map(
-                    create_serialized_example_for_movies)
-         | 'WriteToTFRecord for movies' >> beam.io.tfrecordio.WriteToTFRecord(
-                    file_path_prefix=out_file_prefix,
-                    file_name_suffix='.tfrecord')
-         )
+        pc = (pipeline1 | "read movies.dat" >>
+            beam.io.ReadFromText(in_file_path, skip_header_lines=0,
+            coder=CustomUTF8Coder())
+            | "parse movies.dat" >> beam.Map(lambda line: line.split("::")))
+        
+        (pc | "create serialized movie examples" >> beam.Map(create_serialized_example_for_movies)
+            | 'WriteToTFRecord for movies' >> beam.io.tfrecordio.WriteToTFRecord(
+            file_path_prefix=out_file_prefix, file_name_suffix='.tfrecord.gz'))
+        
+        out_file_path2 = os.path.join(get_bin_dir(), "movies_array_record")
+        os.makedirs(out_file_path2, exist_ok=True)
+        out_file_prefix2 = f'{out_file_path2}/movies'
+        
+        (pc | f"serialize_movies_with_msgpack" >> beam.Map(lambda row: msgpack.packb((int(row[0]), row[1], row[2])))
+            | f'write_movies_array_record' >> arrayrecordio.WriteToArrayRecord(
+            file_path_prefix=out_file_prefix2, num_shards=1, file_name_suffix='.array_record'))
+        
+        out_file_path3 = os.path.join(get_bin_dir(), "movies_parquet")
+        os.makedirs(out_file_path3, exist_ok=True)
+        out_file_prefix3 = f'{out_file_path3}/movies'
+        
+        movie_schema = pa.schema([
+            ('movie_id', pa.int64()),
+            ('title', pa.string()),
+            ('genres', pa.string())
+        ])
+        
+        (pc | "movies To Dict" >> beam.Map(lambda x: {
+            'movie_id': int(x[0]), 'title': x[1], 'genres': x[2]})
+            | "Write movies to Parquet" >> WriteToParquet(
+                file_path_prefix=out_file_prefix3,
+                schema=movie_schema,
+                file_name_suffix='.parquet',
+                num_shards=1
+            ))
+      
         result = pipeline1.run()
         result.wait_until_finish()
         
@@ -346,9 +416,9 @@ class WriteRetrievalInputs(tf.test.TestCase):
         def _parse_function(example_proto):
             return tf.io.parse_single_example(example_proto, feature_spec)
         
-        t = f'{out_file_prefix}*.tfrecord'
+        t = f'{out_file_prefix}*.tfrecord.gz'
         file_paths = glob.glob(t)
-        dataset = tf.data.TFRecordDataset(file_paths)
+        dataset = tf.data.TFRecordDataset(file_paths, compression_type="GZIP")
         parsed_dataset = dataset.map(_parse_function)
         t = None
         for x in parsed_dataset.batch(1):
@@ -358,48 +428,27 @@ class WriteRetrievalInputs(tf.test.TestCase):
             self.assertTrue('genres' in x)
             break
         self.assertIsNotNone(t)
-    
-    def test_write_all_movies_to_parquet(self):
-        """
-        writes movies.dat to movies*tfrecord*gz
-        """
-        in_file_path = os.path.join(get_project_dir(),
-            "src/main/resources/ml-1m/movies.dat")
-        out_file_path = os.path.join(get_bin_dir(), "movies_parquet")
-        os.makedirs(out_file_path, exist_ok=True)
-        out_file_prefix = f'{out_file_path}/movies'
         
-        movie_schema = pa.schema([
-            ('movie_id', pa.int64()),
-            ('title', pa.string()),
-            ('genres', pa.string())
-        ])
-        
-        pipeline1 = beam.Pipeline(options=self.pipeline_options)
-        
-        (pipeline1 | "read movies.dat" >>
-         beam.io.ReadFromText(in_file_path, skip_header_lines=0,
-             coder=CustomUTF8Coder())
-         | "parse movies.dat" >> beam.Map(lambda line: line.split("::"))
-         | "movies To Dict" >> beam.Map(lambda x: {
-                    'movie_id': int(x[0]), 'title': x[1], 'genres': x[2] })
-         | "Write movies to Parquet" >> WriteToParquet(
-            file_path_prefix=out_file_prefix,
-            schema=movie_schema,
-            file_name_suffix='.parquet',
-            num_shards=1
-        ))
-        
-        result = pipeline1.run()
-        result.wait_until_finish()
-        
-        ## assert file contents
-        
-        t = f'{out_file_prefix}*.parquet'
-        file_paths = glob.glob(t)
+        files = glob.glob(f"{out_file_prefix2}*array_record")
+        self.assertTrue(len(files) > 0)
+        for file_path in files:
+            reader = None
+            try:
+                reader = array_record_module.ArrayRecordReader(file_path)
+                record = msgpack.unpackb(reader.read(), use_list=False)
+                self.assertEqual(3, len(record))
+                self.assertTrue(isinstance(record[0], int))
+                self.assertTrue(isinstance(record[1], str))
+                self.assertTrue(isinstance(record[2], str))
+            except Exception as e:
+                self.fail(e)
+            finally:
+                if reader is not None:
+                    reader.close()
+                    
+        file_paths = glob.glob(f"{out_file_prefix3}*parquet")
         table = pq.read_table(file_paths[0])
         actual_data = table.to_pylist()
-        
         self.assertTrue(len(actual_data) > 3000)
         self.assertTrue(isinstance(actual_data[0]['title'], str))
         self.assertTrue(isinstance(actual_data[0]['genres'], str))
@@ -486,36 +535,6 @@ class WriteRetrievalInputs(tf.test.TestCase):
             self.assertEqual(4, len(record))
         except Exception as e:
             self.fail(e)
-        finally:
-            if reader is not None:
-                reader.close()
-    
-    def test_write_movies_array_record(self):
-        infile_path = os.path.join(get_project_dir(),
-            'src/main/resources/ml-1m/movies.dat')
-        outfile_path = os.path.join(get_bin_dir(),
-            'movie_ids.array_record')
-        writer = None
-        try:
-            writer = array_record_module.ArrayRecordWriter(outfile_path,
-                "group_size:1")
-            with open(infile_path, mode='r', encoding='iso-8859-1') as f:
-                for line in f:
-                    movie_id = int(line.strip().split("::")[0])
-                    writer.write(msgpack.packb(movie_id, use_bin_type=True))
-        except Exception as ex:
-            raise ex
-        finally:
-            if writer is not None:
-                writer.close()
-        
-        reader = None
-        try:
-            reader = array_record_module.ArrayRecordReader(outfile_path)
-            record: list = msgpack.unpackb(reader.read())
-            self.assertEqual(1, 1)
-        except Exception as ex:
-            raise ex
         finally:
             if reader is not None:
                 reader.close()
