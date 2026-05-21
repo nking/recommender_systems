@@ -9,6 +9,8 @@ import polars as pl
 import os
 import io
 
+COPY_TO_SRC_TREE = False
+
 schema = pl.Schema(OrderedDict({'user_id': pl.Int64,
     'movie_id': pl.Int64, 'rating': pl.Int64,
     'timestamp' : pl.Int64}))
@@ -19,6 +21,10 @@ for file_name in file_names:
     in_file_path = os.path.join(get_project_dir(), f"src/main/resources/ml-1m/{file_name}.dat")
     out_file_path = os.path.join(get_bin_dir(), f"{file_name}_liked.dat")
     out_file_path2 = os.path.join(get_bin_dir(), f"{file_name}_disliked.dat")
+    if COPY_TO_SRC_TREE:
+        src_dir = os.path.join(get_project_dir(), f"src/main/resources/ml-1m/")
+        out_file_path = os.path.join(src_dir, f"{file_name}_liked.dat")
+        out_file_path2 = os.path.join(src_dir, f"{file_name}_disliked.dat")
     
     processed_buffer = io.StringIO()
     df = None

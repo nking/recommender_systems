@@ -470,6 +470,12 @@ class WriteRetrievalInputs(tf.test.TestCase):
                 f"src/main/resources/ml-1m/{file_name}.dat")
             out_file_path = os.path.join(get_bin_dir(), f"{file_name}.array_record")
             
+            if not os.path.exists(in_file_path):
+                raise IOError(f"File {in_file_path} does not exist.  "
+                f"To create those files: edit the script 'write_liked_disliked_ratings.py' "
+                f"to temporarily set COPY_TO_SRC_TREE=True, and run that code.  It"
+                f"will write the liked and disliked ratings to {in_file_path}.")
+            
             (pipeline | f"read_{file_name}" >>
              beam.io.ReadFromText(in_file_path, skip_header_lines=0,
                  coder=CustomUTF8Coder())

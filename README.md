@@ -10,8 +10,9 @@ The results are in docs/mlops/ subdirectory.
 The kaggle notebook is at:
 https://www.kaggle.com/code/nicholeasuniquename/recommender-systems to use MLOps
 
-The main pipeline, run_kaggle_pipelines.py runs the MLOps
-for the TwoTowerDNN with bias corrections (default) or without.
+The main pipeline, 
+    run_kaggle_pipelines.py 
+runs the MLOps for the TwoTowerDNN with bias corrections (default) or without.
 The in-batch negatives and item popularity bias corrections
 follow the Yi et al. 2019 "Sampling-bias-corrected neural modeling
 for large corpus item recommendations".

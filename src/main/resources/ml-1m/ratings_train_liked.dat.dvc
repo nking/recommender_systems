@@ -1,0 +1,5 @@
+outs:
+- md5: 0302338275e73d831ab996e7ad0afe92
+  size: 11548549
+  hash: md5
+  path: ratings_train_liked.dat
