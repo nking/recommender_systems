@@ -5,12 +5,13 @@ and model selection by the keras tuner BayesianOptimization.
 The model learning looks healthy.
   - The train vs validation curves for loss and metrics can be seen
     in the sub-directory best_fitting_model_stats.  
-The best fitting hyperparameters are also in that subdirectory
+The best fitting hyperparameters are also in that subdirectory.
+The model is saved to src/test/resources/serving_model
 
-Best fitting model used a batch size of 1024:
-val ndcg@20 = 0.048
-val mrr@20 = 0.047
-val recall@20 = 0.051
+Best fitting model used a batch size of 2056:
+val ndcg@20 = 0.049
+val mrr@20 = 0.048
+val recall@20 = 0.055
 
 The ndcg@20 is 10 times random performance.
 The mrr@20 is > 10 times random performance.

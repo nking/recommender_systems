@@ -6,6 +6,7 @@ from ml_metadata.metadata_store import metadata_store
 
 import sys
 import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # 0=all, 1=info, 2=warnings, 3=errors
 sys.path.append(os.path.join(os.getcwd(), "src/test/python/movie_lens_tfx"))
 sys.path.append(os.path.join(os.getcwd(), "src/main/python/movie_lens_tfx"))
 

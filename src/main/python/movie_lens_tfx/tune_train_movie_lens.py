@@ -420,7 +420,10 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         self.dense_layers.add(keras.layers.Dense(layer_size,
             kernel_initializer="glorot_normal", use_bias=False))
       
-      self.dense_layers.add(keras.layers.UnitNormalization(axis=-1))
+      #removing the noramlization layers to allow the models to use dot product instead
+      # of cosine similarity for more personaized ANN searches that use the magnitudes
+      # in addition to the directions
+      #self.dense_layers.add(keras.layers.UnitNormalization(axis=-1))
       
       self.n_users = n_users
       self.feature_acronym = feature_acronym
@@ -519,7 +522,10 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         self.dense_layers.add(keras.layers.Dense(layer_size,
           kernel_initializer="glorot_normal", use_bias=False))
       
-      self.dense_layers.add(keras.layers.UnitNormalization(axis=-1))
+      # removing the noramlization layers to allow the models to use dot product instead
+      # of cosine similarity for more personaized ANN searches that use the magnitudes
+      # in addition to the directions
+      # self.dense_layers.add(keras.layers.UnitNormalization(axis=-1))
       
       self.n_movies = n_movies
       self.movies_offset = movies_offset
@@ -673,7 +679,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       Args:
          inputs: transformed features
       Returns:
-          cosine similarity score for the user data to movie data
+          dot product score for the user data to movie data
       """
       #logging.debug(f'call {self.name} inputs={inputs}\n')
       user_vector = self.query_model(inputs)
@@ -769,7 +775,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
             # Compute ALL-TO-ALL Similarity (In-Batch Softmax)
             # scores[i, j] is similarity between user i and movie j
             # this is [batch_size X batch_size] and the diagonal is the dot product
-            logits = tf.matmul(user_embeddings, movie_embeddings, transpose_b=True) / self.temperature
+            raw_logits = tf.matmul(user_embeddings, movie_embeddings, transpose_b=True)
+            logits = raw_logits / self.temperature
             
             pre_logit_max = tf.reduce_max(logits)
             pre_logit_min = tf.reduce_min(logits)
@@ -800,6 +807,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
             identity_mask = tf.eye(batch_size, dtype=tf.bool)
             mask = tf.logical_and(mask, tf.logical_not(identity_mask))
             masked_logits = tf.where(mask, tf.constant(-1e9, dtype=logits.dtype), logits)
+            masked_raw_logits = tf.where(mask, tf.constant(-1e9, dtype=logits.dtype), raw_logits)
             loss = self.in_batch_softmax_loss_function(y, masked_logits)
             
         gradients = tape.gradient(loss, self.trainable_variables)
@@ -809,10 +817,10 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         
         labels = tf.range(batch_size)
         
-        self.mrr_k_metric.update_state(labels, masked_logits, sample_weight=y)
-        self.ndcg_k_metric.update_state(labels, masked_logits, sample_weight=y)
-        self.recall_k_metric.update_state(labels, masked_logits, sample_weight=y)
-        self.in_batch_hit_rate_metric(y_true=labels, y_pred=masked_logits, sample_weight=y)
+        self.mrr_k_metric.update_state(labels, masked_raw_logits, sample_weight=y)
+        self.ndcg_k_metric.update_state(labels, masked_raw_logits, sample_weight=y)
+        self.recall_k_metric.update_state(labels, masked_raw_logits, sample_weight=y)
+        self.in_batch_hit_rate_metric(y_true=labels, y_pred=masked_raw_logits, sample_weight=y)
         
         output = {m.name: m.result() for m in self.metrics}
         #DEBUG: =====
@@ -830,7 +838,9 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         x, y = data
         user_embeddings = self.query_model(x, training=False)
         movie_embeddings = self.candidate_model(x, training=False)
-        logits = tf.matmul(user_embeddings, movie_embeddings, transpose_b=True) / self.temperature
+        #in test and eval, do not divide by temperature
+        raw_logits = tf.matmul(user_embeddings, movie_embeddings, transpose_b=True)
+        logits = raw_logits / self.temperature
         batch_size = tf.shape(logits)[0]
         
         if self.use_bias_corr:
@@ -854,15 +864,17 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         mask = tf.logical_and(mask, tf.logical_not(identity_mask))
         masked_logits = tf.where(mask, tf.constant(-1e9, dtype=logits.dtype),
             logits)
+        masked_raw_logits = tf.where(mask, tf.constant(-1e9, dtype=raw_logits.dtype),
+            raw_logits)
         #loss = self.loss_function(y, logits)
         loss = self.in_batch_softmax_loss_function(y, masked_logits)
         
         labels = tf.range(batch_size)
         self.mean_loss_metric.update_state(loss)
-        self.mrr_k_metric.update_state(labels, masked_logits, sample_weight=y)
-        self.ndcg_k_metric.update_state(labels, masked_logits, sample_weight=y)
-        self.recall_k_metric.update_state(labels, masked_logits, sample_weight=y)
-        self.in_batch_hit_rate_metric.update_state(y_true=labels, y_pred=masked_logits, sample_weight=y)
+        self.mrr_k_metric.update_state(labels, masked_raw_logits, sample_weight=y)
+        self.ndcg_k_metric.update_state(labels, masked_raw_logits, sample_weight=y)
+        self.recall_k_metric.update_state(labels, masked_raw_logits, sample_weight=y)
+        self.in_batch_hit_rate_metric.update_state(y_true=labels, y_pred=masked_raw_logits, sample_weight=y)
         
         output = {m.name: m.result() for m in self.metrics}
         # DEBUG: =====
@@ -927,7 +939,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       def call(self, y_true, y_pred):
           """
           y_true: [batch_size]
-          y_pred:  [batch_size, batch_size].  the result of matmul Q_embedd, C_embed^T
+          y_pred:  [batch_size, batch_size].  the result of matmul Q_embedd, C_embed^T / temperature
           """
           logits = y_pred
           batch_size = tf.shape(logits)[0]
@@ -966,7 +978,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       def call(self, y_true, y_pred):
           """
           y_true: [batch_size]
-          y_pred:  [batch_size, batch_size].  the result of matmul Q_embedd, C_embed^T
+          y_pred:  [batch_size, batch_size].  the result of matmul Q_embedd, C_embed^T / temperature
           """
           logits = y_pred
           batch_size = tf.shape(logits)[0]
@@ -1279,11 +1291,11 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   #print(f'get_default_hyperparameters: custom_config={custom_config}')
   hp = keras_tuner.HyperParameters()
   # Defines search space.
-  #hp.Float('learning_rate', 1e-4, 1e-3, sampling='log')
-  #hp.Float('weight_decay', 1e-4, 1e-2, sampling='log')
+  hp.Float('learning_rate', 1e-4, 1e-3, sampling='log')
+  hp.Float('weight_decay', 1e-4, 1e-2, sampling='log')
   #TEMPORARY:
-  hp.Fixed('learning_rate', 3e-4)
-  hp.Fixed('weight_decay', 0.0018)
+  #hp.Fixed('learning_rate', 3e-4)
+  #hp.Fixed('weight_decay', 0.0018)
 
   #let AdamW weight decay handle the regularization, so set regl2 to 0:
   #hp.Float('regl2', 1e-5, 1e-2, sampling="log")
@@ -1302,11 +1314,11 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   use_bias_corr = hp.Fixed("use_bias_corr", value=True)
   #if batch_size=1024, max temp should be about 0.2;  if batch_size is 2048, temp max ~ 0.4
   if use_bias_corr:
-      #hp.Choice("bias_corr_alpha", values=[0.01, 0.05, 0.1], default=0.05)
-      #hp.Float('temperature', 0.07, 0.15, step=0.01)
+      hp.Choice("bias_corr_alpha", values=[0.01, 0.05, 0.1], default=0.05)
+      hp.Float('temperature', 0.05, 0.15, step=0.01)
       #TEMPORARY:
-      hp.Fixed("bias_corr_alpha", 0.05)
-      hp.Fixed('temperature', 0.1)
+      #hp.Fixed("bias_corr_alpha", 0.05)
+      #hp.Fixed('temperature', 0.1)
       #hp.Fixed('temperature', value=1.0)
   else:
       hp.Choice("bias_corr_alpha", values=[0.1], default=0.05)  # 0.01, 0.05, 0.1
@@ -2001,11 +2013,11 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
       beta=3.5, #defaut 2.6;  4.0 for more exploration.  
 
       #use when fitting
-      #num_initial_points=15, #30
-      #max_trials=40, #should be 2 to 3 times num_initial_points
+      num_initial_points=15, #30
+      max_trials=40, #should be 2 to 3 times num_initial_points
       #TEMPORARY when fixing params:
-      num_initial_points=1, #30
-      max_trials=1, #should be 2 to 3 times num_initial_points
+      #num_initial_points=1, #30
+      #max_trials=1, #should be 2 to 3 times num_initial_points
 
       allow_new_entries=False,
       directory=fn_args.working_dir,
