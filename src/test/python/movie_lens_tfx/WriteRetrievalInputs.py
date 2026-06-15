@@ -461,13 +461,15 @@ class WriteRetrievalInputs(tf.test.TestCase):
         
         pipeline = beam.Pipeline(options=self.pipeline_options)
         
-        for file_name in ["ratings", "ratings_train", "ratings_val", "ratings_test",
+        for file_name in [
+            #"ratings", "ratings_train", "ratings_val", "ratings_test",
             "ratings_train_liked", "ratings_val_liked", "ratings_test_liked",
+            "ratings_train_3", "ratings_val_3", "ratings_test_3",
             "ratings_train_disliked", "ratings_val_disliked", "ratings_test_disliked"
         ]:
             
             in_file_path = os.path.join(get_project_dir(),
-                f"src/main/resources/ml-1m/{file_name}.dat")
+                f"src/test/resources/ml-1m/{file_name}.dat")
             out_file_path = os.path.join(get_bin_dir(), f"{file_name}.array_record")
             
             if not os.path.exists(in_file_path):
@@ -488,8 +490,10 @@ class WriteRetrievalInputs(tf.test.TestCase):
                         file_path_prefix=out_file_path, num_shards=1))
         
         os.makedirs(os.path.join(get_bin_dir(), "small"), exist_ok=True)
-        for file_name in ["ratings",
+        for file_name in [
+            #"ratings",
             "ratings_train_liked",  "ratings_val_liked", "ratings_test_liked",
+            "ratings_train_3", "ratings_val_3", "ratings_test_3",
             "ratings_train_disliked", "ratings_val_disliked", "ratings_test_disliked",
         ]:
             in_file_path = os.path.join(get_project_dir(),
@@ -512,9 +516,10 @@ class WriteRetrievalInputs(tf.test.TestCase):
         result.wait_until_finish()
         
         # assert wrote correctly
-        for file_name in ["ratings", "ratings_train", "ratings_val",
-            "ratings_test",
+        for file_name in [
+            #"ratings", "ratings_train", "ratings_val", "ratings_test",
             "ratings_train_liked", "ratings_val_liked", "ratings_test_liked",
+            "ratings_train_3", "ratings_val_3", "ratings_test_3",
             "ratings_train_disliked", "ratings_val_disliked", "ratings_test_disliked",
         ]:
             file_path = glob.glob(f'{get_bin_dir()}/{file_name}.array_record*')[0]
@@ -522,7 +527,9 @@ class WriteRetrievalInputs(tf.test.TestCase):
             shutil.move(file_path, out_file_path)
             self._read_array_records(out_file_path)
             
-        for file_name in ["ratings", "ratings_train_liked",
+        for file_name in [
+            #"ratings",
+            "ratings_train_liked",
             "ratings_val_liked", "ratings_test_liked",
             "ratings_train_disliked", "ratings_val_disliked",
             "ratings_test_disliked",

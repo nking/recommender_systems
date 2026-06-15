@@ -17,14 +17,20 @@ schema = pl.Schema(OrderedDict({'user_id': pl.Int64,
 
 file_names = ["ratings_train", "ratings_val", "ratings_test"]
 
+ml1m_dir = os.path.join(get_project_dir(), "src/main/resources/ml-1m/")
+ml1m_small_dir = os.path.join(ml1m_dir, "small/")
+
 for file_name in file_names:
-    in_file_path = os.path.join(get_project_dir(), f"src/main/resources/ml-1m/{file_name}.dat")
+    in_file_path = os.path.join(ml1m_dir, f"{file_name}.dat")
     out_file_path = os.path.join(get_bin_dir(), f"{file_name}_liked.dat")
-    out_file_path2 = os.path.join(get_bin_dir(), f"{file_name}_disliked.dat")
+    out_file_path2 = os.path.join(get_bin_dir(), f"{file_name}_3.dat")
+    out_file_path3 = os.path.join(get_bin_dir(), f"{file_name}_disliked.dat")
     if COPY_TO_SRC_TREE:
-        src_dir = os.path.join(get_project_dir(), f"src/main/resources/ml-1m/")
+        src_dir = os.path.join(get_project_dir(), "src/test/resources/ml-1m/")
         out_file_path = os.path.join(src_dir, f"{file_name}_liked.dat")
-        out_file_path2 = os.path.join(src_dir, f"{file_name}_disliked.dat")
+        out_file_path2 = os.path.join(src_dir, f"{file_name}_3.dat")
+        out_file_path3 = os.path.join(src_dir, f"{file_name}_disliked.dat")
+        ml1m_small_dir = os.path.join(src_dir, "small/")
     
     processed_buffer = io.StringIO()
     df = None
@@ -57,6 +63,35 @@ for file_name in file_names:
             quote_style="never"
         )
         
+        df_3 = df.filter(pl.col("rating") == 3)
+        print(f'# 3 = {len(df_3)} out of {len(df)}')
+        df_formatted = df_3.select(
+            pl.format("{}::{}::{}::{}",
+                pl.col("user_id"),
+                pl.col("movie_id"),
+                pl.col("rating"),
+                pl.col("timestamp")).alias("output")
+        )
+        df_formatted.write_csv(
+            out_file_path2,
+            include_header=False,
+            quote_style="never"
+        )
+        #write also to ml1m_small_dir
+        df_3 = df_3.head(1000)
+        df_formatted = df_3.select(
+            pl.format("{}::{}::{}::{}",
+                pl.col("user_id"),
+                pl.col("movie_id"),
+                pl.col("rating"),
+                pl.col("timestamp")).alias("output")
+        )
+        df_formatted.write_csv(
+            os.path.join(ml1m_small_dir, f"{file_name}_3.dat"),
+            include_header=False,
+            quote_style="never"
+        )
+        
         df_disliked = df.filter(pl.col("rating") < 3)
         print(f'# disliked = {len(df_disliked)} out of {len(df)}')
         
@@ -68,7 +103,7 @@ for file_name in file_names:
                 pl.col("timestamp")).alias("output")
         )
         df_formatted.write_csv(
-            out_file_path2,
+            out_file_path3,
             include_header=False,
             quote_style="never"
         )
