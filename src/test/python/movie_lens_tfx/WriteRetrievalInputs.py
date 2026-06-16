@@ -489,29 +489,28 @@ class WriteRetrievalInputs(tf.test.TestCase):
              >> arrayrecordio.WriteToArrayRecord(
                         file_path_prefix=out_file_path, num_shards=1))
         
-        os.makedirs(os.path.join(get_bin_dir(), "small"), exist_ok=True)
-        for file_name in [
-            #"ratings",
-            "ratings_train_liked",  "ratings_val_liked", "ratings_test_liked",
-            "ratings_train_3", "ratings_val_3", "ratings_test_3",
-            "ratings_train_disliked", "ratings_val_disliked", "ratings_test_disliked",
-        ]:
-            in_file_path = os.path.join(get_project_dir(),
-                f"src/test/resources/ml-1m/small/{file_name}.dat")
-            out_file_path = os.path.join(get_bin_dir(), "small",
-                f"{file_name}.array_record")
-            
-            (pipeline | f"read_small_{file_name}" >>
-             beam.io.ReadFromText(in_file_path, skip_header_lines=0,
-                 coder=CustomUTF8Coder())
-             | f'parse_small_{file_name}' >> beam.Map(lambda line: line.split("::"))
-             | f"FormatToList_small_{file_name}" >> beam.Map(
-                        lambda x: [int(x[0]), int(x[1]), int(x[2]), int(x[3])])
-             | f"SerializeWithMsgpack_small_{file_name}" >> beam.Map(msgpack.packb)
-             | f'write_array_record_small_{file_name}'
-             >> arrayrecordio.WriteToArrayRecord(
-                        file_path_prefix=out_file_path, num_shards=1))
-        
+        for file_dir_name in ("small", "tiny"):
+            os.makedirs(os.path.join(get_bin_dir(), file_dir_name), exist_ok=True)
+            for file_name in [
+                #"ratings",
+                "ratings_train_liked",  "ratings_val_liked", "ratings_test_liked",
+                "ratings_train_3", "ratings_val_3", "ratings_test_3",
+                "ratings_train_disliked", "ratings_val_disliked", "ratings_test_disliked",
+            ]:
+                in_file_path = os.path.join(get_project_dir(),
+                    f"src/test/resources/ml-1m/{file_dir_name}/{file_name}.dat")
+                out_file_path = os.path.join(get_bin_dir(), file_dir_name, f"{file_name}.array_record")
+                
+                (pipeline | f"read_{file_dir_name}_{file_name}" >>
+                 beam.io.ReadFromText(in_file_path, skip_header_lines=0,
+                     coder=CustomUTF8Coder())
+                 | f'parse_{file_dir_name}_{file_name}' >> beam.Map(lambda line: line.split("::"))
+                 | f"FormatToList_{file_dir_name}_{file_name}" >> beam.Map(
+                            lambda x: [int(x[0]), int(x[1]), int(x[2]), int(x[3])])
+                 | f"SerializeWithMsgpack_{file_dir_name}_{file_name}" >> beam.Map(msgpack.packb)
+                 | f'write_array_record_{file_dir_name}_{file_name}'
+                 >> arrayrecordio.WriteToArrayRecord(
+                            file_path_prefix=out_file_path, num_shards=1))
         result = pipeline.run()
         result.wait_until_finish()
         
