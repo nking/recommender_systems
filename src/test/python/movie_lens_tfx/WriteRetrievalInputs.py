@@ -406,7 +406,7 @@ class WriteRetrievalInputs(tf.test.TestCase):
         result = pipeline1.run()
         result.wait_until_finish()
         
-        ## assert recrods are readable
+        ## assert records are readable
         feature_spec = {
             "movie_id": tf.io.FixedLenFeature([], tf.int64),
             "title": tf.io.FixedLenFeature([], tf.string),
@@ -454,10 +454,16 @@ class WriteRetrievalInputs(tf.test.TestCase):
         self.assertTrue(isinstance(actual_data[0]['genres'], str))
         self.assertTrue(isinstance(actual_data[0]['movie_id'], int))
         
-    def test_write_ratings_to_array_records(self):
+    def test_write_ratings_to_array_records_and_parquet(self):
         """
-        writes all ratings*dat to ratings*array_record
+        writes all ratings*dat to ratings*array_record and parquet
         """
+        pa_schema = pa.schema([
+            ('user_id', pa.int32()),
+            ('movie_id', pa.int32()),
+            ('rating', pa.int32()),
+            ('timestamp', pa.int64()),
+        ])
         
         pipeline = beam.Pipeline(options=self.pipeline_options)
         
@@ -471,6 +477,7 @@ class WriteRetrievalInputs(tf.test.TestCase):
             in_file_path = os.path.join(get_project_dir(),
                 f"src/test/resources/ml-1m/{file_name}.dat")
             out_file_path = os.path.join(get_bin_dir(), f"{file_name}.array_record")
+            out_file_prefix = os.path.join(get_bin_dir(), f"{file_name}")
             
             if not os.path.exists(in_file_path):
                 raise IOError(f"File {in_file_path} does not exist.  "
@@ -478,16 +485,28 @@ class WriteRetrievalInputs(tf.test.TestCase):
                 f"to temporarily set COPY_TO_SRC_TREE=True, and run that code.  It"
                 f"will write the liked and disliked ratings to {in_file_path}.")
             
-            (pipeline | f"read_{file_name}" >>
-             beam.io.ReadFromText(in_file_path, skip_header_lines=0,
+            records = (pipeline | f"read_{file_name}" >>
+                beam.io.ReadFromText(in_file_path, skip_header_lines=0,
                  coder=CustomUTF8Coder())
-             | f'parse_{file_name}' >> beam.Map(lambda line: line.split("::"))
-             | f"FormatToList_{file_name}" >> beam.Map(
-                        lambda x: [int(x[0]), int(x[1]), int(x[2]), int(x[3])])
-             | f"SerializeWithMsgpack_{file_name}" >> beam.Map(msgpack.packb)
+                | f'parse_{file_name}' >> beam.Map(lambda line: line.split("::"))
+                | f"FormatToList_{file_name}" >> beam.Map(
+                        lambda x: [int(x[0]), int(x[1]), int(x[2]), int(x[3])]))
+            
+            #write array_records
+            (records | f"SerializeWithMsgpack_{file_name}" >> beam.Map(msgpack.packb)
              | f'write_array_record_{file_name}'
              >> arrayrecordio.WriteToArrayRecord(
                         file_path_prefix=out_file_path, num_shards=1))
+            
+            #write parquet files
+            (records | f"ratings_{file_name} To Dict" >> beam.Map(lambda x: {
+                'user_id': x[0], 'movie_id': x[1], 'rating': x[2], 'timestamp': x[3]})
+             | f"Write ratings_{file_name} to Parquet" >> WriteToParquet(
+                        file_path_prefix=out_file_prefix,
+                        schema=pa_schema,
+                        file_name_suffix='.parquet',
+                        num_shards=1
+                    ))
         
         for file_dir_name in ("small", "tiny"):
             os.makedirs(os.path.join(get_bin_dir(), file_dir_name), exist_ok=True)
@@ -500,17 +519,34 @@ class WriteRetrievalInputs(tf.test.TestCase):
                 in_file_path = os.path.join(get_project_dir(),
                     f"src/test/resources/ml-1m/{file_dir_name}/{file_name}.dat")
                 out_file_path = os.path.join(get_bin_dir(), file_dir_name, f"{file_name}.array_record")
+                out_file_prefix = os.path.join(get_bin_dir(), file_dir_name, f"{file_name}")
                 
-                (pipeline | f"read_{file_dir_name}_{file_name}" >>
-                 beam.io.ReadFromText(in_file_path, skip_header_lines=0,
-                     coder=CustomUTF8Coder())
-                 | f'parse_{file_dir_name}_{file_name}' >> beam.Map(lambda line: line.split("::"))
-                 | f"FormatToList_{file_dir_name}_{file_name}" >> beam.Map(
-                            lambda x: [int(x[0]), int(x[1]), int(x[2]), int(x[3])])
-                 | f"SerializeWithMsgpack_{file_dir_name}_{file_name}" >> beam.Map(msgpack.packb)
-                 | f'write_array_record_{file_dir_name}_{file_name}'
-                 >> arrayrecordio.WriteToArrayRecord(
-                            file_path_prefix=out_file_path, num_shards=1))
+                records = (pipeline | f"read_{file_dir_name}_{file_name}" >>
+                    beam.io.ReadFromText(in_file_path, skip_header_lines=0,
+                    coder=CustomUTF8Coder())
+                    | f'parse_{file_dir_name}_{file_name}' >> beam.Map(lambda line: line.split("::"))
+                    | f"FormatToList_{file_dir_name}_{file_name}" >> beam.Map(
+                        lambda x: [int(x[0]), int(x[1]), int(x[2]), int(x[3])])
+                       )
+                
+                #write to array_record
+                (records | f"SerializeWithMsgpack_{file_dir_name}_{file_name}" >> beam.Map(msgpack.packb)
+                    | f'write_array_record_{file_dir_name}_{file_name}'
+                    >> arrayrecordio.WriteToArrayRecord(
+                        file_path_prefix=out_file_path, num_shards=1))
+                
+                # write parquet files
+                (records | f"ratings_{file_dir_name}_{file_name} To Dict" >> beam.Map(
+                    lambda x: {
+                        'user_id': x[0], 'movie_id': x[1],
+                        'rating': x[2], 'timestamp': x[3]})
+                 | f"Write ratings_{file_dir_name}_{file_name} to Parquet" >> WriteToParquet(
+                            file_path_prefix=out_file_prefix,
+                            schema=pa_schema,
+                            file_name_suffix='.parquet',
+                            num_shards=1
+                        ))
+                
         result = pipeline.run()
         result.wait_until_finish()
         
@@ -526,6 +562,16 @@ class WriteRetrievalInputs(tf.test.TestCase):
             shutil.move(file_path, out_file_path)
             self._read_array_records(out_file_path)
             
+            out_file_prefix = os.path.join(get_bin_dir(), f"{file_name}")
+            file_paths = glob.glob(f"{out_file_prefix}*parquet")
+            table = pq.read_table(file_paths[0])
+            actual_data = table.to_pylist()
+            self.assertTrue(len(actual_data) > 3000)
+            self.assertTrue(isinstance(actual_data[0]['user_id'], int))
+            self.assertTrue(isinstance(actual_data[0]['movie_id'], int))
+            self.assertTrue(isinstance(actual_data[0]['rating'], int))
+            self.assertTrue(isinstance(actual_data[0]['timestamp'], int))
+            
         for file_name in [
             #"ratings",
             "ratings_train_liked",
@@ -537,6 +583,15 @@ class WriteRetrievalInputs(tf.test.TestCase):
             out_file_path = os.path.join(get_bin_dir(), "small", f"{file_name}.array_record")
             shutil.move(file_path, out_file_path)
             self._read_array_records(out_file_path)
+            
+            out_file_prefix = os.path.join(get_bin_dir(), f"{file_name}")
+            file_paths = glob.glob(f"{out_file_prefix}*parquet")
+            table = pq.read_table(file_paths[0])
+            actual_data = table.to_pylist()
+            self.assertTrue(isinstance(actual_data[0]['user_id'], int))
+            self.assertTrue(isinstance(actual_data[0]['movie_id'], int))
+            self.assertTrue(isinstance(actual_data[0]['rating'], int))
+            self.assertTrue(isinstance(actual_data[0]['timestamp'], int))
     
     def _read_array_records(self, file_path: str):
         
