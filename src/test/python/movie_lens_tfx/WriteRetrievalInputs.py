@@ -459,10 +459,10 @@ class WriteRetrievalInputs(tf.test.TestCase):
         writes all ratings*dat to ratings*array_record and parquet
         """
         pa_schema = pa.schema([
-            ('user_id', pa.int32()),
-            ('movie_id', pa.int32()),
-            ('rating', pa.int32()),
-            ('timestamp', pa.int64()),
+            ('user_id', pa.uint32()),
+            ('movie_id', pa.uint32()),
+            ('rating', pa.uint32()),
+            ('timestamp', pa.uint64()),
         ])
         
         pipeline = beam.Pipeline(options=self.pipeline_options)
