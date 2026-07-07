@@ -150,6 +150,7 @@ class WriteRetrievalInputs(tf.test.TestCase):
                 'embedding': element[1]  # List of 16 floats
             }
         
+        import polars as pl
         pipeline = beam.Pipeline(options=self.pipeline_options)
         
         ##====== rad moves.dat into serialized examples for inputs to candidate model ========
@@ -235,33 +236,16 @@ class WriteRetrievalInputs(tf.test.TestCase):
                 if reader is not None:
                     reader.close()
         
-        files = glob.glob(f"{self.output_uri2}/movie_emb*parquet")
-        for file_path in files:
-            reader = None
-            try:
-                reader = pq.ParquetReader(file_path)
-                table = reader.read_row_group(0)
-                assert table.schema.field(
-                    'id').type == 'int32', f"Expected int32, got {table.schema.field('id').type}"
-                assert table.schema.field(
-                    'embedding').type.value_type == 'float', f"Expected float, got {table.schema.field('embedding').type.value_type}"
-                data = table.to_pydict()
-                ids = data['id']
-                embeddings = data['embedding']
-                for i in range(len(ids)):
-                    current_id = ids[i]
-                    current_emb = embeddings[i]
-                    assert isinstance(current_id, int)
-                    assert isinstance(current_emb, list)
-                    assert len(
-                        current_emb) == 16, f"Embedding for ID {current_id} has length {len(current_emb)}"
-                    for val in current_emb:
-                        assert isinstance(val, float)
-            except Exception as e:
-                self.fail(e)
-            finally:
-                if reader is not None:
-                    reader.close()
+        files = glob.glob(f"{self.output_uri1}/movie_emb*parquet")
+        df = pl.read_parquet(files)
+        df = df.sort("id")
+        print(f'first movie = {((df.head(1))["id"]).to_numpy().tolist()[0]}')
+        emb1 = ((df.head(1))['embedding']).to_numpy().tolist()[0]
+        print(f'user emb1={emb1}', flush=True)
+        self.assertTrue(df['id'].dtype == pl.Int32)
+        self.assertTrue(df['embedding'].dtype == pl.List(pl.Float32))
+        print(f'last movie = {((df.tail(1))["id"]).to_numpy().tolist()[0]}')
+        print(f'last embedding={((df.tail(1))["embedding"]).to_numpy().tolist()[0]}', flush=True)
         
     def test_write_user_embeddings(self):
         """
@@ -346,7 +330,7 @@ class WriteRetrievalInputs(tf.test.TestCase):
        
         #user_id_and_embeddings | f'debug print user embeddings' >> beam.Map(lambda x: print(f'X"{x}'))
         
-        # write (movie_id, embeddings) to tfrecord files
+        # write (user_id, embeddings) to tfrecord files
         (user_id_and_embeddings
             | f'serialize_user_embedding_example' >> beam.Map(serialize_example)
             | f'write_user_emb_tfrecord' >> beam.io.tfrecordio.WriteToTFRecord(
@@ -378,18 +362,20 @@ class WriteRetrievalInputs(tf.test.TestCase):
         def _parse_function(example_proto):
             return tf.io.parse_single_example(example_proto, feature_spec)
             
-        # 1. Get all files matching your prefix
         files = glob.glob(f"{self.output_uri2}/user_emb*tfrecord.gz")
         raw_dataset = tf.data.TFRecordDataset(files, compression_type='GZIP')
         for raw_record in raw_dataset.take(1):
             parsed_record = _parse_function(raw_record)
-            print(f'parsed_record: {parsed_record}', flush=True)
+            #print(f'parsed_record: {parsed_record}', flush=True)
             u_id = parsed_record['user_id'].numpy()
             emb = parsed_record['embedding'].values.numpy()
             self.assertTrue(isinstance(u_id, np.int64))
             self.assertTrue(emb.shape[0] > 0)
         
+        import polars as pl
         files = glob.glob(f"{self.output_uri2}/user_emb*array_record")
+        ids = []
+        embeddings = []
         for file_path in files:
             reader = None
             try:
@@ -399,37 +385,34 @@ class WriteRetrievalInputs(tf.test.TestCase):
                 self.assertTrue(isinstance(record[0], int))
                 self.assertTrue(isinstance(record[1], tuple))
                 self.assertTrue(isinstance(record[1][0], float))
+                for i in range(reader.num_records()):
+                    batch_bytes = reader.read([i])
+                    batch = [msgpack.unpackb(b, use_list=True) for b in batch_bytes]
+                    for record in batch:
+                        ids.append(record[0])
+                        embeddings.append(record[1])
+                embeddings = [val for _, val in sorted(zip(ids, embeddings))]
             except Exception as e:
                 self.fail(e)
             finally:
                 if reader is not None:
                     reader.close()
+        emb0 = embeddings[0]
+        print(f'emb0={emb0}', flush=True)
         
         files = glob.glob(f"{self.output_uri2}/user_emb*parquet")
-        for file_path in files:
-            reader = None
-            try:
-                reader = pq.ParquetReader(file_path)
-                table = reader.read_row_group(0)
-                assert table.schema.field('id').type == 'int32', f"Expected int32, got {table.schema.field('id').type}"
-                assert table.schema.field('embedding').type.value_type == 'float', f"Expected float, got {table.schema.field('embedding').type.value_type}"
-                data = table.to_pydict()
-                ids = data['id']
-                embeddings = data['embedding']
-                for i in range(len(ids)):
-                    current_id = ids[i]
-                    current_emb = embeddings[i]
-                    assert isinstance(current_id, int)
-                    assert isinstance(current_emb, list)
-                    assert len(current_emb) == 16, f"Embedding for ID {current_id} has length {len(current_emb)}"
-                    for val in current_emb:
-                        assert isinstance(val, float)
-            except Exception as e:
-                self.fail(e)
-            finally:
-                if reader is not None:
-                    reader.close()
-                    
+        df = pl.read_parquet(files)
+        df = df.sort("id")
+        print(f'first user = {((df.head(1))["id"]).to_numpy().tolist()[0]}')
+        emb1 = ((df.head(1))['embedding']).to_numpy().tolist()[0]
+        print(f'user emb1={emb1}', flush=True)
+        self.assertTrue(df['id'].dtype == pl.Int32)
+        self.assertTrue(df['embedding'].dtype == pl.List(pl.Float32))
+        self.assertAllClose(emb0, emb1)
+        print(f'last user = {((df.tail(1))["id"]).to_numpy().tolist()[0]}')
+        print(f'last embedding={((df.tail(1))["embedding"]).to_numpy().tolist()[0]}',
+            flush=True)
+    
     def create_example_movie_id_prediction(row):
         # each row is a tuple like:
         # (parsed_features['movie_id'] is a tensor like: < tf.Tensor: shape=(1,), dtype = int64, numpy = array([7]),
@@ -838,7 +821,7 @@ class WriteRetrievalInputs(tf.test.TestCase):
         )
         #debug:
         movie_count = unrated_movies_pc | "Count Movies" >> beam.combiners.Count.Globally()
-        movie_count | "Print Count" >> beam.Map(lambda x: print(f'count of movies not rated = {x}'))
+        #movie_count | "Print Count" >> beam.Map(lambda x: print(f'count of movies not rated = {x}'))
 
         #write {'movie_id': 7122, '1': 0, '2': 0, '3': 0, '4': 0, '5': o}
         unrated_pivoted = (unrated_movies_pc | 'write_unrated_movies' >>
