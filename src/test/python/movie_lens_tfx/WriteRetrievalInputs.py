@@ -139,6 +139,17 @@ class WriteRetrievalInputs(tf.test.TestCase):
             example_proto = tf.train.Example(features=tf.train.Features(feature=feature))
             return example_proto.SerializeToString()
         
+        parquet_embeddings_schema = pa.schema([
+            ('id', pa.int32()),
+            ('embedding', pa.list_(pa.float32()))
+        ])
+        def to_parquet_format(element):
+            # element is (id, [16 floats])
+            return {
+                'id': element[0],
+                'embedding': element[1]  # List of 16 floats
+            }
+        
         pipeline = beam.Pipeline(options=self.pipeline_options)
         
         ##====== rad moves.dat into serialized examples for inputs to candidate model ========
@@ -178,6 +189,15 @@ class WriteRetrievalInputs(tf.test.TestCase):
             file_path_prefix=f'{self.output_uri1}/movie_emb',
             num_shards=1, file_name_suffix='.array_record'))
         
+        (movie_id_and_embeddings
+         | beam.Map(to_parquet_format)
+         | beam.io.parquetio.WriteToParquet(
+                    file_path_prefix=f'{self.output_uri1}/movie_emb',
+                    schema=parquet_embeddings_schema,
+                    codec='snappy', # Recommended for compression
+                    num_shards=1, file_name_suffix='.parquet',
+                ))
+        
         result = pipeline.run()
         result.wait_until_finish()
         
@@ -209,6 +229,34 @@ class WriteRetrievalInputs(tf.test.TestCase):
                 self.assertTrue(isinstance(record[0], int))
                 self.assertTrue(isinstance(record[1], tuple))
                 self.assertTrue(isinstance(record[1][0], float))
+            except Exception as e:
+                self.fail(e)
+            finally:
+                if reader is not None:
+                    reader.close()
+        
+        files = glob.glob(f"{self.output_uri2}/movie_emb*parquet")
+        for file_path in files:
+            reader = None
+            try:
+                reader = pq.ParquetReader(file_path)
+                table = reader.read_row_group(0)
+                assert table.schema.field(
+                    'id').type == 'int32', f"Expected int32, got {table.schema.field('id').type}"
+                assert table.schema.field(
+                    'embedding').type.value_type == 'float', f"Expected float, got {table.schema.field('embedding').type.value_type}"
+                data = table.to_pydict()
+                ids = data['id']
+                embeddings = data['embedding']
+                for i in range(len(ids)):
+                    current_id = ids[i]
+                    current_emb = embeddings[i]
+                    assert isinstance(current_id, int)
+                    assert isinstance(current_emb, list)
+                    assert len(
+                        current_emb) == 16, f"Embedding for ID {current_id} has length {len(current_emb)}"
+                    for val in current_emb:
+                        assert isinstance(val, float)
             except Exception as e:
                 self.fail(e)
             finally:
@@ -261,6 +309,18 @@ class WriteRetrievalInputs(tf.test.TestCase):
             example_proto = tf.train.Example(features=tf.train.Features(feature=feature))
             return example_proto.SerializeToString()
         
+        parquet_embeddings_schema = pa.schema([
+            ('id', pa.int32()),
+            ('embedding', pa.list_(pa.float32()))
+        ])
+        
+        def to_parquet_format(element):
+            # element is (id, [16 floats])
+            return {
+                'id': element[0],
+                'embedding': element[1]  # List of 16 floats
+            }
+        
         pipeline = beam.Pipeline(options=self.pipeline_options)
         
         ##====== rad moves.dat into serialized examples for inputs to candidate model ========
@@ -298,6 +358,15 @@ class WriteRetrievalInputs(tf.test.TestCase):
             | f'write_user_embeddings_array_record' >> arrayrecordio.WriteToArrayRecord(
             file_path_prefix=f'{self.output_uri2}/user_emb', num_shards=1, file_name_suffix='.array_record'))
         
+        (user_id_and_embeddings
+         | beam.Map(to_parquet_format)
+         | beam.io.parquetio.WriteToParquet(
+                    file_path_prefix=f'{self.output_uri2}/user_emb',
+                    schema=parquet_embeddings_schema,
+                    codec='snappy',  # Recommended for compression
+                    num_shards=1, file_name_suffix='.parquet',
+                ))
+        
         result = pipeline.run()
         result.wait_until_finish()
         
@@ -330,6 +399,31 @@ class WriteRetrievalInputs(tf.test.TestCase):
                 self.assertTrue(isinstance(record[0], int))
                 self.assertTrue(isinstance(record[1], tuple))
                 self.assertTrue(isinstance(record[1][0], float))
+            except Exception as e:
+                self.fail(e)
+            finally:
+                if reader is not None:
+                    reader.close()
+        
+        files = glob.glob(f"{self.output_uri2}/user_emb*parquet")
+        for file_path in files:
+            reader = None
+            try:
+                reader = pq.ParquetReader(file_path)
+                table = reader.read_row_group(0)
+                assert table.schema.field('id').type == 'int32', f"Expected int32, got {table.schema.field('id').type}"
+                assert table.schema.field('embedding').type.value_type == 'float', f"Expected float, got {table.schema.field('embedding').type.value_type}"
+                data = table.to_pydict()
+                ids = data['id']
+                embeddings = data['embedding']
+                for i in range(len(ids)):
+                    current_id = ids[i]
+                    current_emb = embeddings[i]
+                    assert isinstance(current_id, int)
+                    assert isinstance(current_emb, list)
+                    assert len(current_emb) == 16, f"Embedding for ID {current_id} has length {len(current_emb)}"
+                    for val in current_emb:
+                        assert isinstance(val, float)
             except Exception as e:
                 self.fail(e)
             finally:
