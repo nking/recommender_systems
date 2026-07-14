@@ -454,7 +454,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       # return None, self.layer_sizes[-1]
       # return (input_shape['user_id'][0], self.layer_sizes[-1])
     
-    editing @tf.function(input_signature=[input_dataset_element_spec_trans])
     def call(self, inputs, **kwargs):
       # inputs should contain columns:
       #print(f'call {self.name} type={type(inputs)}, inputs={inputs}\n')
@@ -497,8 +496,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       """
       super(CandidateModel, self).__init__(**kwargs)
       
-      self.regl2 = regl2
-      
       self.embedding_model = MovieModel(n_movies=n_movies, movies_offset=movies_offset,
         n_genres=n_genres,
         embed_out_dim=embed_out_dim,
@@ -510,8 +507,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       reg = None
       # Use the ReLU activation for all but the last layer.
       for layer_size in layer_sizes[:-1]:
-        if self.regl2 > 0.0:
-          reg = keras.regularizers.l2(self.regl2)
+        if regl2 > 0.0:
+          reg = keras.regularizers.l2(regl2)
         self.dense_layers.add(
           keras.layers.Dense(layer_size,
             activation="elu",
@@ -531,7 +528,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       # of cosine similarity for more personaized ANN searches that use the magnitudes
       # in addition to the directions
       # self.dense_layers.add(keras.layers.UnitNormalization(axis=-1))
-      
+      self.regl2 = regl2
       self.n_movies = n_movies
       self.movies_offset = movies_offset
       self.n_genres = n_genres
@@ -678,7 +675,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         # It tells the model: "When you finish an epoch, pull results from these two."
         return [self.mean_loss_metric, self.in_batch_hit_rate_metric, self.mrr_k_metric, self.ndcg_k_metric, self.recall_k_metric]
     
-    @tf.function(input_signature=[input_dataset_element_spec_trans])
+    #@tf.function(input_signature=[input_dataset_element_spec_trans])
     def call(self, inputs):
       """
       compute the cosine similarity score for the user data to movie data.
@@ -697,8 +694,10 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     def build(self, input_shape):
       #print(f'build {self.name} input_shape={input_shape}\n')
       # logging.debug(f'build {self.name} input_shape={input_shape}\n')
-      self.query_model.build(input_shape)
-      self.candidate_model.build(input_shape)
+      if not self.query_model.built:
+        self.query_model.build(input_shape)
+      if not self.candidate_model.built:
+        self.candidate_model.build(input_shape)
       s0 = self.query_model.compute_output_shape(input_shape)
       s1 = self.candidate_model.compute_output_shape(input_shape)
       self.dot_layer.build([s0, s1])
@@ -1232,8 +1231,18 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       temperature=hp.get('temperature'),
     )
     
-    # call once to trace methods.
+    # call model once to trace methods.
     fake_trans_ds = create_fake_transformed_batch(input_dataset_element_spec_trans)
+    
+    build_input_shapes = {
+        feat: tensor.shape for feat, tensor in fake_trans_ds.items()
+    }
+    
+    # initialize the variables, rooted at these models so that variable names do not include parent in definition
+    model.query_model.build(build_input_shapes)
+    model.candidate_model.build(build_input_shapes)
+    model.build(build_input_shapes)
+    
     model(fake_trans_ds, training=False)
     
     BATCH_SIZE_PER_REPLICA = hp.get("BATCH_SIZE")

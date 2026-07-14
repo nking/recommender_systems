@@ -91,11 +91,11 @@ class PipelinesTest(tf.test.TestCase):
         os.makedirs(query_model_dir, exist_ok=True)
         os.makedirs(candidate_model_dir, exist_ok=True)
         
-        infiles_dict_of_dicts_ser = get_contrastive_split_infiles_set(
-            use_small=True)
+        infiles_dict_of_dicts_ser = get_contrastive_split_infiles_set(ds = DataSize.TINY)
+        num_examples = 100
         
         pipeline_factory = PipelineComponentsFactory(
-            num_examples=self.num_examples,
+            num_examples=num_examples,
             infiles_dict_ser=infiles_dict_of_dicts_ser,
             output_config_ser=None,
             transform_dir=tr_dir, n_users=self.n_users,
@@ -127,6 +127,7 @@ class PipelinesTest(tf.test.TestCase):
         
         tfx.orchestration.LocalDagRunner().run(my_pipeline)
         logging.debug("BASELINE pipeline finished")
+        
         
         artifact_types = store.get_artifact_types()
         logging.debug(f"MLMD store artifact_types={artifact_types}")
@@ -376,7 +377,8 @@ class PipelinesTest(tf.test.TestCase):
             # and create new infiles_dict_ser for those files
             
             infiles_dict_of_dicts_ser = get_contrastive_split_infiles_set(
-                use_small=True)
+                ds=DataSize.TINY)
+            num_examples = 100
             
             print(f'serving_model_dir={serving_model_dir}')
             
@@ -391,7 +393,7 @@ class PipelinesTest(tf.test.TestCase):
             print(f'model_uri={model_uri}')
             
             pipeline_factory = PipelineComponentsFactory(
-                num_examples=self.num_examples,
+                num_examples=num_examples,
                 infiles_dict_ser=infiles_dict_of_dicts_ser,
                 output_config_ser=None,
                 transform_dir=tr_dir, n_users=self.n_users,
@@ -485,7 +487,7 @@ class PipelinesTest(tf.test.TestCase):
                 print(f"\n--- DONE ---")
                 print(
                     f"Total inspected records across all files: {total_records_processed}")
-                self.assertEqual(3 * 1000, total_records_processed)
+                self.assertEqual(3 * num_examples, total_records_processed)
             
             read_prediction_logs_from_directory(inference_result_uri)
     

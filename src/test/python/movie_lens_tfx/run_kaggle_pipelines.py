@@ -20,7 +20,7 @@ logging.set_verbosity(logging.WARNING)
 logging.set_stderrthreshold(logging.WARNING)
 
 # for the in-batch softmax, sampled softmax approach, use only positives:
-infiles_dict_of_dicts_ser = get_contrastive_split_infiles_set(use_small=False)
+infiles_dict_of_dicts_ser = get_contrastive_split_infiles_set(ds = DataSize.FULL)
 # for HueristicLambdaLoss, use the ratings that include pos and neg, e.g. 1-5:
 #infiles_dict_of_dicts_ser = get_pos_and_neg_split_infiles_set(use_small=False)
 

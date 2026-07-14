@@ -1,4 +1,5 @@
 #contains tf import:
+from enum import Enum
 
 from movie_lens_tfx.utils.movie_lens_utils import *
 
@@ -30,7 +31,12 @@ def add_to_sys(proj_dir):
   src_module_dir = os.path.join(proj_dir, "src/main/python")
   #sys.path.insert(0, self.module_dir)
 
-def get_contrastive_split_infiles_set(use_small:bool=True) -> Dict[str, str]:
+class DataSize(Enum):
+    FULL = 'full'
+    SMALL = 'small'
+    TINY = 'tiny'
+
+def get_contrastive_split_infiles_set(ds : DataSize = DataSize.SMALL) -> Dict[str, str]:
     prefix_test = os.path.join(get_project_dir(), "src/test/resources/ml-1m/")
     prefix_main = os.path.join(get_project_dir(), "src/main/resources/ml-1m/")
     ratings_col_names = ["user_id", "movie_id", "rating", "timestamp"]
@@ -39,8 +45,10 @@ def get_contrastive_split_infiles_set(use_small:bool=True) -> Dict[str, str]:
     movies_col_types = [int, str, str]
     users_col_names = ["user_id", "gender", "age", "occupation", "zipcode"]
     users_col_types = [int, str, int, int, str]
-    if (use_small):
+    if (ds == DataSize.SMALL):
         ratings_prefix = os.path.join(prefix_test, "small/")
+    elif (ds == DataSize.TINY):
+        ratings_prefix = os.path.join(prefix_test, "tiny/")
     else:
         ratings_prefix = prefix_test
     movies_dict = create_infile_dict(for_file='movies',

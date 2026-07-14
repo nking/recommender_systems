@@ -26,7 +26,7 @@ class TuneTrainTest(tf.test.TestCase):
 
   def setUp(self):
     super().setUp()
-    self.infiles_dict_of_dicts_ser = get_contrastive_split_infiles_set(use_small=False)
+    self.infiles_dict_of_dicts_ser = get_contrastive_split_infiles_set(ds=DataSize.FULL)
     self.n_users = 6040
     self.n_movies = 3952
     self.n_genres = N_GENRES
