@@ -1892,6 +1892,8 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   #print(f'loaded SavedModel signatures: {loaded_saved_model.signatures}')
   #infer = loaded_saved_model.signatures["serving_default"]
   #print(f'infer.structured_outputs={infer.structured_outputs}')
+
+  print(f"saved query model to {serving_query_dir}")
   
   return model
 

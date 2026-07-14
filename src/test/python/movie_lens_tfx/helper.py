@@ -31,6 +31,7 @@ def add_to_sys(proj_dir):
   #sys.path.insert(0, self.module_dir)
 
 def get_contrastive_split_infiles_set(use_small:bool=True) -> Dict[str, str]:
+    prefix_test = os.path.join(get_project_dir(), "src/test/resources/ml-1m/")
     prefix_main = os.path.join(get_project_dir(), "src/main/resources/ml-1m/")
     ratings_col_names = ["user_id", "movie_id", "rating", "timestamp"]
     ratings_col_types = [int, int, int, int]  # for some files, ratings are floats
@@ -39,9 +40,9 @@ def get_contrastive_split_infiles_set(use_small:bool=True) -> Dict[str, str]:
     users_col_names = ["user_id", "gender", "age", "occupation", "zipcode"]
     users_col_types = [int, str, int, int, str]
     if (use_small):
-        ratings_prefix = os.path.join(get_project_dir(), "src/test/resources/ml-1m/small/")
+        ratings_prefix = os.path.join(prefix_test, "small/")
     else:
-        ratings_prefix = prefix_main
+        ratings_prefix = prefix_test
     movies_dict = create_infile_dict(for_file='movies',
         uri=os.path.join(prefix_main, "movies.dat"),
         col_names=movies_col_names,
