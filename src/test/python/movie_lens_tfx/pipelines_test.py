@@ -269,7 +269,7 @@ class PipelinesTest(tf.test.TestCase):
             "gender": tf.constant([[b'F']], dtype=tf.string),
             "occupation": tf.constant([[10]], dtype=tf.int64),
             "timestamp": tf.constant([[1720880000]], dtype=tf.int64),
-            "user_id": tf.constant([[6043]], dtype=tf.int64)
+            "user_id": tf.constant([[99]], dtype=tf.int64)
         }
         results = infer_query_for_dict_model(**inputs)['outputs']
         self.assertEqual(len(results[0]), 16)

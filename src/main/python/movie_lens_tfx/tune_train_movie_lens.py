@@ -136,35 +136,32 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
               s for gender
       """
       super(UserModel, self).__init__(**kwargs)
-      self.embed_out_dim = embed_out_dim
-      self.max_user_id = max_user_id
-      self.feature_acronym = feature_acronym
       
       #NOTE: it is up to the using component to filter for OOV values
       #      to avoid using this incorrectly
       #output dimension calculated following advice in 
       # https://developers.googleblog.com/introducing-tensorflow-feature-columns/
-      user_embed_out_dim = round(self.max_user_id**0.25) #9
-      self.user_embedding = keras.Sequential([
-        keras.layers.Embedding(self.max_user_id + 1, user_embed_out_dim),
+      user_embed_out_dim = round(max_user_id**0.25) #9
+      user_embedding = keras.Sequential([
+        keras.layers.Embedding(max_user_id + 1, user_embed_out_dim),
         keras.layers.Flatten(data_format='channels_last'),
       ], name="user_emb")
       
       # ordinal, dist between items matters
-      self.age_embedding = None
-      if self.feature_acronym.find("a") > -1:
+      age_embedding = None
+      if feature_acronym.find("a") > -1:
         age_embed_out_dim = 7
-        self.age_embedding = keras.Sequential([
+        age_embedding = keras.Sequential([
           keras.layers.Dense(age_embed_out_dim, activation='swish',
           kernel_initializer='he_normal', use_bias=False),
           keras.layers.Flatten(data_format='channels_last'),
         ], name="age_emb")
         
       # ordinal, dist between items matters.
-      self.yr_z_embedding = None
-      if self.feature_acronym.find("y") > -1:
+      yr_z_embedding = None
+      if feature_acronym.find("y") > -1:
         yr_embed_out_dim = round(50**0.25) #3
-        self.yr_z_embedding = keras.Sequential([
+        yr_z_embedding = keras.Sequential([
           keras.layers.Dense(yr_embed_out_dim, activation='swish',
             kernel_initializer='he_normal', use_bias=False,
             kernel_regularizer=keras.regularizers.l2(1e-3)),
@@ -172,35 +169,44 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         ], name="yr_z_emb")
       
       # numerical, cyclical
-      self.hr_wk_embedding = None
-      if self.feature_acronym.find("h") > -1:
-        self.hr_wk_embedding = keras.Sequential([
+      hr_wk_embedding = None
+      if feature_acronym.find("h") > -1:
+        hr_wk_embedding = keras.Sequential([
           CyclicalEncoding(max_val=24*7),
           keras.layers.Flatten(data_format='channels_last'),
         ], name="hr_wk_emb")
       
       #numerical, cyclical
-      self.month_embedding = None
-      if self.feature_acronym.find("m") > -1:
-        self.month_embedding = keras.Sequential([
+      month_embedding = None
+      if feature_acronym.find("m") > -1:
+        month_embedding = keras.Sequential([
             CyclicalEncoding(max_val=12),
             keras.layers.Flatten(data_format='channels_last'),
         ], name="month_emb")
       
       # categorical, nominal, order doesn't matter
-      self.occupation_embedding = None
-      if self.feature_acronym.find("o") > -1:
-        self.occupation_embedding = keras.layers.CategoryEncoding(
-          num_tokens=21, \
-          output_mode="one_hot", name="occupation_emb")
+      occupation_embedding = None
+      if feature_acronym.find("o") > -1:
+        occupation_embedding = keras.layers.CategoryEncoding(
+          num_tokens=21, output_mode="one_hot", name="occupation_emb")
       
       # categorical
-      self.gender_embedding = None
-      if self.feature_acronym.find("s") > -1:
-        self.gender_embedding = keras.layers.CategoryEncoding(
-          num_tokens=2,
-          output_mode="one_hot", name="gender_emb")
-    
+      gender_embedding = None
+      if feature_acronym.find("s") > -1:
+        gender_embedding = keras.layers.CategoryEncoding(
+          num_tokens=2, output_mode="one_hot", name="gender_emb")
+      
+      self.feature_acronym = feature_acronym
+      self.embed_out_dim = embed_out_dim
+      self.max_user_id = max_user_id
+      self.user_embedding = user_embedding
+      self.age_embedding = age_embedding
+      self.yr_z_embedding = yr_z_embedding
+      self.hr_wk_embedding = hr_wk_embedding
+      self.month_embedding = month_embedding
+      self.occupation_embedding = occupation_embedding
+      self.gender_embedding = gender_embedding
+      
     def build(self, input_shape):
       #print(f'build {self.name} input_shape={input_shape}\n')
       self.user_embedding.build(input_shape['user_id'])
@@ -391,8 +397,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       """
       super(QueryModel, self).__init__(**kwargs)
       
-      self.regl2 = regl2
-      
       self.embedding_model = UserModel(max_user_id=n_users,
                                        embed_out_dim=embed_out_dim,
                                        feature_acronym=feature_acronym)
@@ -403,8 +407,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       reg = None
       # Use the ReLU activation for all but the last layer.
       for layer_size in layer_sizes[:-1]:
-        if self.regl2 > 0.0:
-            reg = keras.regularizers.l2(self.regl2)
+        if regl2 > 0.0:
+            reg = keras.regularizers.l2(regl2)
         #TODO: consider changing order to: Dense, LayerNorm, Activation(elu), Dropout
         self.dense_layers.add(
           keras.layers.Dense(layer_size,
@@ -424,7 +428,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       # of cosine similarity for more personaized ANN searches that use the magnitudes
       # in addition to the directions
       #self.dense_layers.add(keras.layers.UnitNormalization(axis=-1))
-      
+      self.regl2 = regl2
       self.n_users = n_users
       self.feature_acronym = feature_acronym
       self.embed_out_dim = embed_out_dim
@@ -450,6 +454,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       # return None, self.layer_sizes[-1]
       # return (input_shape['user_id'][0], self.layer_sizes[-1])
     
+    editing @tf.function(input_signature=[input_dataset_element_spec_trans])
     def call(self, inputs, **kwargs):
       # inputs should contain columns:
       #print(f'call {self.name} type={type(inputs)}, inputs={inputs}\n')
@@ -598,7 +603,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     # for init from a load, arguments are present for the compositional instance members too
     def __init__(self, n_users: int, n_movies: int, movies_offset: int,
          n_genres: int,
-         layer_sizes: list, embed_out_dim: int,
+         layer_sizes: list,
+         embed_out_dim: int,
          regl2: float = 0.0,
          drop_rate: float = 0,
          feature_acronym: str = "",
@@ -607,9 +613,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
          incl_genres: bool = True,
          temperature:float=1.0, **kwargs):
       super(TwoTowerDNN, self).__init__(**kwargs)
-      
-      if isinstance(layer_sizes, str):
-        layer_sizes = json.loads(layer_sizes)
       
       self.query_model = QueryModel(n_users=n_users,
                                     layer_sizes=layer_sizes,
@@ -627,6 +630,9 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
                                             drop_rate=drop_rate,
                                             incl_genres=incl_genres,
                                             **kwargs)
+      
+      if isinstance(layer_sizes, str):
+          layer_sizes = json.loads(layer_sizes)
       
       self.dot_layer = keras.layers.Dot(axes=1)
       #to use HeuristicLambdaLoss, train with the positives of the dataset splits
@@ -687,17 +693,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       #tf.print('U,V SHAPES: ', user_vector.shape, movie_vector.shape)
       s = self.dot_layer([user_vector, movie_vector])
       return s
-      
-    @tf.function(input_signature=[input_dataset_element_spec_trans])
-    def serve_query_model(self, inputs):
-      """A dedicated function to trace and serve the trained Query Model."""
-      return self.query_model(inputs)  #
-    
-    @tf.function(input_signature=[input_dataset_element_spec_trans])
-    def serve_candidate_model(self, inputs):
-      """A dedicated function to trace and serve the trained Candidate Model."""
-      return self.candidate_model(inputs)  #
-    
+   
     def build(self, input_shape):
       #print(f'build {self.name} input_shape={input_shape}\n')
       # logging.debug(f'build {self.name} input_shape={input_shape}\n')
@@ -1595,6 +1591,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   input_signature_raw_candidate = {k: input_signature_raw[k] for k in _cand_keys}
   input_signature_raw_query = {k:v for k,v in input_signature_raw.items() if k not in _cand_keys}
   
+  ## TODO: is input_dataset_element_spec_trans needed here since we have input_signature_trans?
   try:
       _ = hp.get('input_dataset_element_spec_trans_ser')
   except Exception:
