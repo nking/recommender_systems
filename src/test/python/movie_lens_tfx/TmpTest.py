@@ -68,6 +68,11 @@ class TuneTrainTest(tf.test.TestCase):
     tr_dir = os.path.join(get_project_dir(), "src/main/python/movie_lens_tfx")
     
     serving_model_dir = os.path.join(PIPELINE_ROOT, 'serving_model')
+    query_model_dir = os.path.join(PIPELINE_ROOT, 'serving_query_model')
+    candidate_model_dir = os.path.join(PIPELINE_ROOT, 'serving_candidate_model')
+    os.makedirs(serving_model_dir, exist_ok=True)
+    os.makedirs(query_model_dir, exist_ok=True)
+    os.makedirs(candidate_model_dir, exist_ok=True)
 
     pipeline_factory = PipelineComponentsFactory(
       num_examples=self.num_examples,

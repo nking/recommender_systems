@@ -1,4 +1,6 @@
+import os
 import shutil
+from pathlib import Path
 
 from tfx.orchestration import metadata
 
@@ -83,6 +85,11 @@ class PipelinesTest(tf.test.TestCase):
                 "src/main/python/movie_lens_tfx")
         
         serving_model_dir = os.path.join(PIPELINE_ROOT, 'serving_model')
+        query_model_dir = os.path.join(PIPELINE_ROOT, 'serving_query_model')
+        candidate_model_dir = os.path.join(PIPELINE_ROOT, 'serving_candidate_model')
+        os.makedirs(serving_model_dir, exist_ok=True)
+        os.makedirs(query_model_dir, exist_ok=True)
+        os.makedirs(candidate_model_dir, exist_ok=True)
         
         infiles_dict_of_dicts_ser = get_contrastive_split_infiles_set(
             use_small=True)
@@ -155,6 +162,7 @@ class PipelinesTest(tf.test.TestCase):
             if event.type == metadata_store_pb2.Event.OUTPUT
         ]
         artifacts = store.get_artifacts_by_id(output_artifact_ids)
+        #print(f'artifacts={artifacts}', flush=True)
         # Filter for the artifact specifically named 'pushed_model'
         pushed_model_artifact = next((a for a in artifacts if a.type == "PushedModel"),None )
         if pushed_model_artifact:
@@ -162,7 +170,15 @@ class PipelinesTest(tf.test.TestCase):
             print(f"Pushed Model URI: {model_uri}")
         else:
             self.fail("No pushed model artifact found.")
-        logging.debug(f"test: model_uri={model_uri}")
+        
+        model_artifacts = store.get_artifacts_by_type("Model")
+        print(f"model_artifacts={model_artifacts}", flush=True)
+        trainer_model_artifact = model_artifacts[-1]
+        if trainer_model_artifact:
+            trainer_model_uri = trainer_model_artifact.uri
+            print(f"Trainer Model URI: {trainer_model_uri}")
+        else:
+            self.fail("No Trainer Model artifact found.")
         
         # --- get the transformed test dataset to check that can run the model with expected input structure
         examples_list = store.get_artifacts_by_type("Examples")
@@ -228,6 +244,11 @@ class PipelinesTest(tf.test.TestCase):
         
         # test_trans_ds2 = tf.io.parse_example(test_trans_ds_ser, transformed_feature_spec) this fails
         
+        print(f'trainer_model_uri ={trainer_model_uri}', flush=True)
+        path = Path(trainer_model_uri)
+        serving_query_dir = str(path / "serving_query_model")
+        serving_candidate_dir = str(path / "serving_candidate_model")
+        
         loaded_saved_model = tf.saved_model.load(model_uri)
         logging.debug(f'test: loaded SavedModel signatures: {loaded_saved_model.signatures}')
         infer_twotower = loaded_saved_model.signatures["serving_default"]
@@ -237,6 +258,33 @@ class PipelinesTest(tf.test.TestCase):
         infer_query_for_dict = loaded_saved_model.signatures["serving_query_dict"]
         infer_candidate_for_dict = loaded_saved_model.signatures["serving_candidate_dict"]
         infer_default_for_dict = loaded_saved_model.signatures["serving_default_dict"]
+        
+        loaded_saved_query_model = tf.saved_model.load(serving_query_dir)
+        infer_query_for_dict_model = loaded_saved_query_model.signatures["serving_default"]
+        loaded_saved_candidate_model = tf.saved_model.load(serving_candidate_dir)
+        infer_candidate_for_dict_model = loaded_saved_candidate_model.signatures["serving_default"]
+        
+        inputs = {
+            "age": tf.constant([[25]], dtype=tf.int64),
+            "gender": tf.constant([[b'F']], dtype=tf.string),
+            "occupation": tf.constant([[10]], dtype=tf.int64),
+            "timestamp": tf.constant([[1720880000]], dtype=tf.int64),
+            "user_id": tf.constant([[6043]], dtype=tf.int64)
+        }
+        results = infer_query_for_dict_model(**inputs)['outputs']
+        self.assertEqual(len(results[0]), 16)
+        results = infer_query_for_dict(**inputs)['outputs']
+        self.assertEqual(len(results[0]), 16)
+        
+        inputs = {
+            "movie_id": tf.constant([[6054]], dtype=tf.int64),
+            "genres": tf.constant([[b'Documentary']], dtype=tf.string),
+        }
+        results = infer_candidate_for_dict_model(**inputs)['outputs']
+        self.assertEqual(len(results[0]), 16)
+        results = infer_candidate_for_dict(**inputs)['outputs']
+        self.assertEqual(len(results[0]), 16)
+        
         
         print(f'INFERENCE TEST START')
         
@@ -284,42 +332,6 @@ class PipelinesTest(tf.test.TestCase):
         self.assertTrue(len(query_embeddings) > 0)
         
         x = test_raw_ds.batch(BATCH_SIZE)
-        try:
-            print('DICTIONARY INFERENCE signatures')
-            for batch in x:
-              #input_dict = {NEW_Q_INPUT_KEY: batch}
-              #new_query_embeddings = infer_query_for_dict(**q_input_dict)['outputs']
-              new_query_embeddings = infer_query_for_dict(
-                age=batch['age'],
-                gender=batch['gender'],
-                #genres=batch['genres'],
-                #movie_id=batch['movie_id'],
-                occupation=batch['occupation'],
-                timestamp=batch['timestamp'],
-                user_id=batch['user_id']
-                )
-              new_candidate_embeddings = infer_candidate_for_dict(
-                #age=batch['age'],
-                #gender=batch['gender'],
-                genres=batch['genres'],
-                movie_id=batch['movie_id'],
-                #occupation=batch['occupation'],
-                #timestamp=batch['timestamp'],
-                #user_id=batch['user_id']
-                )
-              new_rating_predictions = infer_default_for_dict(
-                age=batch['age'],
-                gender=batch['gender'],
-                genres=batch['genres'],
-                movie_id=batch['movie_id'],
-                occupation=batch['occupation'],
-                timestamp=batch['timestamp'],
-                user_id=batch['user_id']
-                )
-              break
-        except Exception as e:
-            print(f'ERROR in infer_for_dict: {e}')
-          
         
         #test converting input dictionary of numpy arrays or tensors into serialized tf_examples for use with serving
         fake_inputs_np = {
@@ -567,7 +579,6 @@ class PipelinesTest(tf.test.TestCase):
         artifact_types = store.get_artifact_types()
         logging.debug(f"MLMD store artifact_types={artifact_types}")
         artifacts = store.get_artifacts()
-        logging.debug(f"MLMD store artifacts={artifacts}")
         
         components = pipeline_factory.build_components_metadata_model(
             PIPELINE_TYPE.PRODUCTION)

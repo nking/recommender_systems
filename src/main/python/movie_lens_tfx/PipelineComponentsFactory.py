@@ -51,7 +51,11 @@ class PipelineComponentsFactory():
       batch_size: int, number of examples per batch
       num_epochs: int, number of epochs
       device: str, device name
-      serving_model_dir: str, path to serving model
+      serving_model_dir: str, path to serving model directory to save the default model to.
+          NOTE that a hackish workaround to save the Query and Candidate embedding models
+          separately for serving inference has been added to the run_fn in tune_train_movie_lens.py
+          to create sibling directories called serving_query_model and serving_candidate_model.
+          The hack hasn't been tested in a production environment, and has only been used with file uris.
       output_parquet_path: str, path to output parquet directory for transformed examples
       version: str, version name, e.g. string of major.mino.patch
       git_hash: str, git commit hash

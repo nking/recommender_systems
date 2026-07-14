@@ -53,6 +53,12 @@ tr_dir = os.path.join(get_project_dir(),
                       "src/main/python/movie_lens_tfx")
 
 serving_model_dir = os.path.join(PIPELINE_ROOT, 'serving_model')
+query_model_dir = os.path.join(PIPELINE_ROOT, 'serving_query_model')
+candidate_model_dir = os.path.join(PIPELINE_ROOT, 'serving_candidate_model')
+os.makedirs(serving_model_dir, exist_ok=True)
+os.makedirs(query_model_dir, exist_ok=True)
+os.makedirs(candidate_model_dir, exist_ok=True)
+
 output_parquet_path = os.path.join(PIPELINE_ROOT, "transformed_parquet")
 os.makedirs(output_parquet_path, exist_ok=True)
 team_lead = "Nichole King"

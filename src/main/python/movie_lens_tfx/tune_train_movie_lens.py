@@ -1289,18 +1289,23 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
 def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   """Returns hyperparameters for building Keras model."""
   #print(f'get_default_hyperparameters: custom_config={custom_config}')
+  use_best_as_fixed = True
+  
   hp = keras_tuner.HyperParameters()
   # Defines search space.
-  hp.Float('learning_rate', 1e-4, 1e-3, sampling='log')
-  hp.Float('weight_decay', 1e-4, 1e-2, sampling='log')
-  #TEMPORARY:
-  #hp.Fixed('learning_rate', 3e-4)
-  #hp.Fixed('weight_decay', 0.0018)
+  
+  if not use_best_as_fixed:
+      hp.Float('learning_rate', 1e-4, 1e-3, sampling='log')
+      hp.Float('weight_decay', 1e-4, 1e-2, sampling='log')
+      hp.Float('drop_rate', min_value=0.1, max_value=0.3, default=0.5)
+  else:
+      hp.Fixed('learning_rate', 0.0001026)
+      hp.Fixed('weight_decay', 0.00016785)
+      hp.Fixed('drop_rate', 0.11754)
 
   #let AdamW weight decay handle the regularization, so set regl2 to 0:
   #hp.Float('regl2', 1e-5, 1e-2, sampling="log")
   hp.Fixed('regl2', 0.0)
-  hp.Float('drop_rate', min_value=0.1, max_value=0.3, default=0.5)
   hp.Choice("embed_out_dim", values=[32], default=32)
   #layers_sizes is a list of ints, so encode each list as a string, chices can only be int,float,bool,str
   hp.Choice("layer_sizes", values=[json.dumps([16])], default=json.dumps([16]))
@@ -1314,12 +1319,12 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   use_bias_corr = hp.Fixed("use_bias_corr", value=True)
   #if batch_size=1024, max temp should be about 0.2;  if batch_size is 2048, temp max ~ 0.4
   if use_bias_corr:
-      hp.Choice("bias_corr_alpha", values=[0.01, 0.05, 0.1], default=0.05)
-      hp.Float('temperature', 0.05, 0.15, step=0.01)
-      #TEMPORARY:
-      #hp.Fixed("bias_corr_alpha", 0.05)
-      #hp.Fixed('temperature', 0.1)
-      #hp.Fixed('temperature', value=1.0)
+      if not use_best_as_fixed:
+          hp.Choice("bias_corr_alpha", values=[0.01, 0.05, 0.1], default=0.05)
+          hp.Float('temperature', 0.05, 0.15, step=0.01)
+      else:
+          hp.Fixed("bias_corr_alpha", 0.01)
+          hp.Fixed('temperature', 0.1)
   else:
       hp.Choice("bias_corr_alpha", values=[0.1], default=0.05)  # 0.01, 0.05, 0.1
       hp.Fixed("temperature", value=1.0)
@@ -1505,6 +1510,11 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
           'n_genres'
           'run_eagerly'
           'device'
+          
+    fn_args.serving_model_dir: where the model will be saved to.
+    NOTE that a hackish workaround to save the Query and Candidate embedding models
+          separately for serving inference has been added to the run_fn in tune_train_movie_lens.py
+          to create sibling directories called serving_query_model and serving_candidate_model.
 
     fn_args.hyperparameters (required) : keras_tuner.HyperParameters with keys
       'lr'
@@ -1670,6 +1680,10 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
     
     # We need to track the layers in the model in order to save it.
     model.tft_layer = tf_transform_output.transform_features_layer()
+    query_model = model.query_model
+    query_model.tft_layer = model.tft_layer
+    candidate_model = model.candidate_model
+    candidate_model.tft_layer = model.tft_layer
     
     @tf.function(input_signature=[tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')])
     def serve_tf_examples_fn(serialized_tf_example):
@@ -1736,8 +1750,8 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
           raw_timestamp
       )
       
-      transformed_features = model.tft_layer(raw_features)
-      outputs = model.query_model(inputs=transformed_features, training=False)
+      transformed_features = query_model.tft_layer(raw_features)
+      outputs = query_model(inputs=transformed_features, training=False)
       return {'outputs': outputs}
     
     @tf.function(input_signature=[tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')])
@@ -1752,8 +1766,8 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       except KeyError as e:
         logging.error(f'ERROR: {e}')
       raw_features = tf.io.parse_example(serialized_tf_example, relaxed_feature_spec)
-      transformed_features = model.tft_layer(raw_features)
-      outputs = model.candidate_model(inputs=transformed_features, training=False)
+      transformed_features = candidate_model.tft_layer(raw_features)
+      outputs = candidate_model(inputs=transformed_features, training=False)
       return {'outputs': outputs}
     
     @tf.function(input_signature=[
@@ -1797,8 +1811,8 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
                       values=tf.zeros([0], dtype=spec.dtype),
                       dense_shape=tf.cast(tf.stack([batch_size, 0]), tf.int64)
                   )
-      transformed_features = model.tft_layer(complete_features)
-      outputs = model.query_model(inputs=transformed_features, training=False)
+      transformed_features = query_model.tft_layer(complete_features)
+      outputs = query_model(inputs=transformed_features, training=False)
       return {'outputs': outputs}
     
     @tf.function(input_signature=[input_signature_raw_candidate])
@@ -1827,8 +1841,8 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
                       values=tf.zeros([0], dtype=spec.dtype),
                       dense_shape=tf.cast(tf.stack([batch_size, 0]), tf.int64)
                   )
-      transformed_features = model.tft_layer(complete_features)
-      outputs = model.candidate_model(inputs=transformed_features, training=False)
+      transformed_features = candidate_model.tft_layer(complete_features)
+      outputs = candidate_model(inputs=transformed_features, training=False)
       return {'outputs': outputs}
     
     @tf.function(input_signature=[input_signature_raw])
@@ -1858,6 +1872,18 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   signatures["serving_candidate_dict"] = other_sigs["serving_candidate_dict"]
   
   tf.saved_model.save(model, fn_args.serving_model_dir, signatures=signatures)
+  
+  print(f"fn_args.serving_model_dir={fn_args.serving_model_dir}")
+  #create the query and candidate model dirs
+  from pathlib import Path
+  path = Path(fn_args.serving_model_dir)
+  serving_query_dir = str( path.parent / "serving_query_model")
+  serving_candidate_dir = str( path.parent / "serving_candidate_model")
+  #TODO: save query and embedidng model here
+  tf.saved_model.save(model.query_model, serving_query_dir, signatures=
+      {"serving_default" : other_sigs["serving_query_dict"]})
+  tf.saved_model.save(model.candidate_model, serving_candidate_dir, signatures=
+      {"serving_default" : other_sigs["serving_candidate_dict"]})
   
   #the model signatures expected as input are positional keywords ordere.
   # to see the epected order, use saved_model_cli show --dir <path_to_format-serving-dir> --all
