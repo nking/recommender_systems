@@ -16,6 +16,7 @@ import math
 import json
 import keras_tuner
 import tensorflow_transform as tft
+from tensorflow_transform import common_types
 from tensorflow_transform.tf_metadata import schema_utils
 from tfx.types.standard_artifacts import Model
 from tensorflow_metadata.proto.v0 import statistics_pb2
@@ -92,6 +93,532 @@ def input_fn(file_pattern: List[str], data_accessor: tfx.components.DataAccessor
         tf_transform_output.transformed_metadata.schema)
         .prefetch(tf.data.AUTOTUNE))
 
+def _make_query_model(n_users : int, layer_sizes : list,
+    embed_out_dim : int, regl2 : float, drop_rate : float,
+    feature_acronym : str, **kwargs) :
+    
+    @keras.utils.register_keras_serializable(package=package)
+    class CyclicalEncoding(keras.layers.Layer):
+        def __init__(self, max_val, name='cyc_enc', **kwargs):
+            super().__init__(name=name, **kwargs)
+            self.max_val = max_val
+        
+        def call(self, inputs):
+            radians = 2 * math.pi * tf.cast(inputs, tf.float32) / self.max_val
+            return tf.concat([tf.sin(radians), tf.cos(radians)], axis=-1)
+        
+        def get_config(self):
+            config = super(CyclicalEncoding, self).get_config()
+            config.update({"max_val": self.max_val})
+    
+    @keras.utils.register_keras_serializable(package=package)
+    class UserModel(keras.Model):
+        # for init from a load, arguments are present for the compositional instance members too
+        def __init__(self, max_user_id: int,
+                embed_out_dim: int = 32,
+                feature_acronym: str = "",
+                name='user_model', **kwargs):
+            """
+            a user feature model to create an initial vector of features for the QueryModel.
+            NOTE: the user_ids are expected to be already unique and represented by range [1, n_users] and dtype np.int32.
+            No integerlookup to rewrite to smaller number of ids is used here because the ratings and user data
+            are densely populated for user.
+    
+            Args:
+                n_users: the total number of users
+    
+                feature_acronym: a string of alphabetized single letters for each of the following to be in the embedding:
+                    a for age
+                    h for hr_wk cross
+                    m for month
+                    o for occupation
+                    s for gender
+            """
+            super(UserModel, self).__init__(name=name, **kwargs)
+            
+            # NOTE: it is up to the using component to filter for OOV values
+            #      to avoid using this incorrectly
+            # output dimension calculated following advice in
+            # https://developers.googleblog.com/introducing-tensorflow-feature-columns/
+            user_embed_out_dim = round(max_user_id ** 0.25)  # 9
+            user_emb = keras.Sequential([
+                keras.layers.Embedding(max_user_id + 1, user_embed_out_dim),
+                keras.layers.Flatten(data_format='channels_last'),
+            ], name="user_emb")
+            
+            # ordinal, dist between items matters
+            age_emb = None
+            if feature_acronym.find("a") > -1:
+                age_embed_out_dim = 7
+                age_emb = keras.Sequential([
+                    keras.layers.Dense(age_embed_out_dim, activation='swish',
+                        kernel_initializer='he_normal', use_bias=False, name='age_emb_dense'),
+                    keras.layers.Flatten(data_format='channels_last'),
+                ], name="age_emb")
+            
+            # ordinal, dist between items matters.
+            yr_z_emb = None
+            if feature_acronym.find("y") > -1:
+                yr_embed_out_dim = round(50 ** 0.25)  # 3
+                yr_z_emb = keras.Sequential([
+                    keras.layers.Dense(yr_embed_out_dim, activation='swish',
+                        kernel_initializer='he_normal', use_bias=False,
+                        kernel_regularizer=keras.regularizers.l2(1e-3), name='yr_z_emb_dense'),
+                    keras.layers.Flatten(data_format='channels_last'),
+                ], name="yr_z_emb")
+            
+            # numerical, cyclical
+            hr_wk_emb = None
+            if feature_acronym.find("h") > -1:
+                hr_wk_emb = keras.Sequential([
+                    CyclicalEncoding(max_val=24 * 7),
+                    keras.layers.Flatten(data_format='channels_last'),
+                ], name="hr_wk_emb")
+            
+            # numerical, cyclical
+            month_emb = None
+            if feature_acronym.find("m") > -1:
+                month_emb = keras.Sequential([
+                    CyclicalEncoding(max_val=12),
+                    keras.layers.Flatten(data_format='channels_last'),
+                ], name="month_emb")
+            
+            # categorical, nominal, order doesn't matter
+            occupation_emb = None
+            if feature_acronym.find("o") > -1:
+                occupation_emb = keras.layers.CategoryEncoding(
+                    num_tokens=21, output_mode="one_hot",
+                    name="occupation_emb")
+            
+            # categorical
+            gender_emb = None
+            if feature_acronym.find("s") > -1:
+                gender_emb = keras.layers.CategoryEncoding(
+                    num_tokens=2, output_mode="one_hot", name="gender_emb")
+            
+            self.feature_acronym = feature_acronym
+            self.embed_out_dim = embed_out_dim
+            self.max_user_id = max_user_id
+            self.user_emb = user_emb
+            self.age_emb = age_emb
+            self.yr_z_emb = yr_z_emb
+            self.hr_wk_emb = hr_wk_emb
+            self.month_emb = month_emb
+            self.occupation_emb = occupation_emb
+            self.gender_emb = gender_emb
+        
+        def build(self, input_shape):
+            # print(f'build {self.name} input_shape={input_shape}\n')
+            self.user_emb.build(input_shape['user_id'])
+            if self.age_emb:
+                self.age_emb.build(input_shape['age'])
+            if self.yr_z_emb:
+                self.yr_z_emb.build(input_shape['yr_z'])
+            if self.hr_wk_emb:
+                self.hr_wk_emb.build(input_shape['hr_wk'])
+            if self.month_emb:
+                self.month_emb.build(input_shape['month'])
+            if self.occupation_emb:
+                self.occupation_emb.build(input_shape['occupation'])
+            if self.gender_emb:
+                self.gender_emb.build(input_shape['gender'])
+            # print(f'build {self.name} User {self.embed_out_dim} =>{self.user_emb.compute_output_shape(input_shape['user_id'])}\n')
+            self.built = True
+        
+        def compute_output_shape(self, input_shape):
+            # print(f'compute_output_shape {self.name} input_shape={input_shape}\n')
+            # This is invoked after build by QueryModel.
+            # return (None, self.embed_out_dim)
+            _shape = self.user_emb.compute_output_shape(
+                input_shape['user_id'])
+            total_length = _shape[-1]
+            if self.age_emb:
+                _shape = self.age_emb.compute_output_shape(
+                    input_shape['age'])
+                total_length += _shape[-1]
+            if self.yr_z_emb:
+                _shape = self.yr_z_emb.compute_output_shape(
+                    input_shape['yr_z'])
+                total_length += _shape[-1]
+            if self.hr_wk_emb:
+                _shape = self.hr_wk_emb.compute_output_shape(
+                    input_shape['hr_wk'])
+                total_length += _shape[-1]
+            if self.month_emb:
+                _shape = self.month_emb.compute_output_shape(
+                    input_shape['month'])
+                total_length += _shape[-1]
+            if self.occupation_emb:
+                _shape = self.occupation_emb.compute_output_shape(
+                    input_shape['occupation'])
+                total_length += _shape[-1]
+            if self.gender_emb:
+                _shape = self.gender_emb.compute_output_shape(
+                    input_shape['gender'])
+                total_length += _shape[-1]
+            return None, total_length
+            # return (input_shape['movie_id'][0], total_length)
+            # return self.user_emb.compute_output_shape(input_shape['movie_id'])
+        
+        def call(self, inputs, **kwargs):
+            # Take the input dictionary, pass it through each input layer,
+            # and concatenate the result.
+            # arrays are: 'user_id',  'gender', 'age_group', 'occupation','movie_id', 'rating'
+            # print(f'call {self.name} type={type(inputs)}\n')
+            # tf.print(inputs)
+            results = []
+            results.append(self.user_emb(inputs['user_id']))
+            if self.age_emb:
+                results.append(self.age_emb(inputs['age']))
+            if self.yr_z_emb:
+                results.append(self.yr_z_emb(inputs['yr_z']))
+            if self.hr_wk_emb:
+                results.append(self.hr_wk_emb(inputs['hr_wk']))
+            if self.month_emb:
+                results.append(self.month_emb(inputs['month']))
+            if self.occupation_emb:
+                results.append(self.occupation_emb(inputs['occupation']))
+            if self.gender_emb:
+                results.append(self.gender_emb(inputs['gender']))
+            res = keras.layers.Concatenate()(results)
+            # logging.debug(f'call {self.name} SHAPE ={res.shape}')
+            # tf.print('CALL', self.name, ' shape=', res.shape)
+            return res
+        
+        def get_config(self):
+            config = super(UserModel, self).get_config()
+            config.update({"max_user_id": self.max_user_id,
+                "embed_out_dim": self.embed_out_dim,
+                "feature_acronym": self.feature_acronym,
+            })
+            return config
+    
+    @keras.utils.register_keras_serializable(package=package)
+    class QueryModel(keras.Model):
+        """Model for encoding user queries."""
+        
+        # for init from a load, arguments are present for the compositional instance members too
+        def __init__(self, n_users: int,
+                layer_sizes: list,
+                embed_out_dim: int = 32,
+                regl2: float = 0.0,
+                drop_rate: float = 0., feature_acronym: str = "",
+                name='query_model', **kwargs):
+            """Model for encoding user queries.
+    
+                    Args:
+              layer_sizes:
+                A list of integers where the i-th entry represents the number of units
+                the i-th layer contains.
+            """
+            super(QueryModel, self).__init__(name=name, **kwargs)
+            
+            self.user_model = UserModel(max_user_id=n_users,
+                embed_out_dim=embed_out_dim,
+                feature_acronym=feature_acronym)
+            if isinstance(layer_sizes, str):
+                layer_sizes = json.loads(layer_sizes)
+            
+            self.dense_query = keras.Sequential(name="dense_query")
+            reg = None
+            # Use the ReLU activation for all but the last layer.
+            for layer_size in layer_sizes[:-1]:
+                if regl2 > 0.0:
+                    reg = keras.regularizers.l2(regl2)
+                # TODO: consider changing order to: Dense, LayerNorm, Activation(elu), Dropout
+                self.dense_query.add(
+                    keras.layers.Dense(layer_size,
+                        activation="elu",
+                        kernel_regularizer=reg,
+                        kernel_initializer="glorot_normal",
+                        use_bias=False, name=f'dense_{layer_size}'))
+                # self.dense_query.add(keras.layers.BatchNormalization())
+                self.dense_query.add(keras.layers.LayerNormalization())
+                self.dense_query.add(keras.layers.Dropout(drop_rate))
+            
+            for layer_size in layer_sizes[-1:]:
+                self.dense_query.add(keras.layers.Dense(layer_size,
+                    kernel_initializer="glorot_normal", use_bias=False, name=f'_layers'))
+            
+            # removing the noramlization layers to allow the models to use dot product instead
+            # of cosine similarity for more personaized ANN searches that use the magnitudes
+            # in addition to the directions
+            # self.dense_query.add(keras.layers.UnitNormalization(axis=-1))
+            self.regl2 = regl2
+            self.n_users = n_users
+            self.feature_acronym = feature_acronym
+            self.embed_out_dim = embed_out_dim
+            self.layer_sizes = layer_sizes
+            self.drop_rate = drop_rate
+        
+        def build(self, input_shape):
+            # print(f'build {self.name} input_shape={input_shape}\n')
+            self.user_model.build(input_shape)
+            input_shape_2 = self.user_model.compute_output_shape(
+                input_shape)
+            self.dense_query.build(input_shape_2)
+            self.built = True
+        
+        def compute_output_shape(self, input_shape):
+            # print(f'compute_output_shape {self.name} input_shape={input_shape}, {input_shape['user_id'][0]}, {self.layer_sizes[-1:]}\n')
+            # This is invoked after build by TwoTower
+            # return self.output_shapes[0]
+            input_shape_3 = self.dense_query.compute_output_shape(
+                self.user_model.compute_output_shape(input_shape))
+            _shape_3 = [i for i in input_shape_3]
+            _shape_3[0] = None
+            return _shape_3
+            # return None, self.layer_sizes[-1]
+            # return (input_shape['user_id'][0], self.layer_sizes[-1])
+        
+        def call(self, inputs, **kwargs):
+            # inputs should contain columns:
+            # print(f'call {self.name} type={type(inputs)}, inputs={inputs}\n')
+            feature_embedding = self.user_model(inputs, **kwargs)
+            res = self.dense_query(feature_embedding)
+            # tf.print('CALL', self.name, ' shape=', res.shape)
+            return res
+        
+        def get_config(self):
+            config = super(QueryModel, self).get_config()
+            config.update({"n_users": self.n_users,
+                "embed_out_dim": self.embed_out_dim,
+                "drop_rate": self.drop_rate,
+                "layer_sizes": self.layer_sizes,
+                "feature_acronym": self.feature_acronym,
+                "regl2": self.regl2,
+            })
+            return config
+        
+        @classmethod
+        def from_config(cls, config):
+            return cls(**config)
+        
+    return QueryModel(n_users=n_users,
+                                    layer_sizes=layer_sizes,
+                                    embed_out_dim=embed_out_dim,
+                                    regl2=regl2,
+                                    drop_rate=drop_rate,
+                                    feature_acronym=feature_acronym,
+                                    **kwargs)
+    
+def _make_candidate_model(n_movies : int, movies_offset : int,
+        n_genres : int, layer_sizes : List, embed_out_dim : int,
+        regl2 : float, drop_rate : float, incl_genres : bool, **kwargs):
+    
+    @keras.utils.register_keras_serializable(package=package)
+    class MovieModel(keras.Model):
+        """
+        NOTE: the movie_ids are expected to be already unique and represented by range [1, n_movies] and dtype np.int32.
+          No integerlookup to rewrite to smaller number of ids is used here because ratings.dat uses 96% of the
+          movies.dat ids.
+        """
+        
+        # for init from a load, arguments are present for the compositional instance members too
+        def __init__(self, n_movies: int, movies_offset: int, n_genres: int,
+                embed_out_dim: int = 32, incl_genres: bool = True,
+                name='movie_model', **kwargs):
+            super(MovieModel, self).__init__(name=name, **kwargs)
+            
+            self.embed_out_dim = embed_out_dim
+            self.n_movies = n_movies
+            self.movies_offset = movies_offset
+            self.n_genres = n_genres
+            self.incl_genres = incl_genres
+            # out_dim = int(np.sqrt(in_dim)) ~ 64
+            
+            # NOTE: it is up to the using component to filter for OOV values
+            #      to avoid using this incorrectly
+            movie_embed_out_dim = round(self.n_movies ** 0.25)  # 8
+            self.movie_emb = keras.Sequential([
+                keras.layers.IntegerLookup(
+                    vocabulary=[i for i in range(movies_offset + 1,
+                        movies_offset + n_movies + 1)],
+                    output_mode="int"),
+                keras.layers.Embedding(self.n_movies + 1, movie_embed_out_dim),
+                keras.layers.Flatten(data_format='channels_last'),
+            ], name="movie_emb")
+            
+            genres_emb = None
+            if self.incl_genres:
+                # expand to embed_out_dim for concatenation
+                genres_embed_out_dim = 8  # 18
+                genres_emb = keras.Sequential([
+                    keras.layers.Dense(genres_embed_out_dim, use_bias=False),
+                    keras.layers.Flatten(data_format='channels_last'),
+                ], name="genres_emb")
+            self.genres_emb = genres_emb
+        
+        def build(self, input_shape):
+            # tf.print("build", self.name, "input_shape=:", input_shape)
+            # tf.print(f"OUTPUT shapes:", self.movie_emb.compute_output_shape( input_shape['movie_id']))
+            self.movie_emb.build(input_shape['movie_id'])
+            if self.incl_genres:
+                self.genres_emb.build(input_shape['genres'])
+                # tf.print(self.genres_embedding.compute_output_shape(input_shape['genres']))
+            self.built = True
+        
+        def compute_output_shape(self, input_shape):
+            # print(f'compute_output_shape {self.name} input_shape={input_shape}\n')
+            # This is invoked after build by CandidateModel
+            _shape = self.movie_emb.compute_output_shape(
+                input_shape['movie_id'])
+            total_length = _shape[-1]
+            if self.incl_genres:
+                _shape = self.genres_emb.compute_output_shape(
+                    input_shape['genres'])
+                total_length += _shape[-1]
+            return None, total_length
+        
+        def call(self, inputs, **kwargs):
+            # Take the input dictionary, pass it through each input layer,
+            # and concatenate the result.
+            # print(f'call {self.name} type={type(inputs)}, kwargs={kwargs}\n')
+            # print(f'    spec={inputs.element_spec}\n')
+            x = tf.cast(inputs['movie_id'], dtype=tf.int32)
+            results = [self.movie_emb(x)]
+            # shape is (batch_size, x, out_dim)
+            if self.incl_genres:
+                results.append(self.genres_emb(inputs['genres']))
+            # tf.print('concatenate shapes:', [r.shape for r in results])
+            res = keras.layers.Concatenate(axis=-1)(results)
+            # tf.print('call result,shape=', res.shape)
+            # logging.debug(f'call {self.name} SHAPE ={res.shape}')
+            # tf.print('CALL', self.name, ' shape=', res.shape)
+            return res
+        
+        def get_config(self):
+            # updating super config stomps over existing key names, so if need separate values one would need
+            # to use some form of package and class name in keys or uniquely name the keys to avoid collision
+            config = super(MovieModel, self).get_config()
+            config.update(
+                {"n_movies": self.n_movies,
+                    "movies_offset": self.movies_offset,
+                    "n_genres": self.n_genres,
+                    "embed_out_dim": self.embed_out_dim,
+                    'incl_genres': self.incl_genres
+                })
+            return config
+    
+    @keras.utils.register_keras_serializable(package=package)
+    class CandidateModel(keras.Model):
+        """Model for encoding candidate features."""
+        
+        # for init from a load, arguments are present for the compositional instance members too
+        def __init__(self, n_movies: int, movies_offset: int, n_genres: int,
+                layer_sizes,
+                embed_out_dim: int = 32,
+                regl2: float = 0.0,
+                drop_rate: float = 0., incl_genres: bool = True,
+                name='candidate_model', **kwargs):
+            """Model for encoding candidate features.
+    
+            Args:
+              layer_sizes:
+                A list of integers where the i-th entry represents the number of units
+                the i-th layer contains.
+            """
+            super(CandidateModel, self).__init__(name=name, **kwargs)
+            
+            self.movie_model = MovieModel(n_movies=n_movies,
+                movies_offset=movies_offset,
+                n_genres=n_genres,
+                embed_out_dim=embed_out_dim,
+                incl_genres=incl_genres, name="movie_model")
+            
+            self.dense_candidate = keras.Sequential(name="dense_candidate")
+            if isinstance(layer_sizes, str):
+                layer_sizes = json.loads(layer_sizes)
+            reg = None
+            # Use the ReLU activation for all but the last layer.
+            for layer_size in layer_sizes[:-1]:
+                if regl2 > 0.0:
+                    reg = keras.regularizers.l2(regl2)
+                self.dense_candidate.add(
+                    keras.layers.Dense(layer_size,
+                        activation="elu",
+                        kernel_regularizer=reg,
+                        kernel_initializer="glorot_normal",
+                        use_bias=False, name=f'{layer_size}'
+                    ))
+                # self.dense_query.add(keras.layers.BatchNormalization())
+                self.dense_candidate.add(keras.layers.LayerNormalization())
+                # self.dense_query.add(keras.activations.elu())
+                self.dense_candidate.add(keras.layers.Dropout(drop_rate))
+            
+            for layer_size in layer_sizes[-1:]:
+                self.dense_candidate.add(keras.layers.Dense(layer_size,
+                    kernel_initializer="glorot_normal", use_bias=False, name=f'_layers'))
+            
+            # removing the noramlization layers to allow the models to use dot product instead
+            # of cosine similarity for more personaized ANN searches that use the magnitudes
+            # in addition to the directions
+            # self.dense_query.add(keras.layers.UnitNormalization(axis=-1))
+            self.regl2 = regl2
+            self.n_movies = n_movies
+            self.movies_offset = movies_offset
+            self.n_genres = n_genres
+            self.incl_genres = incl_genres
+            self.embed_out_dim = embed_out_dim
+            self.drop_rate = drop_rate
+            self.layer_sizes = layer_sizes
+        
+        def build(self, input_shape):
+            # print(f'build {self.name} input_shape={input_shape}\n')
+            self.movie_model.build(input_shape)
+            input_shape_2 = self.movie_model.compute_output_shape(
+                input_shape)
+            self.dense_candidate.build(input_shape_2)
+            self.built = True
+        
+        def compute_output_shape(self, input_shape):
+            # print(f'compute_output_shape {self.name} input_shape={input_shape}\n')
+            # This is invoked after build by TwoTower
+            input_shape_3 = self.dense_candidate.compute_output_shape(
+                self.movie_model.compute_output_shape(input_shape))
+            _shape_3 = [i for i in input_shape_3]
+            _shape_3[0] = None
+            return _shape_3
+            # return None, self.layer_sizes[-1]
+        
+        def call(self, inputs, **kwargs):
+            # inputs should contain columns "movie_id", "genres"
+            # logging.debug(f'call {self.name} type ={type(inputs)}\ntype ={inputs}\n')
+            feature_embedding = self.movie_model(inputs, **kwargs)
+            # tf.print('invoked movie_emb.  shape=', feature_embedding.shape)
+            res = self.dense_candidate(feature_embedding)
+            # returns an np.ndarray wrapped in a tensor if inputs is tensor, else not wrapped
+            # logging.debug(f'CALL {self.name} SHAPE ={res.shape}\n')
+            # tf.print('CALL', self.name, ' shape=', res.shape)
+            return res
+        
+        def get_config(self):
+            config = super(CandidateModel, self).get_config()
+            config.update(
+                {"n_movies": self.n_movies,
+                    "movies_offset": self.movies_offset,
+                    "n_genres": self.n_genres,
+                    "embed_out_dim": self.embed_out_dim,
+                    "drop_rate": self.drop_rate,
+                    "layer_sizes": self.layer_sizes,
+                    "regl2": self.regl2,
+                    "incl_genres": self.incl_genres
+                })
+            return config
+        
+        @classmethod
+        def from_config(cls, config):
+            return cls(**config)
+    
+    return CandidateModel(n_movies=n_movies, movies_offset=movies_offset,
+                                            n_genres=n_genres,
+                                            layer_sizes=layer_sizes,
+                                            embed_out_dim=embed_out_dim,
+                                            regl2=regl2,
+                                            drop_rate=drop_rate,
+                                            incl_genres=incl_genres,
+                                            **kwargs)
+    
 def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   
   #input_dataset_element_spec_raw = hp.get("input_dataset_element_spec_raw_ser")
@@ -99,488 +626,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   
   input_dataset_element_spec_trans = hp.get("input_dataset_element_spec_trans_ser")
   input_dataset_element_spec_trans = pickle.loads(base64.b64decode(input_dataset_element_spec_trans.encode('utf-8')))
-  
-  @keras.utils.register_keras_serializable(package=package)
-  class CyclicalEncoding(keras.layers.Layer):
-    def __init__(self, max_val, **kwargs):
-      super().__init__(**kwargs)
-      self.max_val = max_val
-    def call(self, inputs):
-      radians = 2 * math.pi * tf.cast(inputs, tf.float32) / self.max_val
-      return tf.concat([tf.sin(radians), tf.cos(radians)], axis=-1)
-    def get_config(self):
-      config = super(CyclicalEncoding, self).get_config()
-      config.update({"max_val": self.max_val})
-  
-  @keras.utils.register_keras_serializable(package=package)
-  class UserModel(keras.Model):
-    # for init from a load, arguments are present for the compositional instance members too
-    def __init__(self, max_user_id: int,
-                 embed_out_dim: int = 32,
-                 feature_acronym: str = "",
-                 **kwargs):
-      """
-      a user feature model to create an initial vector of features for the QueryModel.
-      NOTE: the user_ids are expected to be already unique and represented by range [1, n_users] and dtype np.int32.
-      No integerlookup to rewrite to smaller number of ids is used here because the ratings and user data
-      are densely populated for user.
-
-      Args:
-          n_users: the total number of users
-
-          feature_acronym: a string of alphabetized single letters for each of the following to be in the embedding:
-              a for age
-              h for hr_wk cross
-              m for month
-              o for occupation
-              s for gender
-      """
-      super(UserModel, self).__init__(**kwargs)
-      
-      #NOTE: it is up to the using component to filter for OOV values
-      #      to avoid using this incorrectly
-      #output dimension calculated following advice in 
-      # https://developers.googleblog.com/introducing-tensorflow-feature-columns/
-      user_embed_out_dim = round(max_user_id**0.25) #9
-      user_embedding = keras.Sequential([
-        keras.layers.Embedding(max_user_id + 1, user_embed_out_dim),
-        keras.layers.Flatten(data_format='channels_last'),
-      ], name="user_emb")
-      
-      # ordinal, dist between items matters
-      age_embedding = None
-      if feature_acronym.find("a") > -1:
-        age_embed_out_dim = 7
-        age_embedding = keras.Sequential([
-          keras.layers.Dense(age_embed_out_dim, activation='swish',
-          kernel_initializer='he_normal', use_bias=False),
-          keras.layers.Flatten(data_format='channels_last'),
-        ], name="age_emb")
-        
-      # ordinal, dist between items matters.
-      yr_z_embedding = None
-      if feature_acronym.find("y") > -1:
-        yr_embed_out_dim = round(50**0.25) #3
-        yr_z_embedding = keras.Sequential([
-          keras.layers.Dense(yr_embed_out_dim, activation='swish',
-            kernel_initializer='he_normal', use_bias=False,
-            kernel_regularizer=keras.regularizers.l2(1e-3)),
-            keras.layers.Flatten(data_format='channels_last'),
-        ], name="yr_z_emb")
-      
-      # numerical, cyclical
-      hr_wk_embedding = None
-      if feature_acronym.find("h") > -1:
-        hr_wk_embedding = keras.Sequential([
-          CyclicalEncoding(max_val=24*7),
-          keras.layers.Flatten(data_format='channels_last'),
-        ], name="hr_wk_emb")
-      
-      #numerical, cyclical
-      month_embedding = None
-      if feature_acronym.find("m") > -1:
-        month_embedding = keras.Sequential([
-            CyclicalEncoding(max_val=12),
-            keras.layers.Flatten(data_format='channels_last'),
-        ], name="month_emb")
-      
-      # categorical, nominal, order doesn't matter
-      occupation_embedding = None
-      if feature_acronym.find("o") > -1:
-        occupation_embedding = keras.layers.CategoryEncoding(
-          num_tokens=21, output_mode="one_hot", name="occupation_emb")
-      
-      # categorical
-      gender_embedding = None
-      if feature_acronym.find("s") > -1:
-        gender_embedding = keras.layers.CategoryEncoding(
-          num_tokens=2, output_mode="one_hot", name="gender_emb")
-      
-      self.feature_acronym = feature_acronym
-      self.embed_out_dim = embed_out_dim
-      self.max_user_id = max_user_id
-      self.user_embedding = user_embedding
-      self.age_embedding = age_embedding
-      self.yr_z_embedding = yr_z_embedding
-      self.hr_wk_embedding = hr_wk_embedding
-      self.month_embedding = month_embedding
-      self.occupation_embedding = occupation_embedding
-      self.gender_embedding = gender_embedding
-      
-    def build(self, input_shape):
-      #print(f'build {self.name} input_shape={input_shape}\n')
-      self.user_embedding.build(input_shape['user_id'])
-      if self.age_embedding:
-        self.age_embedding.build(input_shape['age'])
-      if self.yr_z_embedding:
-        self.yr_z_embedding.build(input_shape['yr_z'])
-      if self.hr_wk_embedding:
-        self.hr_wk_embedding.build(input_shape['hr_wk'])
-      if self.month_embedding:
-        self.month_embedding.build(input_shape['month'])
-      if self.occupation_embedding:
-        self.occupation_embedding.build(input_shape['occupation'])
-      if self.gender_embedding:
-        self.gender_embedding.build(input_shape['gender'])
-      #print(f'build {self.name} User {self.embed_out_dim} =>{self.user_embedding.compute_output_shape(input_shape['user_id'])}\n')
-      self.built = True
-    
-    def compute_output_shape(self, input_shape):
-      #print(f'compute_output_shape {self.name} input_shape={input_shape}\n')
-      # This is invoked after build by QueryModel.
-      # return (None, self.embed_out_dim)
-      _shape = self.user_embedding.compute_output_shape(input_shape['user_id'])
-      total_length = _shape[-1]
-      if self.age_embedding:
-        _shape = self.age_embedding.compute_output_shape(input_shape['age'])
-        total_length += _shape[-1]
-      if self.yr_z_embedding:
-          _shape = self.yr_z_embedding.compute_output_shape(input_shape['yr_z'])
-          total_length += _shape[-1]
-      if self.hr_wk_embedding:
-        _shape = self.hr_wk_embedding.compute_output_shape(
-          input_shape['hr_wk'])
-        total_length += _shape[-1]
-      if self.month_embedding:
-        _shape = self.month_embedding.compute_output_shape(
-          input_shape['month'])
-        total_length += _shape[-1]
-      if self.occupation_embedding:
-        _shape = self.occupation_embedding.compute_output_shape(
-          input_shape['occupation'])
-        total_length += _shape[-1]
-      if self.gender_embedding:
-        _shape = self.gender_embedding.compute_output_shape(
-          input_shape['gender'])
-        total_length += _shape[-1]
-      return None, total_length
-      # return (input_shape['movie_id'][0], total_length)
-      # return self.user_embedding.compute_output_shape(input_shape['movie_id'])
-    
-    def call(self, inputs, **kwargs):
-      # Take the input dictionary, pass it through each input layer,
-      # and concatenate the result.
-      # arrays are: 'user_id',  'gender', 'age_group', 'occupation','movie_id', 'rating'
-      #print(f'call {self.name} type={type(inputs)}\n')
-      # tf.print(inputs)
-      results = []
-      results.append(self.user_embedding(inputs['user_id']))
-      if self.age_embedding:
-        results.append(self.age_embedding(inputs['age']))
-      if self.yr_z_embedding:
-        results.append(self.yr_z_embedding(inputs['yr_z']))
-      if self.hr_wk_embedding:
-        results.append(self.hr_wk_embedding(inputs['hr_wk']))
-      if self.month_embedding:
-        results.append(self.month_embedding(inputs['month']))
-      if self.occupation_embedding:
-        results.append(self.occupation_embedding(inputs['occupation']))
-      if self.gender_embedding:
-        results.append(self.gender_embedding(inputs['gender']))
-      res = keras.layers.Concatenate()(results)
-      #logging.debug(f'call {self.name} SHAPE ={res.shape}')
-      #tf.print('CALL', self.name, ' shape=', res.shape)
-      return res
-    
-    def get_config(self):
-      config = super(UserModel, self).get_config()
-      config.update({"max_user_id": self.max_user_id,
-                     "embed_out_dim": self.embed_out_dim,
-                     "feature_acronym": self.feature_acronym,
-                     })
-      return config
-  
-  @keras.utils.register_keras_serializable(package=package)
-  class MovieModel(keras.Model):
-    """
-    NOTE: the movie_ids are expected to be already unique and represented by range [1, n_movies] and dtype np.int32.
-      No integerlookup to rewrite to smaller number of ids is used here because ratings.dat uses 96% of the
-      movies.dat ids.
-    """
-    
-    # for init from a load, arguments are present for the compositional instance members too
-    def __init__(self, n_movies: int, movies_offset:int, n_genres: int,
-                 embed_out_dim: int = 32, incl_genres: bool = True,
-                 **kwargs):
-      super(MovieModel, self).__init__(**kwargs)
-      
-      self.embed_out_dim = embed_out_dim
-      self.n_movies = n_movies
-      self.movies_offset = movies_offset
-      self.n_genres = n_genres
-      self.incl_genres = incl_genres
-      # out_dim = int(np.sqrt(in_dim)) ~ 64
-      
-      #NOTE: it is up to the using component to filter for OOV values
-      #      to avoid using this incorrectly
-      movie_embed_out_dim = round(self.n_movies**0.25) #8
-      self.movie_embedding = keras.Sequential([
-        keras.layers.IntegerLookup(
-            vocabulary=[i for i in range(movies_offset+1, movies_offset + n_movies + 1)],
-            output_mode="int"),
-        keras.layers.Embedding(self.n_movies + 1, movie_embed_out_dim),
-        keras.layers.Flatten(data_format='channels_last'),
-      ], name="movie_emb")
-      
-      if self.incl_genres:
-        # expand to embed_out_dim for concatenation
-        genres_embed_out_dim = 8# 18
-        self.genres_embedding = keras.Sequential([
-          keras.layers.Dense(genres_embed_out_dim, use_bias=False),
-          keras.layers.Flatten(data_format='channels_last'),
-        ], name="genres_emb")
-    
-    def build(self, input_shape):
-      #tf.print("build", self.name, "input_shape=:", input_shape)
-      #tf.print(f"OUTPUT shapes:", self.movie_embedding.compute_output_shape( input_shape['movie_id']))
-      self.movie_embedding.build(input_shape['movie_id'])
-      if self.incl_genres:
-        self.genres_embedding.build(input_shape['genres'])
-        #tf.print(self.genres_embedding.compute_output_shape(input_shape['genres']))
-      self.built = True
-    
-    def compute_output_shape(self, input_shape):
-      #print(f'compute_output_shape {self.name} input_shape={input_shape}\n')
-      # This is invoked after build by CandidateModel
-      _shape = self.movie_embedding.compute_output_shape(input_shape['movie_id'])
-      total_length = _shape[-1]
-      if self.incl_genres:
-        _shape = self.genres_embedding.compute_output_shape(input_shape['genres'])
-        total_length += _shape[-1]
-      return None, total_length
-    
-    def call(self, inputs, **kwargs):
-      # Take the input dictionary, pass it through each input layer,
-      # and concatenate the result.
-      #print(f'call {self.name} type={type(inputs)}, kwargs={kwargs}\n')
-      #print(f'    spec={inputs.element_spec}\n')
-      x = tf.cast(inputs['movie_id'], dtype=tf.int32)
-      results = [self.movie_embedding(x)]
-      # shape is (batch_size, x, out_dim)
-      if self.incl_genres:
-        results.append(self.genres_embedding(inputs['genres']))
-      #tf.print('concatenate shapes:', [r.shape for r in results])
-      res = keras.layers.Concatenate(axis=-1)(results)
-      #tf.print('call result,shape=', res.shape)
-      # logging.debug(f'call {self.name} SHAPE ={res.shape}')
-      #tf.print('CALL', self.name, ' shape=', res.shape)
-      return res
-    
-    def get_config(self):
-      # updating super config stomps over existing key names, so if need separate values one would need
-      # to use some form of package and class name in keys or uniquely name the keys to avoid collision
-      config = super(MovieModel, self).get_config()
-      config.update(
-        {"n_movies": self.n_movies, "movies_offset": self.movies_offset, "n_genres": self.n_genres,
-         "embed_out_dim": self.embed_out_dim,
-         'incl_genres': self.incl_genres
-         })
-      return config
-  
-  @keras.utils.register_keras_serializable(package=package)
-  class QueryModel(keras.Model):
-    """Model for encoding user queries."""
-    
-    # for init from a load, arguments are present for the compositional instance members too
-    def __init__(self, n_users: int,
-                 layer_sizes: list,
-                 embed_out_dim: int = 32,
-                 regl2:float = 0.0,
-                 drop_rate: float = 0., feature_acronym: str = "",
-                 **kwargs):
-      """Model for encoding user queries.
-
-              Args:
-        layer_sizes:
-          A list of integers where the i-th entry represents the number of units
-          the i-th layer contains.
-      """
-      super(QueryModel, self).__init__(**kwargs)
-      
-      self.embedding_model = UserModel(max_user_id=n_users,
-                                       embed_out_dim=embed_out_dim,
-                                       feature_acronym=feature_acronym)
-      if isinstance(layer_sizes, str):
-        layer_sizes = json.loads(layer_sizes)
-      
-      self.dense_layers = keras.Sequential(name="dense_query")
-      reg = None
-      # Use the ReLU activation for all but the last layer.
-      for layer_size in layer_sizes[:-1]:
-        if regl2 > 0.0:
-            reg = keras.regularizers.l2(regl2)
-        #TODO: consider changing order to: Dense, LayerNorm, Activation(elu), Dropout
-        self.dense_layers.add(
-          keras.layers.Dense(layer_size,
-            activation="elu",
-            kernel_regularizer=reg,
-            kernel_initializer="glorot_normal",
-            use_bias=False))
-        # self.dense_layers.add(keras.layers.BatchNormalization())
-        self.dense_layers.add(keras.layers.LayerNormalization())
-        self.dense_layers.add(keras.layers.Dropout(drop_rate))
-      
-      for layer_size in layer_sizes[-1:]:
-        self.dense_layers.add(keras.layers.Dense(layer_size,
-            kernel_initializer="glorot_normal", use_bias=False))
-      
-      #removing the noramlization layers to allow the models to use dot product instead
-      # of cosine similarity for more personaized ANN searches that use the magnitudes
-      # in addition to the directions
-      #self.dense_layers.add(keras.layers.UnitNormalization(axis=-1))
-      self.regl2 = regl2
-      self.n_users = n_users
-      self.feature_acronym = feature_acronym
-      self.embed_out_dim = embed_out_dim
-      self.layer_sizes = layer_sizes
-      self.drop_rate = drop_rate
-    
-    def build(self, input_shape):
-      #print(f'build {self.name} input_shape={input_shape}\n')
-      self.embedding_model.build(input_shape)
-      input_shape_2 = self.embedding_model.compute_output_shape(input_shape)
-      self.dense_layers.build(input_shape_2)
-      self.built = True
-    
-    def compute_output_shape(self, input_shape):
-      #print(f'compute_output_shape {self.name} input_shape={input_shape}, {input_shape['user_id'][0]}, {self.layer_sizes[-1:]}\n')
-      # This is invoked after build by TwoTower
-      # return self.output_shapes[0]
-      input_shape_3 = self.dense_layers.compute_output_shape(
-        self.embedding_model.compute_output_shape(input_shape))
-      _shape_3 = [i for i in input_shape_3]
-      _shape_3[0] = None
-      return _shape_3
-      # return None, self.layer_sizes[-1]
-      # return (input_shape['user_id'][0], self.layer_sizes[-1])
-    
-    def call(self, inputs, **kwargs):
-      # inputs should contain columns:
-      #print(f'call {self.name} type={type(inputs)}, inputs={inputs}\n')
-      feature_embedding = self.embedding_model(inputs, **kwargs)
-      res = self.dense_layers(feature_embedding)
-      #tf.print('CALL', self.name, ' shape=', res.shape)
-      return res
-    
-    def get_config(self):
-      config = super(QueryModel, self).get_config()
-      config.update({"n_users": self.n_users,
-                     "embed_out_dim": self.embed_out_dim,
-                     "drop_rate": self.drop_rate,
-                     "layer_sizes": self.layer_sizes,
-                     "feature_acronym": self.feature_acronym,
-                     "regl2": self.regl2,
-                     })
-      return config
-    
-    @classmethod
-    def from_config(cls, config):
-      return cls(**config)
-  
-  @keras.utils.register_keras_serializable(package=package)
-  class CandidateModel(keras.Model):
-    """Model for encoding candidate features."""
-    
-    # for init from a load, arguments are present for the compositional instance members too
-    def __init__(self, n_movies: int, movies_offset:int, n_genres: int, layer_sizes,
-                 embed_out_dim: int = 32,
-                 regl2: float = 0.0,
-                 drop_rate: float = 0., incl_genres: bool = True,
-                 **kwargs):
-      """Model for encoding candidate features.
-
-      Args:
-        layer_sizes:
-          A list of integers where the i-th entry represents the number of units
-          the i-th layer contains.
-      """
-      super(CandidateModel, self).__init__(**kwargs)
-      
-      self.embedding_model = MovieModel(n_movies=n_movies, movies_offset=movies_offset,
-        n_genres=n_genres,
-        embed_out_dim=embed_out_dim,
-        incl_genres=incl_genres, name = "movie_emb")
-      
-      self.dense_layers = keras.Sequential(name="dense_candidate")
-      if isinstance(layer_sizes, str):
-        layer_sizes = json.loads(layer_sizes)
-      reg = None
-      # Use the ReLU activation for all but the last layer.
-      for layer_size in layer_sizes[:-1]:
-        if regl2 > 0.0:
-          reg = keras.regularizers.l2(regl2)
-        self.dense_layers.add(
-          keras.layers.Dense(layer_size,
-            activation="elu",
-            kernel_regularizer=reg, kernel_initializer="glorot_normal",
-            use_bias=False
-            ))
-        # self.dense_layers.add(keras.layers.BatchNormalization())
-        self.dense_layers.add(keras.layers.LayerNormalization())
-        #self.dense_layers.add(keras.activations.elu())
-        self.dense_layers.add(keras.layers.Dropout(drop_rate))
-      
-      for layer_size in layer_sizes[-1:]:
-        self.dense_layers.add(keras.layers.Dense(layer_size,
-          kernel_initializer="glorot_normal", use_bias=False))
-      
-      # removing the noramlization layers to allow the models to use dot product instead
-      # of cosine similarity for more personaized ANN searches that use the magnitudes
-      # in addition to the directions
-      # self.dense_layers.add(keras.layers.UnitNormalization(axis=-1))
-      self.regl2 = regl2
-      self.n_movies = n_movies
-      self.movies_offset = movies_offset
-      self.n_genres = n_genres
-      self.incl_genres = incl_genres
-      self.embed_out_dim = embed_out_dim
-      self.drop_rate = drop_rate
-      self.layer_sizes = layer_sizes
-      
-    def build(self, input_shape):
-      #print(f'build {self.name} input_shape={input_shape}\n')
-      self.embedding_model.build(input_shape)
-      input_shape_2 = self.embedding_model.compute_output_shape(input_shape)
-      self.dense_layers.build(input_shape_2)
-      self.built = True
-    
-    def compute_output_shape(self, input_shape):
-      #print(f'compute_output_shape {self.name} input_shape={input_shape}\n')
-      # This is invoked after build by TwoTower
-      input_shape_3 = self.dense_layers.compute_output_shape(
-        self.embedding_model.compute_output_shape(input_shape))
-      _shape_3 = [i for i in input_shape_3]
-      _shape_3[0] = None
-      return _shape_3
-      # return None, self.layer_sizes[-1]
-    
-    def call(self, inputs, **kwargs):
-      # inputs should contain columns "movie_id", "genres"
-      # logging.debug(f'call {self.name} type ={type(inputs)}\ntype ={inputs}\n')
-      feature_embedding = self.embedding_model(inputs, **kwargs)
-      #tf.print('invoked movie_emb.  shape=', feature_embedding.shape)
-      res = self.dense_layers(feature_embedding)
-      # returns an np.ndarray wrapped in a tensor if inputs is tensor, else not wrapped
-      # logging.debug(f'CALL {self.name} SHAPE ={res.shape}\n')
-      #tf.print('CALL', self.name, ' shape=', res.shape)
-      return res
-    
-    def get_config(self):
-      config = super(CandidateModel, self).get_config()
-      config.update(
-        {"n_movies": self.n_movies, "movies_offset":self.movies_offset,
-          "n_genres": self.n_genres,
-         "embed_out_dim": self.embed_out_dim,
-         "drop_rate": self.drop_rate,
-         "layer_sizes": self.layer_sizes,
-         "regl2": self.regl2,
-         "incl_genres": self.incl_genres
-         })
-      return config
-    
-    @classmethod
-    def from_config(cls, config):
-      return cls(**config)
   
   @keras.utils.register_keras_serializable(package=package)
   class TwoTowerDNN(keras.Model):
@@ -608,10 +653,10 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
          use_bias_corr: bool = True,
          bias_corr_alpha: float=0.1,
          incl_genres: bool = True,
-         temperature:float=1.0, **kwargs):
-      super(TwoTowerDNN, self).__init__(**kwargs)
+         temperature:float=1.0, name='twotowerdnn', **kwargs):
+      super(TwoTowerDNN, self).__init__(name=name, **kwargs)
       
-      self.query_model = QueryModel(n_users=n_users,
+      self.query_model = _make_query_model(n_users=n_users,
                                     layer_sizes=layer_sizes,
                                     embed_out_dim=embed_out_dim,
                                     regl2=regl2,
@@ -619,7 +664,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
                                     feature_acronym=feature_acronym,
                                     **kwargs)
       
-      self.candidate_model = CandidateModel(n_movies=n_movies, movies_offset=movies_offset,
+      self.candidate_model = _make_candidate_model(n_movies=n_movies, movies_offset=movies_offset,
                                             n_genres=n_genres,
                                             layer_sizes=layer_sizes,
                                             embed_out_dim=embed_out_dim,
@@ -631,7 +676,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       if isinstance(layer_sizes, str):
           layer_sizes = json.loads(layer_sizes)
       
-      self.dot_layer = keras.layers.Dot(axes=1)
+      self.dot_layer = keras.layers.Dot(axes=1, name='dot_layer')
       #to use HeuristicLambdaLoss, train with the positives of the dataset splits
       #self.loss_function = HeuristicLambdaLoss()
       #to use LambdaSoftmaxLoss, train with full dataset splits
@@ -675,7 +720,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         # It tells the model: "When you finish an epoch, pull results from these two."
         return [self.mean_loss_metric, self.in_batch_hit_rate_metric, self.mrr_k_metric, self.ndcg_k_metric, self.recall_k_metric]
     
-    #@tf.function(input_signature=[input_dataset_element_spec_trans])
     def call(self, inputs):
       """
       compute the cosine similarity score for the user data to movie data.
@@ -1482,6 +1526,28 @@ def convert_feature_spec_to_tensor_spec(raw_feature_spec: Dict) -> Dict[
   
   return tensor_spec
 
+def create_input_shapes_from_spec(transformed_feature_spec : Dict[str, common_types.FeatureSpecType])\
+        -> Dict[str, tf.TensorShape]:
+    
+    input_shapes = {}
+    
+    for name, spec in transformed_feature_spec.items():
+        if isinstance(spec, tf.io.FixedLenFeature):
+            # FixedLenFeature.shape describes the feature without the batch dimension.
+            # We add [None] to indicate the batch size is variable.
+            input_shapes[name] = tf.TensorShape([None] + list(spec.shape))
+        
+        elif isinstance(spec, tf.io.VarLenFeature):
+            # VarLenFeature (Sparse) data usually has a dynamic shape.
+            # [None, None] is the standard representation for a
+            # variable-length sequence in a batch.
+            input_shapes[name] = tf.TensorShape([None, None])
+        
+        elif isinstance(spec, tf.io.SparseFeature):
+            # Less common, but handled similarly to VarLen
+            input_shapes[name] = tf.TensorShape([None, None])
+    
+    return input_shapes
 
 # tfx.components.FnArgs
 def run_fn(fn_args):
@@ -1879,26 +1945,136 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   
   tf.saved_model.save(model, fn_args.serving_model_dir, signatures=signatures)
   
-  print(f"fn_args.serving_model_dir={fn_args.serving_model_dir}")
-  #create the query and candidate model dirs
+  print(f"saved the two_tower_dnn model to fn_args.serving_model_dir={fn_args.serving_model_dir}")
+  
+  #create the query and candidate saved models
   from pathlib import Path
   path = Path(fn_args.serving_model_dir)
   serving_query_dir = str( path.parent / "serving_query_model")
   serving_candidate_dir = str( path.parent / "serving_candidate_model")
-  #TODO: save query and embedidng model here
-  tf.saved_model.save(model.query_model, serving_query_dir, signatures=
-      {"serving_default" : other_sigs["serving_query_dict"]})
-  tf.saved_model.save(model.candidate_model, serving_candidate_dir, signatures=
-      {"serving_default" : other_sigs["serving_candidate_dict"]})
   
-  #the model signatures expected as input are positional keywords ordere.
-  # to see the epected order, use saved_model_cli show --dir <path_to_format-serving-dir> --all
+  build_input_shapes : Dict[str, tf.TensorShape] = create_input_shapes_from_spec(
+      transformed_feature_spec = tf_transform_output.transformed_feature_spec())
   
-  #loaded_saved_model = tf.saved_model.load(fn_args.serving_model_dir)
-  #print(f'loaded SavedModel signatures: {loaded_saved_model.signatures}')
-  #infer = loaded_saved_model.signatures["serving_default"]
-  #print(f'infer.structured_outputs={infer.structured_outputs}')
+  trained_query_weights = model.query_model.get_weights()
+  trained_candidate_weights = model.candidate_model.get_weights()
+  tf.keras.backend.clear_session()
+  
+  query_model = _make_query_model(n_users=model.n_users,
+      layer_sizes=model.layer_sizes,
+      embed_out_dim=model.embed_out_dim,
+      regl2=model.regl2,
+      drop_rate=model.drop_rate,
+      feature_acronym=model.feature_acronym)
+  query_model.build(input_shape=build_input_shapes)
+  query_model.set_weights(trained_query_weights)
+  
+  candidate_model = _make_candidate_model(n_movies=model.n_movies,
+      movies_offset=model.movies_offset,
+      n_genres=model.n_genres,
+      layer_sizes=model.layer_sizes,
+      embed_out_dim=model.embed_out_dim,
+      regl2=model.regl2,
+      drop_rate=model.drop_rate,
+      incl_genres=model.incl_genres)
+  candidate_model.build(input_shape=build_input_shapes)
+  candidate_model.set_weights(trained_candidate_weights)
+  
+  tft_layer = tf_transform_output.transform_features_layer()
+  raw_feature_spec = tf_transform_output.raw_feature_spec()
+  
+  @tf.function
+  def query_serve_fn(raw_features):
+      any_input = next(iter(raw_features.values()))
+      batch_size = tf.shape(any_input)[0]
+      complete_features = dict(raw_features)
+      for key, spec in raw_feature_spec.items():
+          if key not in complete_features:
+              if isinstance(spec, tf.io.FixedLenFeature):
+                  shape = tf.concat([[batch_size], spec.shape], axis=0)
+                  complete_features[key] = tf.zeros(shape=shape, dtype=spec.dtype)
+              else:
+                  complete_features[key] = tf.SparseTensor(
+                      indices=tf.zeros([0, 2], dtype=tf.int64),
+                      values=tf.zeros([0], dtype=spec.dtype),
+                      dense_shape=tf.cast(tf.stack([batch_size, 0]), tf.int64))
+      transformed_features = tft_layer(complete_features)
+      outputs = query_model(inputs=transformed_features, training=False)
+      return {'outputs': outputs}
+  
+  @tf.function
+  def candidate_serve_fn(raw_features):
+      any_input = next(iter(raw_features.values()))
+      batch_size = tf.shape(any_input)[0]
+      complete_features = dict(raw_features)
+      for key, spec in raw_feature_spec.items():
+          if key not in complete_features:
+              if isinstance(spec, tf.io.FixedLenFeature):
+                  shape = tf.concat([[batch_size], spec.shape], axis=0)
+                  complete_features[key] = tf.zeros(shape=shape,
+                      dtype=spec.dtype)
+              else:
+                  complete_features[key] = tf.SparseTensor(
+                      indices=tf.zeros([0, 2], dtype=tf.int64),
+                      values=tf.zeros([0], dtype=spec.dtype),
+                      dense_shape=tf.cast(tf.stack([batch_size, 0]), tf.int64))
+      transformed_features = tft_layer(complete_features)
+      outputs = candidate_model(inputs=transformed_features, training=False)
+      return {'outputs': outputs}
+  
+  export_archive = keras.export.ExportArchive()
+  export_archive.track(query_model)
+  export_archive.track(tft_layer)
 
+  export_archive.add_endpoint(
+      name="serving_default",
+      fn=query_serve_fn,
+      input_signature=[input_signature_raw_query]
+  )
+  export_archive.write_out(serving_query_dir)
+  
+  export_archive = keras.export.ExportArchive()
+  export_archive.track(candidate_model)
+  export_archive.track(tft_layer)
+  
+  export_archive.add_endpoint(
+      name="serving_default",
+      fn=candidate_serve_fn,
+      input_signature=[input_signature_raw_candidate]
+  )
+  export_archive.write_out(serving_candidate_dir)
+  
+  '''
+  ## DEBUG
+  ckpt_path = os.path.join(serving_query_dir, "variables", "variables")
+  try:
+      print(f"--- Variables inside: {ckpt_path} ---")
+      vars_in_ckpt = tf.train.list_variables(ckpt_path)
+      for name, shape in vars_in_ckpt:
+          print(f"Found variable: {name} with shape {shape}")
+  except Exception as e:
+      print(f"Could not read checkpoint: {e}")
+  try:
+      reader = tf.train.load_checkpoint(ckpt_path)
+      variable_map = reader.get_variable_to_shape_map()
+      
+      # Check if the path the error is complaining about actually exists
+      target = "query_model/user_model/age_emb/dense/kernel"
+      found = False
+      for name in variable_map:
+          if target in name:
+              print(f"MATCH FOUND: {name}")
+              found = True
+      
+      if not found:
+          print(f"CRITICAL: '{target}' does not exist in the checkpoint!")
+          print("Here are the first 10 variables that DO exist:")
+          for name in list(variable_map.keys())[:10]:
+              print(f" - {name}")
+  except Exception as e2:
+      print(f"Could not read checkpoint vars: {e2}")
+  '''
+  
   print(f"saved query model to {serving_query_dir}")
   
   return model

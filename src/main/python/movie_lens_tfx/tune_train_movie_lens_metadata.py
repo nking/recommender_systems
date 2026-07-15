@@ -122,7 +122,7 @@ def _make_movie_metadata_model(hp: keras_tuner.HyperParameters) -> tf.keras.Mode
           keras.layers.Dense(layer_size, activation="elu",
                              kernel_regularizer=reg,
                              kernel_initializer="glorot_normal"))
-        # self.dense_layers.add(keras.layers.BatchNormalization())
+        # self.dense_query.add(keras.layers.BatchNormalization())
         self.dense_layers.add(keras.layers.LayerNormalization())
         self.dense_layers.add(keras.layers.Dropout(drop_rate))
       
@@ -218,7 +218,7 @@ def _make_movie_metadata_model(hp: keras_tuner.HyperParameters) -> tf.keras.Mode
           keras.layers.Dense(layer_size, activation="elu",
                              kernel_regularizer=reg,
                              kernel_initializer="glorot_normal"))
-        # self.dense_layers.add(keras.layers.BatchNormalization())
+        # self.dense_query.add(keras.layers.BatchNormalization())
         self.dense_layers.add(keras.layers.LayerNormalization())
         self.dense_layers.add(keras.layers.Dropout(drop_rate))
       
