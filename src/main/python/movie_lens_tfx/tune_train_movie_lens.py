@@ -1729,224 +1729,6 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
     print(f"Loaded best weights from {latest_checkpoint}")
   """
   
-  #from TFX codebase: https://github.com/tensorflow/tfx/blob/v1.16.0/tfx/examples/penguin/penguin_utils_base.py
-  def _make_raw_serving_signatures(model, tf_transform_output: tft.TFTransformOutput):
-    """Returns the serving signatures.
-
-    Args:
-      model: the model function to apply to the transformed features.
-      tf_transform_output: The transformation to apply to the serialized
-        tf.Example.
-
-    Returns:
-      The signatures to use for saving the mode. The 'serving_default' signature
-      will be a concrete function that takes a batch of unspecified length of
-      serialized tf.Example, parses them, transformes the features and
-      then applies the model.
-      Similarly, "serving_query" and "serving_candidate" signature take batches of
-      unspecified length of serialized tf.Example, parse them, transformes them,
-      then applies the embedding models.
-      The 'transform_features' signature parses the
-      example and transforms the features.
-    """
-    
-    # We need to track the layers in the model in order to save it.
-    model.tft_layer = tf_transform_output.transform_features_layer()
-    query_model = model.query_model
-    query_model.tft_layer = model.tft_layer
-    candidate_model = model.candidate_model
-    candidate_model.tft_layer = model.tft_layer
-    
-    @tf.function(input_signature=[tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')])
-    def serve_tf_examples_fn(serialized_tf_example):
-      '''Returns the serving signature for input being raw examples such as
-      inputs = tf.data.TFRecordDataset(examples_file_paths, compression_type="GZIP")
-      where examples_file_paths was written by MovieLensSplitExampleGen
-      '''
-      raw_feature_spec = tf_transform_output.raw_feature_spec()
-      try:
-        raw_feature_spec.pop(LABEL_KEY)
-      except KeyError as e:
-        logging.error(f'ERROR: {e}')
-      
-      raw_features = tf.io.parse_example(serialized_tf_example, raw_feature_spec)
-      
-      transformed_features = model.tft_layer(raw_features)
-      outputs = model(inputs=transformed_features, training=False)
-      return {'outputs': outputs}
-    
-    def get_relaxed_feature_spec(original_spec):
-        """
-        for the serialized example inputs for Candidate model or Query model, we want to be able to accept
-        just the movie data and provide dummy values to fill the full joined user movie data.
-        the dummy value is ignored by the candidate or query model
-        :param original_spec:
-        :return:
-        """
-        relaxed_spec = {}
-        for key, spec in original_spec.items():
-            if isinstance(spec, tf.io.FixedLenFeature):
-                # We create a new spec with a default_value.
-                # Use 0 for numbers and "" for strings.
-                default = 0 if spec.dtype.is_integer or spec.dtype.is_floating else ""
-                if key == 'timestamp':
-                    default = -1
-                relaxed_spec[key] = tf.io.FixedLenFeature(
-                    shape=spec.shape,
-                    dtype=spec.dtype,
-                    default_value=default
-                )
-            else:
-                # VarLenFeatures (SparseTensors) naturally handle missing keys
-                # by returning an empty SparseTensor rather than crashing.
-                relaxed_spec[key] = spec
-        return relaxed_spec
-    
-    @tf.function(input_signature=[tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')])
-    def serve_query_tf_examples_fn(serialized_tf_example):
-      '''
-      Returns the serving signature query embeddings for input being raw examples, not yet transformed to features.
-      '''
-      raw_feature_spec = tf_transform_output.raw_feature_spec()
-      relaxed_feature_spec = get_relaxed_feature_spec(raw_feature_spec)
-      try:
-        relaxed_feature_spec.pop(LABEL_KEY)
-      except KeyError as e:
-        logging.error(f'ERROR: {e}')
-      raw_features = tf.io.parse_example(serialized_tf_example, relaxed_feature_spec)
-      
-      raw_timestamp = raw_features['timestamp']
-      raw_features['timestamp'] = tf.where(
-          tf.equal(raw_timestamp, -1),
-          tf.cast(tf.timestamp(), tf.int64),
-          raw_timestamp
-      )
-      
-      transformed_features = query_model.tft_layer(raw_features)
-      outputs = query_model(inputs=transformed_features, training=False)
-      return {'outputs': outputs}
-    
-    @tf.function(input_signature=[tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')])
-    def serve_candidate_tf_examples_fn(serialized_tf_example):
-      '''
-      Returns the serving signature candidate embeddings for input being raw examples, not yet transformed to features.
-      '''
-      raw_feature_spec = tf_transform_output.raw_feature_spec()
-      relaxed_feature_spec = get_relaxed_feature_spec(raw_feature_spec)
-      try:
-        relaxed_feature_spec.pop(LABEL_KEY)
-      except KeyError as e:
-        logging.error(f'ERROR: {e}')
-      raw_features = tf.io.parse_example(serialized_tf_example, relaxed_feature_spec)
-      transformed_features = candidate_model.tft_layer(raw_features)
-      outputs = candidate_model(inputs=transformed_features, training=False)
-      return {'outputs': outputs}
-    
-    @tf.function(input_signature=[
-      tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')
-    ])
-    def transform_features_fn(serialized_tf_example):
-      '''Returns the transformed_features to be fed as input to evaluator.  inputs are the raw
-      examples from MovieLensSplitExampleGen
-      '''
-      raw_feature_spec = tf_transform_output.raw_feature_spec()
-      logging.debug(f'transform_features_fn spec = {raw_feature_spec}')
-      raw_features = tf.io.parse_example(serialized_tf_example, raw_feature_spec)
-      transformed_features = model.tft_layer(raw_features)
-      logging.info('eval_transformed_features = %s',transformed_features)
-      return transformed_features
-    
-    @tf.function(input_signature=[input_signature_raw_query])
-    def serve_query_dict_fn(raw_features):
-      '''
-      given raw inputs dictionary of tensors, transforms the data and returns the outputs of query model on transformed data.
-      '''
-      full_spec = tf_transform_output.raw_feature_spec()
-      
-      any_input = next(iter(raw_features.values()))
-      batch_size = tf.shape(any_input)[0]
-      
-      complete_features = dict(raw_features)
-      for key, spec in full_spec.items():
-          if key not in complete_features:
-              # Create dummy data based on the spec
-              if isinstance(spec, tf.io.FixedLenFeature):
-                  # Handle Dense Tensors
-                  shape = tf.concat([[batch_size], spec.shape], axis=0)
-                  complete_features[key] = tf.zeros(shape=shape,
-                      dtype=spec.dtype)
-              else:
-                  # Handle VarLen (Sparse Tensors)
-                  # TFT expects a SparseTensor if the spec was VarLen
-                  complete_features[key] = tf.SparseTensor(
-                      indices=tf.zeros([0, 2], dtype=tf.int64),
-                      values=tf.zeros([0], dtype=spec.dtype),
-                      dense_shape=tf.cast(tf.stack([batch_size, 0]), tf.int64)
-                  )
-      transformed_features = query_model.tft_layer(complete_features)
-      outputs = query_model(inputs=transformed_features, training=False)
-      return {'outputs': outputs}
-    
-    @tf.function(input_signature=[input_signature_raw_candidate])
-    def serve_candidate_dict_fn(raw_features):
-      '''
-      given raw inputs dictionary of tensors, transforms the data and returns the outputs of candidate model on transformed data.
-      '''
-      full_spec = tf_transform_output.raw_feature_spec()
-      
-      any_input = next(iter(raw_features.values()))
-      batch_size = tf.shape(any_input)[0]
-      
-      complete_features = dict(raw_features)
-      for key, spec in full_spec.items():
-          if key not in complete_features:
-              # Create dummy data based on the spec
-              if isinstance(spec, tf.io.FixedLenFeature):
-                  # Handle Dense Tensors
-                  shape = tf.concat([[batch_size], spec.shape], axis=0)
-                  complete_features[key] = tf.zeros(shape=shape, dtype=spec.dtype)
-              else:
-                  # Handle VarLen (Sparse Tensors)
-                  # TFT expects a SparseTensor if the spec was VarLen
-                  complete_features[key] = tf.SparseTensor(
-                      indices=tf.zeros([0, 2], dtype=tf.int64),
-                      values=tf.zeros([0], dtype=spec.dtype),
-                      dense_shape=tf.cast(tf.stack([batch_size, 0]), tf.int64)
-                  )
-      transformed_features = candidate_model.tft_layer(complete_features)
-      outputs = candidate_model(inputs=transformed_features, training=False)
-      return {'outputs': outputs}
-    
-    @tf.function(input_signature=[input_signature_raw])
-    def serve_default_dict_fn(raw_features):
-      transformed_features = model.tft_layer(raw_features)
-      outputs = model(inputs=transformed_features, training=False)
-      return {'outputs': outputs}
-    
-    return {
-      'serving_default': serve_tf_examples_fn,
-      'transform_features': transform_features_fn,
-      'serving_candidate': serve_candidate_tf_examples_fn,
-      'serving_query': serve_query_tf_examples_fn,
-      "serving_default_dict": serve_default_dict_fn,
-      "serving_query_dict" : serve_query_dict_fn,
-      "serving_candidate_dict": serve_candidate_dict_fn
-    }
-  
-  signatures = {}
-  other_sigs = _make_raw_serving_signatures(model, tf_transform_output)
-  signatures["transform_features"] = other_sigs["transform_features"]
-  signatures["serving_default"] = other_sigs["serving_default"]
-  signatures["serving_query"] = other_sigs["serving_query"]
-  signatures["serving_candidate"] = other_sigs["serving_candidate"]
-  signatures["serving_default_dict"] = other_sigs["serving_default_dict"]
-  signatures["serving_query_dict"] = other_sigs["serving_query_dict"]
-  signatures["serving_candidate_dict"] = other_sigs["serving_candidate_dict"]
-  
-  tf.saved_model.save(model, fn_args.serving_model_dir, signatures=signatures)
-  
-  print(f"saved the two_tower_dnn model to fn_args.serving_model_dir={fn_args.serving_model_dir}")
-  
   #create the query and candidate saved models
   from pathlib import Path
   path = Path(fn_args.serving_model_dir)
@@ -1956,6 +1738,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   build_input_shapes : Dict[str, tf.TensorShape] = create_input_shapes_from_spec(
       transformed_feature_spec = tf_transform_output.transformed_feature_spec())
   
+  #create new query and candidate trained models without any parent references in thier variable or computation graphs:
   trained_query_weights = model.query_model.get_weights()
   trained_candidate_weights = model.candidate_model.get_weights()
   tf.keras.backend.clear_session()
@@ -1983,12 +1766,9 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   tft_layer = tf_transform_output.transform_features_layer()
   raw_feature_spec = tf_transform_output.raw_feature_spec()
   
-  @tf.function
-  def query_serve_fn(raw_features):
-      any_input = next(iter(raw_features.values()))
-      batch_size = tf.shape(any_input)[0]
+  def _parse_and_transform(raw_features, feature_spec, batch_size):
       complete_features = dict(raw_features)
-      for key, spec in raw_feature_spec.items():
+      for key, spec in feature_spec.items():
           if key not in complete_features:
               if isinstance(spec, tf.io.FixedLenFeature):
                   shape = tf.concat([[batch_size], spec.shape], axis=0)
@@ -1998,30 +1778,154 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
                       indices=tf.zeros([0, 2], dtype=tf.int64),
                       values=tf.zeros([0], dtype=spec.dtype),
                       dense_shape=tf.cast(tf.stack([batch_size, 0]), tf.int64))
-      transformed_features = tft_layer(complete_features)
+      return tft_layer(complete_features)
+  
+  @tf.function
+  def query_serve_fn(raw_features):
+      batch_size = tf.shape(next(iter(raw_features.values())))[0]
+      transformed_features = _parse_and_transform(raw_features, raw_feature_spec, batch_size)
       outputs = query_model(inputs=transformed_features, training=False)
       return {'outputs': outputs}
   
   @tf.function
   def candidate_serve_fn(raw_features):
-      any_input = next(iter(raw_features.values()))
-      batch_size = tf.shape(any_input)[0]
-      complete_features = dict(raw_features)
-      for key, spec in raw_feature_spec.items():
-          if key not in complete_features:
-              if isinstance(spec, tf.io.FixedLenFeature):
-                  shape = tf.concat([[batch_size], spec.shape], axis=0)
-                  complete_features[key] = tf.zeros(shape=shape,
-                      dtype=spec.dtype)
-              else:
-                  complete_features[key] = tf.SparseTensor(
-                      indices=tf.zeros([0, 2], dtype=tf.int64),
-                      values=tf.zeros([0], dtype=spec.dtype),
-                      dense_shape=tf.cast(tf.stack([batch_size, 0]), tf.int64))
-      transformed_features = tft_layer(complete_features)
+      batch_size = tf.shape(next(iter(raw_features.values())))[0]
+      transformed_features = _parse_and_transform(raw_features, raw_feature_spec, batch_size)
       outputs = candidate_model(inputs=transformed_features, training=False)
       return {'outputs': outputs}
   
+  @tf.function
+  def twotower_serve_dict_fn(raw_features):
+      batch_size = tf.shape(next(iter(raw_features.values())))[0]
+      transformed_features = _parse_and_transform(raw_features, raw_feature_spec, batch_size)
+      outputs = model(inputs=transformed_features, training=False)
+      return {'outputs': outputs}
+  
+  def get_relaxed_feature_spec(original_spec):
+      """
+      for the serialized example inputs for Candidate model or Query model, we want to be able to accept
+      just the movie data and provide dummy values to fill the full joined user movie data.
+      the dummy value is ignored by the candidate or query model
+      :param original_spec:
+      :return:
+      """
+      relaxed_spec = {}
+      for key, spec in original_spec.items():
+          if isinstance(spec, tf.io.FixedLenFeature):
+              # We create a new spec with a default_value.
+              # Use 0 for numbers and "" for strings.
+              default = 0 if spec.dtype.is_integer or spec.dtype.is_floating else ""
+              if key == 'timestamp':
+                  default = -1
+              relaxed_spec[key] = tf.io.FixedLenFeature(
+                  shape=spec.shape,
+                  dtype=spec.dtype,
+                  default_value=default
+              )
+          else:
+              # VarLenFeatures (SparseTensors) naturally handle missing keys
+              # by returning an empty SparseTensor rather than crashing.
+              relaxed_spec[key] = spec
+      return relaxed_spec
+  
+  @tf.function
+  def serve_query_tf_examples_fn(serialized_tf_example):
+      '''
+      Returns the serving signature query embeddings for input being raw examples, not yet transformed to features.
+      '''
+      relaxed_feature_spec = get_relaxed_feature_spec(raw_feature_spec)
+      try:
+          relaxed_feature_spec.pop(LABEL_KEY)
+      except KeyError as e:
+          logging.error(f'ERROR: {e}')
+      raw_features = tf.io.parse_example(serialized_tf_example, relaxed_feature_spec)
+      raw_timestamp = raw_features['timestamp']
+      raw_features['timestamp'] = tf.where(
+          tf.equal(raw_timestamp, -1),
+          tf.cast(tf.timestamp(), tf.int64),
+          raw_timestamp
+      )
+      transformed_features = tft_layer(raw_features)
+      outputs = query_model(inputs=transformed_features, training=False)
+      return {'outputs': outputs}
+  
+  @tf.function
+  def serve_candidate_tf_examples_fn(serialized_tf_example):
+      '''
+      Returns the serving signature candidate embeddings for input being raw examples, not yet transformed to features.
+      '''
+      relaxed_feature_spec = get_relaxed_feature_spec(raw_feature_spec)
+      try:
+          relaxed_feature_spec.pop(LABEL_KEY)
+      except KeyError as e:
+          logging.error(f'ERROR: {e}')
+      raw_features = tf.io.parse_example(serialized_tf_example,
+          relaxed_feature_spec)
+      transformed_features = tft_layer(raw_features)
+      outputs = candidate_model(inputs=transformed_features, training=False)
+      return {'outputs': outputs}
+  
+  def serve_twotower_tf_examples_fn(serialized_tf_example):
+      '''Returns the serving signature for input being raw examples such as
+      inputs = tf.data.TFRecordDataset(examples_file_paths, compression_type="GZIP")
+      where examples_file_paths was written by MovieLensSplitExampleGen
+      '''
+      raw_feature_spec2 = raw_feature_spec.copy()
+      try:
+          raw_feature_spec2.pop(LABEL_KEY)
+      except KeyError as e:
+          logging.error(f'ERROR: {e}')
+      raw_features = tf.io.parse_example(serialized_tf_example, raw_feature_spec2)
+      transformed_features = tft_layer(raw_features)
+      outputs = model(inputs=transformed_features, training=False)
+      return {'outputs': outputs}
+  
+  @tf.function
+  def serve_query_tf_examples_fn(serialized_tf_example):
+      '''
+      Returns the serving signature query embeddings for input being raw examples, not yet transformed to features.
+      '''
+      relaxed_feature_spec = get_relaxed_feature_spec(raw_feature_spec)
+      try:
+          relaxed_feature_spec.pop(LABEL_KEY)
+      except KeyError as e:
+          logging.error(f'ERROR: {e}')
+      raw_features = tf.io.parse_example(serialized_tf_example, relaxed_feature_spec)
+      raw_timestamp = raw_features['timestamp']
+      raw_features['timestamp'] = tf.where(
+          tf.equal(raw_timestamp, -1),
+          tf.cast(tf.timestamp(), tf.int64),
+          raw_timestamp
+      )
+      transformed_features = tft_layer(raw_features)
+      outputs = query_model(inputs=transformed_features, training=False)
+      return {'outputs': outputs}
+  
+  @tf.function
+  def serve_candidate_tf_examples_fn(serialized_tf_example):
+      '''
+      Returns the serving signature candidate embeddings for input being raw examples, not yet transformed to features.
+      '''
+      relaxed_feature_spec = get_relaxed_feature_spec(raw_feature_spec)
+      try:
+          relaxed_feature_spec.pop(LABEL_KEY)
+      except KeyError as e:
+          logging.error(f'ERROR: {e}')
+      raw_features = tf.io.parse_example(serialized_tf_example, relaxed_feature_spec)
+      transformed_features = tft_layer(raw_features)
+      outputs = candidate_model(inputs=transformed_features, training=False)
+      return {'outputs': outputs}
+  
+  @tf.function
+  def transform_features_fn(serialized_tf_example):
+      '''Returns the transformed_features to be fed as input to evaluator.  inputs are the raw
+      examples from MovieLensSplitExampleGen
+      '''
+      raw_features = tf.io.parse_example(serialized_tf_example,raw_feature_spec)
+      transformed_features = tft_layer(raw_features)
+      return transformed_features
+  
+  ## ==== begin the export to QUERY saved model =======
   export_archive = keras.export.ExportArchive()
   export_archive.track(query_model)
   export_archive.track(tft_layer)
@@ -2031,8 +1935,17 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       fn=query_serve_fn,
       input_signature=[input_signature_raw_query]
   )
+  export_archive.add_endpoint(
+      name="serving_default_examples",
+      fn=serve_query_tf_examples_fn,
+      input_signature=[tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')]
+  )
+  
   export_archive.write_out(serving_query_dir)
   
+  logging.info(f"saved query model to {serving_query_dir}")
+  
+  ## ==== begin the export to CANDIDATE saved model =======
   export_archive = keras.export.ExportArchive()
   export_archive.track(candidate_model)
   export_archive.track(tft_layer)
@@ -2042,40 +1955,63 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       fn=candidate_serve_fn,
       input_signature=[input_signature_raw_candidate]
   )
+  export_archive.add_endpoint(
+      name="serving_default_examples",
+      fn=serve_candidate_tf_examples_fn,
+      input_signature=[
+          tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')]
+  )
   export_archive.write_out(serving_candidate_dir)
   
-  '''
-  ## DEBUG
-  ckpt_path = os.path.join(serving_query_dir, "variables", "variables")
-  try:
-      print(f"--- Variables inside: {ckpt_path} ---")
-      vars_in_ckpt = tf.train.list_variables(ckpt_path)
-      for name, shape in vars_in_ckpt:
-          print(f"Found variable: {name} with shape {shape}")
-  except Exception as e:
-      print(f"Could not read checkpoint: {e}")
-  try:
-      reader = tf.train.load_checkpoint(ckpt_path)
-      variable_map = reader.get_variable_to_shape_map()
-      
-      # Check if the path the error is complaining about actually exists
-      target = "query_model/user_model/age_emb/dense/kernel"
-      found = False
-      for name in variable_map:
-          if target in name:
-              print(f"MATCH FOUND: {name}")
-              found = True
-      
-      if not found:
-          print(f"CRITICAL: '{target}' does not exist in the checkpoint!")
-          print("Here are the first 10 variables that DO exist:")
-          for name in list(variable_map.keys())[:10]:
-              print(f" - {name}")
-  except Exception as e2:
-      print(f"Could not read checkpoint vars: {e2}")
-  '''
+  logging.info(f"saved candidate model to {serving_candidate_dir}")
   
-  print(f"saved query model to {serving_query_dir}")
+  ## ==== begin the export to TWOTOWER all-in-one saved model =======
+  export_archive = keras.export.ExportArchive()
+  export_archive.track(model)
+  export_archive.track(query_model)
+  export_archive.track(candidate_model)
+  export_archive.track(tft_layer)
+
+  export_archive.add_endpoint(
+      name="serving_default",
+      fn=serve_twotower_tf_examples_fn,
+      input_signature=[tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')]
+  )
+  export_archive.add_endpoint(
+      name="serving_default_dict",
+      fn=twotower_serve_dict_fn,
+      input_signature=[input_signature_raw]
+  )
+  export_archive.add_endpoint(
+      name="transform_features",
+      fn=transform_features_fn,
+      input_signature=[
+          tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')]
+  )
+  export_archive.add_endpoint(
+      name="serving_query",
+      fn=serve_query_tf_examples_fn,
+      input_signature=[tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')]
+  )
+  export_archive.add_endpoint(
+      name="serving_query_dict",
+      fn=query_serve_fn,
+      input_signature=[input_signature_raw_query]
+  )
+  export_archive.add_endpoint(
+      name="serving_candidate",
+      fn=serve_candidate_tf_examples_fn,
+      input_signature=[tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')]
+  )
+  export_archive.add_endpoint(
+      name="serving_candidate_dict",
+      fn=candidate_serve_fn,
+      input_signature=[input_signature_raw_candidate]
+  )
+  
+  export_archive.write_out(fn_args.serving_model_dir)
+  
+  logging.info(f"saved candidate model to {fn_args.serving_model_dir}")
   
   return model
 
