@@ -966,10 +966,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         "temperature": self.temperature,
         })
       return config
-    
-    @classmethod
-    def from_config(cls, config):
-      return cls(**config)
   
   @keras.utils.register_keras_serializable(package=package)
   class HeuristicLambdaLoss(keras.losses.Loss):
@@ -1239,7 +1235,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
           b_values = table_b.lookup(movie_ids_flat)
           
           # Items with higher B_new appear less frequently (tail items)
-          tail_mask = b_values > b_threshold
+          tail_mask = b_values > self.b_threshold
           
           # Compute ranking via top_k over in-batch logits
           _, indices = tf.nn.top_k(logits, k=batch_size)
