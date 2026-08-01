@@ -687,6 +687,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       self.ndcg_k_metric = NDCGAtKForInBatchNegatives(k=20)
       self.recall_k_metric = RecallAtKForInBatchNegatives(k=20)
       self.in_batch_hit_rate_metric = InBatchHitRate()
+      self.ndcg_k_composite_metric = NDCGAtKComposite(b_threshold=100.0, k=20)
       
       self.regl2 = regl2
       
@@ -719,9 +720,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
               key_dtype=tf.int32, value_dtype=tf.float32, default_value=1.0)
           self.global_step = tf.Variable(0., trainable=False,
               dtype=tf.float32)
-          self.ndcg_k_composite_metric = NDCGAtKComposite(self.table_B, b_threshold=100.0, k=20)
       else:
-          self.ndcg_k_composite_metric = NDCGAtKComposite(table_b=None, k=20)
+          self.table_B = None
     
     @property
     def metrics(self):
@@ -869,6 +869,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
             y_true=labels,
             y_pred=masked_raw_logits,
             movie_ids=movie_ids,
+            table_b=self.table_B,
             sample_weight=y
         )
         
@@ -927,9 +928,11 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         self.recall_k_metric.update_state(labels, masked_raw_logits, sample_weight=y)
         self.in_batch_hit_rate_metric.update_state(y_true=labels, y_pred=masked_raw_logits, sample_weight=y)
         
+        #def update_state(self, y_true, y_pred, sample_weight=None, table_b = None, movie_ids=None)
         self.ndcg_k_composite_metric.update_state(
             y_true=labels,
             y_pred=masked_raw_logits,
+            table_b=self.table_B,
             movie_ids=movie_ids,
             sample_weight=y
         )
@@ -1219,30 +1222,28 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       Computes NDCG@K restricted strictly to rows where the true positive
       candidate item is a tail item based on the streaming table_B state.
       """
-      def __init__(self, table_b, b_threshold=100.0, name="ndcg_tail",
+      def __init__(self, b_threshold=100.0, name="ndcg_tail",
               k: int = 20, **kwargs):
           name = f"{name}_{k}"
-          super().__init__(name=name, **kwargs)
+          super(NDCGAtKForInBatchTail, self).__init__(name=name, **kwargs)
           self.k = tf.cast(k, tf.float32)
-          self.table_b = table_b
           self.b_threshold = tf.cast(b_threshold, tf.float32)
           self.ndcg_sum = self.add_weight(name="ndcg_sum", initializer="zeros")
           self.count = self.add_weight(name="count", initializer="zeros")
       
-      def update_state(self, labels, logits, movie_ids, sample_weight=None):
+      def update_state(self, labels, logits, movie_ids, table_b, sample_weight=None):
           batch_size = tf.shape(logits)[0]
           
           # Look up frequency state (B_new) for each movie in the batch
           movie_ids_flat = tf.cast(tf.reshape(movie_ids, [-1]), tf.int32)
-          b_values = self.table_b.lookup(movie_ids_flat)
+          b_values = table_b.lookup(movie_ids_flat)
           
           # Items with higher B_new appear less frequently (tail items)
-          tail_mask = b_values > self.b_threshold
+          tail_mask = b_values > b_threshold
           
           # Compute ranking via top_k over in-batch logits
           _, indices = tf.nn.top_k(logits, k=batch_size)
-          target_items = tf.expand_dims(
-              tf.range(batch_size, dtype=indices.dtype), 1)
+          target_items = tf.expand_dims(tf.range(batch_size, dtype=indices.dtype), 1)
           rank_matches = tf.equal(indices, target_items)
           rank_indices = tf.where(rank_matches)
           ranks = tf.cast(rank_indices[:, 1], tf.float32)
@@ -1258,8 +1259,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
           # Filter accumulator to include only tail rows, scaled by sample weights if provided
           weights = tf.cast(tail_mask, tf.float32)
           if sample_weight is not None:
-              weights = weights * tf.cast(tf.reshape(sample_weight, [-1]),
-                  tf.float32)
+              weights = weights * tf.cast(tf.reshape(sample_weight, [-1]), tf.float32)
           
           self.ndcg_sum.assign_add(tf.reduce_sum(dcg * weights))
           self.count.assign_add(tf.reduce_sum(weights))
@@ -1272,30 +1272,34 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
           self.count.assign(0.0)
       
       def get_config(self):
-          config = super().get_config()
+          config = super(NDCGAtKForInBatchTail, self).get_config()
           config.update({
-              "b_threshold": self.b_threshold if hasattr(self, 'b_threshold') else 100.0,
               "k": int(self.k),
+              "b_threshold": self.b_threshold,
           })
           return config
       
   @keras.utils.register_keras_serializable(package=package)
   class NDCGAtKComposite(keras.metrics.Metric):
-      def __init__(self, table_b, b_threshold=100.0, name="composite_ndcg",
-              k: int = 20, **kwargs):
+      def __init__(self, b_threshold=100.0, name="composite_ndcg",
+              k: int = 20, use_tail:bool=True, **kwargs):
+          #composite_ndcg_20
           name = f"{name}_{k}"
-          super().__init__(name=name, **kwargs)
+          super(NDCGAtKComposite, self).__init__(name=name, **kwargs)
+          self.b_threshold = tf.cast(b_threshold, tf.float32)
+          self.k = k
+          self.use_tail = use_tail
           self.ndcg = NDCGAtKForInBatchNegatives(k=k)
-          if table_b is not None:
-              self.ndcg_tail = NDCGAtKForInBatchTail(table_b=table_b, b_threshold=b_threshold, k=k)
+          if use_tail is not None:
+              self.ndcg_tail = NDCGAtKForInBatchTail(b_threshold=b_threshold, k=k)
           else:
               self.ndcg_tail = None
       
-      def update_state(self, y_true, y_pred, sample_weight=None, movie_ids=None):
+      def update_state(self, y_true, y_pred, sample_weight=None, table_b = None, movie_ids=None):
           # Forward the data to both underlying sub-metrics
           self.ndcg.update_state(y_true, y_pred, sample_weight)
           if self.ndcg_tail is not None:
-              self.ndcg_tail.update_state(y_true, y_pred, movie_ids, sample_weight)
+              self.ndcg_tail.update_state(y_true, y_pred, movie_ids, table_b, sample_weight)
       
       def result(self):
           # Fetch the results of both sub-metrics
@@ -1313,13 +1317,14 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
                 self.ndcg_tail.reset_state()
       
       def get_config(self):
-          config = super().get_config()
+          config = super(NDCGAtKComposite).get_config()
           config.update({
-              "b_threshold": self.b_threshold if hasattr(self, 'b_threshold') else 100.0,
               "k": int(self.k),
+              "b_threshold": self.b_threshold,
+              "use_tail": self.use_tail,
           })
           return config
-          
+      
   @keras.utils.register_keras_serializable(package=package)
   class RecallAtKForInBatchNegatives(keras.metrics.Metric):
       """
@@ -2289,12 +2294,11 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
       beta=3.5, #defaut 2.6;  4.0 for more exploration.  
 
       #use when fitting
-      #num_initial_points=15, #30
-      #max_trials=40, #should be 2 to 3 times num_initial_points
+      num_initial_points=15, #30
+      max_trials=40, #should be 2 to 3 times num_initial_points
       #TEMPORARY when fixing params:
-      #DEBUG
-      num_initial_points=1, #30
-      max_trials=1, #should be 2 to 3 times num_initial_points
+      #num_initial_points=1, #30
+      #max_trials=1, #should be 2 to 3 times num_initial_points
 
       allow_new_entries=False,
       directory=fn_args.working_dir,
