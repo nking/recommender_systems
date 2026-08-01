@@ -27,12 +27,22 @@ from tensorboard.plugins.hparams.api import hparams
 # from tensorflow.python.ops.gen_experimental_dataset_ops import save_dataset
 from tfx import v1 as tfx
 
+#DEBUG
+import logging
+import sys
+logging.basicConfig(stream=sys.stderr, level=logging.INFO)
+logging.info("--- THIS WILL SHOW UP IN TFX LOGS ---")
+
 from tfx_bsl.public import tfxio
-
 from absl import logging
-
 logging.set_verbosity(logging.WARNING)
 logging.set_stderrthreshold(logging.WARNING)
+#DEBUG:
+logging.set_verbosity(logging.DEBUG)
+logging.set_stderrthreshold(logging.DEBUG)
+
+#DEBUG:
+tf.config.run_functions_eagerly(True)
 
 '''
 builds pipelines for training a TwoTowerDNN model to train Query and Candidate
@@ -743,14 +753,18 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       return s
    
     def build(self, input_shape):
+      normalized_input_shape = {
+        k: tf.TensorShape(v) if not isinstance(v, tf.TensorShape) else v
+        for k, v in input_shape.items()
+      }
       #print(f'build {self.name} input_shape={input_shape}\n')
       # logging.debug(f'build {self.name} input_shape={input_shape}\n')
       if not self.query_model.built:
-        self.query_model.build(input_shape)
+        self.query_model.build(normalized_input_shape)
       if not self.candidate_model.built:
-        self.candidate_model.build(input_shape)
-      s0 = self.query_model.compute_output_shape(input_shape)
-      s1 = self.candidate_model.compute_output_shape(input_shape)
+        self.candidate_model.build(normalized_input_shape)
+      s0 = self.query_model.compute_output_shape(normalized_input_shape)
+      s1 = self.candidate_model.compute_output_shape(normalized_input_shape)
       self.dot_layer.build([s0, s1])
       s2 = self.dot_layer.compute_output_shape([s0, s1])
       self.built = True
@@ -963,6 +977,24 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         "temperature": self.temperature,
         })
       return config
+    
+    #override needed for keras_tuner utils.save_json
+    # if TensorShape remains in return from model.get_build_config(), there is error here:
+    # https://github.com/keras-team/keras-tuner/blob/48f671490201f6b873e4d27dee8df6f406256ca4/keras_tuner/engine/tuner.py#L237
+    # this override removes the TensorShapes and then a complementary fix in the def build method puts the TensorShapes back in.
+    def get_build_config(self):
+        build_config = super().get_build_config()
+        # If input_shape is a dict of TensorShapes, convert them to tuples/lists recursively:
+        if "input_shape" in build_config:
+            original_shapes = build_config["input_shape"]
+            if isinstance(original_shapes, dict):
+                build_config["input_shape"] = {
+                    k: tuple(v.as_list()) if hasattr(v, "as_list") and v.rank is not None else v
+                    for k, v in original_shapes.items()
+                }
+            elif hasattr(original_shapes, "as_list"):
+                build_config["input_shape"] = tuple(original_shapes.as_list())
+        return build_config
   
   @keras.utils.register_keras_serializable(package=package)
   class HeuristicLambdaLoss(keras.losses.Loss):
@@ -1464,6 +1496,13 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   if not isinstance(model, keras.models.Model):
     logging.debug(f'this is the fail at tuner.py line 167')
   # TO debug, user run_eagerly=False
+  
+  #DEBUG:   jsonmodel.get_build_config() serial error for inputs from keras-tuner model.get_build_config()
+  logging.debug(f"model.get_build_config():")
+  dbg = model.get_build_config()
+  for key, val in dbg.items():
+      logging.debug(f"key: {key}, val: {val}, type: {type(val)}")
+  
   return model
 
 def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
@@ -1514,7 +1553,9 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   hp.Fixed('n_users', value=custom_config["n_users"])
   hp.Fixed('n_movies', custom_config["n_movies"])
   hp.Fixed('n_genres', custom_config["n_genres"])
-  hp.Fixed('run_eagerly', custom_config["run_eagerly"])
+  #DEBUG:
+  #hp.Fixed('run_eagerly', custom_config.get("run_eagerly", False))
+  hp.Fixed('run_eagerly', True)
   hp.Fixed('device', custom_config.get("device", 'CPU'))
   num_examples = custom_config.get("num_examples", DEFAULT_NUM_EXAMPLES)
   num_train = int(num_examples * 0.8)
@@ -1822,7 +1863,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
     GLOBAL_BATCH_SIZE, is_train=False)
   
   #the model is built and compiled in strategy scope:
-  logging.info("create 2Tower ")
+  logging.info("create 2Tower from run_fn")
   model = _make_2tower_keras_model(hp)
   # model = _make_2tower_keras_model(hp, tf_transform_output)
 
@@ -1889,6 +1930,9 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   query_model.build(input_shape=build_input_shapes)
   query_model.set_weights(trained_query_weights)
   
+  print('QUERY MODEL SUMMARY:')
+  query_model.summary()
+  
   candidate_model = _make_candidate_model(n_movies=model.n_movies,
       movies_offset=model.movies_offset,
       n_genres=model.n_genres,
@@ -1899,6 +1943,9 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       incl_genres=model.incl_genres)
   candidate_model.build(input_shape=build_input_shapes)
   candidate_model.set_weights(trained_candidate_weights)
+  
+  print('CANDIDATE MODEL SUMMARY:')
+  candidate_model.summary()
   
   tft_layer = tf_transform_output.transform_features_layer()
   raw_feature_spec = tf_transform_output.raw_feature_spec()
@@ -2195,6 +2242,22 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
   """
   # RandomSearch is a subclass of keras_tuner.Tuner which inherits from
   # BaseTuner.
+  
+  # Save reference to original dumps
+  _original_dumps = json.dumps
+  
+  def _debug_dumps(obj, *args, **kwargs):
+      try:
+          return _original_dumps(obj, *args, **kwargs)
+      except TypeError as e:
+          if "TensorShape" in str(e):
+              print("--- CAUGHT TENSORSHAPE JSON ERROR ---")
+              import traceback
+              traceback.print_stack()
+              print("Offending object structure:", obj)
+          raise e
+  
+  json.dumps = _debug_dumps
   
   #FnArgs should be from tfx.components.trainer.fn_args_utils
   #print(f"TUNER_FN fn_args={fn_args}")

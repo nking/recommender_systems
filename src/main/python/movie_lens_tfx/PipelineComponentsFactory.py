@@ -139,7 +139,7 @@ class PipelineComponentsFactory():
         )
       )
       return [example_gen, model_resolver, bulk_inferrer]
-    
+   
     tuner_custom_config = {
       'n_users': self.n_users,
       'n_movies': self.n_movies,
@@ -467,16 +467,16 @@ class PipelineComponentsFactory():
       "version": self.version,
       "model_name": MODEL_NAME.MOVIE_METADATA.value,
     }
-    push_config = {
+    push_custom_config = {
       "version": self.version,
       "model_name": MODEL_NAME.MOVIE_METADATA.value,
     }
     if self.team_lead:
       tuner_custom_config['team_lead'] = self.team_lead
-      push_config['team_lead'] = self.team_lead
+      push_custom_config['team_lead'] = self.team_lead
     if self.git_hash:
       tuner_custom_config['git_hash'] = self.git_hash
-      push_config['git_hash'] = self.git_hash
+      push_custom_config['git_hash'] = self.git_hash
     
     statistics_gen = StatisticsGen(
       examples=example_gen.outputs['output_examples'])
@@ -659,7 +659,7 @@ class PipelineComponentsFactory():
         push_destination=pusher_pb2.PushDestination(
           filesystem=pusher_pb2.PushDestination.Filesystem(
             base_directory=self.serving_model_dir)),
-        custom_config=push_config
+        custom_config=push_custom_config
       )
     
     components = [example_gen, statistics_gen, schema_gen]

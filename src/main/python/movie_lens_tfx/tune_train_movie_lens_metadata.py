@@ -75,6 +75,7 @@ def _make_movie_metadata_model(hp: keras_tuner.HyperParameters) -> tf.keras.Mode
   
   logging.info("about to deserialize input_dataset_element_spec_trans_ser")
   input_dataset_element_spec_trans = hp.get("input_dataset_element_spec_trans_ser")
+  logging.debug(f"hp.get('input_dataset_element_spec_trans_ser')={input_dataset_element_spec_trans}")
   input_dataset_element_spec_trans = pickle.loads(base64.b64decode(input_dataset_element_spec_trans.encode('utf-8')))
   
   # TODO: add hyper-parameter "temperature" after L2Norm
@@ -406,10 +407,6 @@ def _make_movie_metadata_model(hp: keras_tuner.HyperParameters) -> tf.keras.Mode
                      })
       return config
     
-    @classmethod
-    def from_config(cls, config):
-      return cls(**config)
-  
   # use strategy
   d = hp.get("device")
   if d == "GPU":
