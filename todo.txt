@@ -1,3 +1,10 @@
+- add versioning to the model and metadata json file for the params it used
+
+- if using the HPO objective val_composite_ndcg_20
+  doesn't lead to popularity bias corrections (seen as
+  user affinity difference between niche and mainstream
+  users), change to use val_ndcg_tail_20
+
 - change the bi-encoder to use pretrained LLM for
   the User and Movie properties that are not
   user_id and movie_id.  use a prompt formatting

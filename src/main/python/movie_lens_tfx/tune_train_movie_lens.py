@@ -40,7 +40,7 @@ embedding models.  The training is optimized using Contrastive Learning for a
 Listwise Discriminative Model.
 
 The run_fn defines the model, compile, fit and signatures.
-The tuner_fn specifies that the custom metric "val_ndcg_20" should be used
+The tuner_fn specifies that the custom metric "val_composite_ndcg_20" should be used
 to decide which model is best.
 '''
 
@@ -652,6 +652,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
          feature_acronym: str = "",
          use_bias_corr: bool = True,
          bias_corr_alpha: float=0.1,
+         log_q_correction_factor: float=0.5,
          incl_genres: bool = True,
          temperature:float=1.0, name='twotowerdnn', **kwargs):
       super(TwoTowerDNN, self).__init__(name=name, **kwargs)
@@ -686,8 +687,13 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       self.ndcg_k_metric = NDCGAtKForInBatchNegatives(k=20)
       self.recall_k_metric = RecallAtKForInBatchNegatives(k=20)
       self.in_batch_hit_rate_metric = InBatchHitRate()
-
+      
       self.regl2 = regl2
+      
+      # 1.0 : Full popularity bias
+      # 0.5 : A balanced space that allows the latent tail to emerge
+      # 0.0 : Heavy popularity penalty.
+      self.log_q_correction_factor = log_q_correction_factor
       
       self.n_users = n_users
       self.n_movies = n_movies
@@ -713,13 +719,17 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
               key_dtype=tf.int32, value_dtype=tf.float32, default_value=1.0)
           self.global_step = tf.Variable(0., trainable=False,
               dtype=tf.float32)
+          self.ndcg_k_composite_metric = NDCGAtKComposite(self.table_B, b_threshold=100.0, k=20)
+      else:
+          self.ndcg_k_composite_metric = NDCGAtKComposite(table_b=None, k=20)
     
     @property
     def metrics(self):
         # OVERRIDE to workaround tf.keras handling of validation metrics
         # It tells the model: "When you finish an epoch, pull results from these two."
-        return [self.mean_loss_metric, self.in_batch_hit_rate_metric, self.mrr_k_metric, self.ndcg_k_metric, self.recall_k_metric]
-    
+        return [self.mean_loss_metric, self.in_batch_hit_rate_metric, self.mrr_k_metric,
+                self.ndcg_k_metric, self.ndcg_k_composite_metric, self.recall_k_metric]
+        
     def call(self, inputs):
       """
       compute the cosine similarity score for the user data to movie data.
@@ -771,42 +781,33 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         B_old = self.table_B.lookup(movie_ids_flat)
         
         delta_t = tf.cast(t - last_t, tf.float32)
-
-        # B = (1 - alpha) * B + alpha * (t - last_t)
+        
         B_new = (1.0 - self.bias_corr_alpha) * B_old + self.bias_corr_alpha * delta_t
         
         self.table_A.insert(movie_ids_flat, tf.fill(tf.shape(movie_ids_flat), t))
         self.table_B.insert(movie_ids_flat, B_new)
-        return 1.0/tf.maximum(B_new, 1.0)
-
+        
+        # Remove tf.maximum(B_new, 1.0).
+        # If B_new is 0.2 (appears 5 times per batch), p_i correctly becomes 5.0
+        return 1.0 / tf.maximum(B_new, 1e-6)
+    
     def in_batch_softmax_loss_function(self, y_true, logits):
         """
         y_true: The original ratings (used as sample weights) [Batch]
         logits: The [Batch, Batch] matrix after Log-Q correction and Temperature
         """
         batch_size = tf.shape(logits)[0]
-    
-        # The correct movie for each user is at the same index (the diagonal)
         labels = tf.range(batch_size)
-
-        # We use Categorical Crossentropy. 
-        # Each row is a distribution over all movies in the batch.
+        
         loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
             labels=labels, logits=logits)
-
-        #Force y_true to be (batch_size,) to avoid the [B, B] broadcasting trap
-        weights = tf.cast(tf.reshape(y_true, [-1]), tf.float32)
-        #Compute weighted mean for more stable gradients
-        weighted_loss = loss * weights
-        # prevent the loss from "shrinking" if the ratings are scaled [0, 1]
-        return tf.math.divide_no_nan(
-            tf.reduce_sum(weighted_loss),
-            tf.reduce_sum(weights)
-        )
+        
+        return tf.reduce_mean(loss)
     
     def train_step(self, batch):
         x, y = batch  # y is typically not used in pure In-Batch Softmax (identity matrix is the target)
         movie_ids = x['movie_id']
+        beta_correction = self.log_q_correction_factor
         with tf.GradientTape() as tape:
             user_embeddings = self.query_model(x)  # [Batch, Dim]
             movie_embeddings = self.candidate_model(x)  # [Batch, Dim]
@@ -824,10 +825,13 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
             if self.use_bias_corr:
                 # Get frequency corrections
                 p_i = self._update_frequencies(movie_ids)
-                log_q = tf.math.log(tf.clip_by_value(p_i, 1e-6, 1.))
+                # Allow p_i to act as expected count, which can be > 1.0 for blockbusters
+                # Do not clip the upper bound to 1.0, only protect against log(0)
+                log_q = tf.math.log(tf.maximum(p_i, 1e-6))
                 # Apply Log-Q correction to columns (the candidate side)
                 # Broad-casting log_q across the batch
-                logits = logits - tf.expand_dims(log_q, axis=0)
+                #logits = logits - tf.expand_dims(log_q, axis=0)
+                logits = logits - (beta_correction * tf.expand_dims(log_q, axis=0))
             
             #logits is [batch_size x batch_size] to use non-diagonal elements as negatives for the
             #diagonal elements.
@@ -861,6 +865,13 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         self.recall_k_metric.update_state(labels, masked_raw_logits, sample_weight=y)
         self.in_batch_hit_rate_metric(y_true=labels, y_pred=masked_raw_logits, sample_weight=y)
         
+        self.ndcg_k_composite_metric.update_state(
+            y_true=labels,
+            y_pred=masked_raw_logits,
+            movie_ids=movie_ids,
+            sample_weight=y
+        )
+        
         output = {m.name: m.result() for m in self.metrics}
         #DEBUG: =====
         output.update({
@@ -875,6 +886,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     
     def test_step(self, data):
         x, y = data
+        movie_ids = x['movie_id']
         user_embeddings = self.query_model(x, training=False)
         movie_embeddings = self.candidate_model(x, training=False)
         #in test and eval, do not divide by temperature
@@ -915,6 +927,13 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         self.recall_k_metric.update_state(labels, masked_raw_logits, sample_weight=y)
         self.in_batch_hit_rate_metric.update_state(y_true=labels, y_pred=masked_raw_logits, sample_weight=y)
         
+        self.ndcg_k_composite_metric.update_state(
+            y_true=labels,
+            y_pred=masked_raw_logits,
+            movie_ids=movie_ids,
+            sample_weight=y
+        )
+        
         output = {m.name: m.result() for m in self.metrics}
         # DEBUG: =====
         logit_max = tf.reduce_max(logits)
@@ -940,6 +959,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         "regl2": self.regl2,
         "incl_genres": self.incl_genres,
         "bias_corr_alpha": self.bias_corr_alpha,
+        "log_q_correction_factor": self.log_q_correction_factor,
         "temperature": self.temperature,
         })
       return config
@@ -1151,8 +1171,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
           name = f"{name}_{k}"
           super(NDCGAtKForInBatchNegatives, self).__init__(name=name, **kwargs)
           self.k = tf.cast(k, tf.float32)
-          self.ndcg_sum = self.add_weight(name="ndcg_sum",
-              initializer="zeros")
+          self.ndcg_sum = self.add_weight(name="ndcg_sum", initializer="zeros")
           self.count = self.add_weight(name="count", initializer="zeros")
       
       def update_state(self, y_true, y_pred, sample_weight=None):
@@ -1193,7 +1212,114 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
               "k": float(self.k.numpy())
           })
           return config
+  
+  @keras.utils.register_keras_serializable(package=package)
+  class NDCGAtKForInBatchTail(keras.metrics.Metric):
+      """
+      Computes NDCG@K restricted strictly to rows where the true positive
+      candidate item is a tail item based on the streaming table_B state.
+      """
+      def __init__(self, table_b, b_threshold=100.0, name="ndcg_tail",
+              k: int = 20, **kwargs):
+          name = f"{name}_{k}"
+          super().__init__(name=name, **kwargs)
+          self.k = tf.cast(k, tf.float32)
+          self.table_b = table_b
+          self.b_threshold = tf.cast(b_threshold, tf.float32)
+          self.ndcg_sum = self.add_weight(name="ndcg_sum", initializer="zeros")
+          self.count = self.add_weight(name="count", initializer="zeros")
       
+      def update_state(self, labels, logits, movie_ids, sample_weight=None):
+          batch_size = tf.shape(logits)[0]
+          
+          # Look up frequency state (B_new) for each movie in the batch
+          movie_ids_flat = tf.cast(tf.reshape(movie_ids, [-1]), tf.int32)
+          b_values = self.table_b.lookup(movie_ids_flat)
+          
+          # Items with higher B_new appear less frequently (tail items)
+          tail_mask = b_values > self.b_threshold
+          
+          # Compute ranking via top_k over in-batch logits
+          _, indices = tf.nn.top_k(logits, k=batch_size)
+          target_items = tf.expand_dims(
+              tf.range(batch_size, dtype=indices.dtype), 1)
+          rank_matches = tf.equal(indices, target_items)
+          rank_indices = tf.where(rank_matches)
+          ranks = tf.cast(rank_indices[:, 1], tf.float32)
+          
+          # Calculate NDCG@K positional weight (1 / log2(rank + 2))
+          in_top_k = ranks < self.k
+          dcg = tf.where(
+              in_top_k,
+              1.0 / (tf.math.log(ranks + 2.0) / tf.math.log(2.0)),
+              0.0
+          )
+          
+          # Filter accumulator to include only tail rows, scaled by sample weights if provided
+          weights = tf.cast(tail_mask, tf.float32)
+          if sample_weight is not None:
+              weights = weights * tf.cast(tf.reshape(sample_weight, [-1]),
+                  tf.float32)
+          
+          self.ndcg_sum.assign_add(tf.reduce_sum(dcg * weights))
+          self.count.assign_add(tf.reduce_sum(weights))
+      
+      def result(self):
+          return tf.math.divide_no_nan(self.ndcg_sum, self.count)
+      
+      def reset_state(self):
+          self.ndcg_sum.assign(0.0)
+          self.count.assign(0.0)
+      
+      def get_config(self):
+          config = super().get_config()
+          config.update({
+              "b_threshold": self.b_threshold if hasattr(self, 'b_threshold') else 100.0,
+              "k": int(self.k),
+          })
+          return config
+      
+  @keras.utils.register_keras_serializable(package=package)
+  class NDCGAtKComposite(keras.metrics.Metric):
+      def __init__(self, table_b, b_threshold=100.0, name="composite_ndcg",
+              k: int = 20, **kwargs):
+          name = f"{name}_{k}"
+          super().__init__(name=name, **kwargs)
+          self.ndcg = NDCGAtKForInBatchNegatives(k=k)
+          if table_b is not None:
+              self.ndcg_tail = NDCGAtKForInBatchTail(table_b=table_b, b_threshold=b_threshold, k=k)
+          else:
+              self.ndcg_tail = None
+      
+      def update_state(self, y_true, y_pred, sample_weight=None, movie_ids=None):
+          # Forward the data to both underlying sub-metrics
+          self.ndcg.update_state(y_true, y_pred, sample_weight)
+          if self.ndcg_tail is not None:
+              self.ndcg_tail.update_state(y_true, y_pred, movie_ids, sample_weight)
+      
+      def result(self):
+          # Fetch the results of both sub-metrics
+          r0 = self.ndcg.result()
+          if self.ndcg_tail is not None:
+              r1 = self.ndcg_tail.result()
+              return r0 + (1.0 * r1)
+          else:
+              return r0
+          
+      def reset_state(self):
+          # Crucial step: Reset the internal accumulated states
+          self.ndcg.reset_state()
+          if self.ndcg_tail is not None:
+                self.ndcg_tail.reset_state()
+      
+      def get_config(self):
+          config = super().get_config()
+          config.update({
+              "b_threshold": self.b_threshold if hasattr(self, 'b_threshold') else 100.0,
+              "k": int(self.k),
+          })
+          return config
+          
   @keras.utils.register_keras_serializable(package=package)
   class RecallAtKForInBatchNegatives(keras.metrics.Metric):
       """
@@ -1271,6 +1397,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       feature_acronym=hp.get("feature_acronym"),
       use_bias_corr=hp.get('use_bias_corr'),
       bias_corr_alpha = hp.get('bias_corr_alpha'),
+      log_q_correction_factor = hp.get('log_q_correction_factor'),
       incl_genres=hp.get('incl_genres'),
       temperature=hp.get('temperature'),
     )
@@ -1338,7 +1465,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
 def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   """Returns hyperparameters for building Keras model."""
   #print(f'get_default_hyperparameters: custom_config={custom_config}')
-  use_best_as_fixed = True
+  use_best_as_fixed = False
   
   hp = keras_tuner.HyperParameters()
   # Defines search space.
@@ -1347,10 +1474,13 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
       hp.Float('learning_rate', 1e-4, 1e-3, sampling='log')
       hp.Float('weight_decay', 1e-4, 1e-2, sampling='log')
       hp.Float('drop_rate', min_value=0.1, max_value=0.3, default=0.5)
+      hp.Float('log_q_correction_factor', min_value=0.1, max_value=1.0, default=0.5)
   else:
       hp.Fixed('learning_rate', 0.0001026)
       hp.Fixed('weight_decay', 0.00016785)
       hp.Fixed('drop_rate', 0.11754)
+      #TODO: edit when have best value:
+      hp.Fixed('log_q_correction_factor',value=0.5)
 
   #let AdamW weight decay handle the regularization, so set regl2 to 0:
   #hp.Float('regl2', 1e-5, 1e-2, sampling="log")
@@ -1696,7 +1826,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   
   #use patience=3 with batch_size 1024, and patience=5 with batch_size 2048
   stop_early = keras.callbacks.EarlyStopping(
-    monitor=f'val_ndcg_20', min_delta=1E-4, patience=5, mode="max",
+    monitor=f'val_composite_ndcg_20', min_delta=1E-4, patience=5, mode="max",
     restore_best_weights=True)
   
   """
@@ -2132,7 +2262,7 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
     overwrite=True,
     hyperparameters=hp,
     allow_new_entries=False,
-    objective=keras_tuner.Objective(f'val_ndcg_20', 'max'),
+    objective=keras_tuner.Objective(f'val_composite_ndcg_20', 'max'),
     directory=fn_args.working_dir,
     project_name='movie_lens_2t_tuning_r')
   '''
@@ -2140,7 +2270,7 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
   '''
   tuner = keras_tuner.Hyperband(
     _make_2tower_keras_model,
-    objective=keras_tuner.Objective(f'val_ndcg_20', 'max'),
+    objective=keras_tuner.Objective(f'val_composite_ndcg_20', 'max'),
     max_epochs=8,
     factor=4,
     hyperband_iterations=3,
@@ -2153,17 +2283,18 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
   
   tuner = keras_tuner.BayesianOptimization(
       _make_2tower_keras_model,
-      objective=keras_tuner.Objective(f'val_ndcg_20', 'max'),
+      objective=keras_tuner.Objective(f'val_composite_ndcg_20', 'max'),
       hyperparameters=hp,
       alpha=1e-2,
       beta=3.5, #defaut 2.6;  4.0 for more exploration.  
 
       #use when fitting
-      num_initial_points=15, #30
-      max_trials=40, #should be 2 to 3 times num_initial_points
+      #num_initial_points=15, #30
+      #max_trials=40, #should be 2 to 3 times num_initial_points
       #TEMPORARY when fixing params:
-      #num_initial_points=1, #30
-      #max_trials=1, #should be 2 to 3 times num_initial_points
+      #DEBUG
+      num_initial_points=1, #30
+      max_trials=1, #should be 2 to 3 times num_initial_points
 
       allow_new_entries=False,
       directory=fn_args.working_dir,
