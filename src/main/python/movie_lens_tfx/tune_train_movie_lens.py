@@ -389,11 +389,7 @@ def _make_query_model(n_users : int, layer_sizes : list,
                 "regl2": self.regl2,
             })
             return config
-        
-        @classmethod
-        def from_config(cls, config):
-            return cls(**config)
-        
+   
     return QueryModel(n_users=n_users,
                                     layer_sizes=layer_sizes,
                                     embed_out_dim=embed_out_dim,
@@ -605,10 +601,6 @@ def _make_candidate_model(n_movies : int, movies_offset : int,
                     "incl_genres": self.incl_genres
                 })
             return config
-        
-        @classmethod
-        def from_config(cls, config):
-            return cls(**config)
     
     return CandidateModel(n_movies=n_movies, movies_offset=movies_offset,
                                             n_genres=n_genres,
