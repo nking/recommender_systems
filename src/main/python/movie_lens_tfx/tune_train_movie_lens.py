@@ -616,6 +616,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   #input_dataset_element_spec_raw = hp.get("input_dataset_element_spec_raw_ser")
   #input_dataset_element_spec_raw = pickle.loads(base64.b64decode(input_dataset_element_spec_raw.encode('utf-8')))
   
+  logging.info("_make_2tower_keras_model")
+  
   input_dataset_element_spec_trans = hp.get("input_dataset_element_spec_trans_ser")
   input_dataset_element_spec_trans = pickle.loads(base64.b64decode(input_dataset_element_spec_trans.encode('utf-8')))
   
@@ -679,7 +681,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       self.ndcg_k_metric = NDCGAtKForInBatchNegatives(k=20)
       self.recall_k_metric = RecallAtKForInBatchNegatives(k=20)
       self.in_batch_hit_rate_metric = InBatchHitRate()
-      self.ndcg_k_composite_metric = NDCGAtKComposite(b_threshold=100.0, k=20)
       
       self.regl2 = regl2
       
@@ -712,8 +713,12 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
               key_dtype=tf.int32, value_dtype=tf.float32, default_value=1.0)
           self.global_step = tf.Variable(0., trainable=False,
               dtype=tf.float32)
+          self.ndcg_k_composite_metric = NDCGAtKComposite(b_threshold=100.0,
+              k=20, use_tail=True)
       else:
           self.table_B = None
+          self.ndcg_k_composite_metric = NDCGAtKComposite(b_threshold=100.0,
+              k=20, use_tail=False)
     
     @property
     def metrics(self):
@@ -1117,7 +1122,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       def __init__(self, name="mrr", k:int=10,**kwargs):
           name = f"{name}_{k}"
           super(MeanReciprocalRankAtK, self).__init__(name=name, **kwargs)
-          self.k = tf.cast(k, tf.float32)
+          self.k = k
           self.mrr_sum = self.add_weight(name="mrr_sum", initializer="zeros")
           self.count = self.add_weight(name="count", initializer="zeros")
 
@@ -1132,7 +1137,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
           is_greater_equal = tf.cast(y_pred >= (pos_scores - 1e-6), tf.float32)
           ranks = tf.reduce_sum(is_greater_equal, axis=1)
           reciprocal_rank = 1.0 / ranks
-          reciprocal_rank = tf.where(ranks <= self.k, reciprocal_rank, 0.0)
+          k = tf.cast(self.k, tf.float32)
+          reciprocal_rank = tf.where(ranks <= k, reciprocal_rank, 0.0)
           
           weights = sample_weight if sample_weight is not None else y_true
           weights = tf.cast(tf.reshape(weights, [-1]), tf.float32)
@@ -1150,7 +1156,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       def get_config(self):
           config = super(MeanReciprocalRankAtK, self).get_config()
           config.update({
-              "k": float(self.k.numpy())
+              "k": self.k
           })
           return config
       
@@ -1161,7 +1167,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       def __init__(self, name="ndcg", k: int = 20, **kwargs):
           name = f"{name}_{k}"
           super(NDCGAtKForInBatchNegatives, self).__init__(name=name, **kwargs)
-          self.k = tf.cast(k, tf.float32)
+          self.k = k
           self.ndcg_sum = self.add_weight(name="ndcg_sum", initializer="zeros")
           self.count = self.add_weight(name="count", initializer="zeros")
       
@@ -1177,7 +1183,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
           is_greater_equal = tf.cast(y_pred >= (pos_scores - 1e-6), tf.float32)
           ranks = tf.reduce_sum(is_greater_equal,  axis=1)  # wehere relevance is > diagonal
           log2_rank = tf.math.log(ranks + 1.0) / tf.math.log(2.0)
-          relevant_mask = tf.cast(ranks <= self.k, tf.float32)
+          k = tf.cast(self.k, tf.float32)
+          relevant_mask = tf.cast(ranks <= k, tf.float32)
           # NDCG = (1 / log2(rank + 1)) / IDCG. Since IDCG is 1.0 here:
           ndcg = (1.0 / log2_rank) * relevant_mask
           
@@ -1198,9 +1205,9 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
           self.count.assign(0.0)
       
       def get_config(self):
-          config = super(NDCGAtKForInBatchNegatives, self).get_config()
+          config = super().get_config()
           config.update({
-              "k": float(self.k.numpy())
+              "k": self.k
           })
           return config
   
@@ -1214,12 +1221,14 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
               k: int = 20, **kwargs):
           name = f"{name}_{k}"
           super(NDCGAtKForInBatchTail, self).__init__(name=name, **kwargs)
-          self.k = tf.cast(k, tf.float32)
-          self.b_threshold = tf.cast(b_threshold, tf.float32)
+          self.k = k
+          self.b_threshold = b_threshold
           self.ndcg_sum = self.add_weight(name="ndcg_sum", initializer="zeros")
           self.count = self.add_weight(name="count", initializer="zeros")
       
-      def update_state(self, labels, logits, movie_ids, table_b, sample_weight=None):
+      def update_state(self, labels, logits, movie_ids,
+              table_b:tf.lookup.experimental.MutableHashTable, sample_weight=None):
+          
           batch_size = tf.shape(logits)[0]
           
           # Look up frequency state (B_new) for each movie in the batch
@@ -1237,7 +1246,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
           ranks = tf.cast(rank_indices[:, 1], tf.float32)
           
           # Calculate NDCG@K positional weight (1 / log2(rank + 2))
-          in_top_k = ranks < self.k
+          k = tf.cast(self.k, tf.float32)
+          in_top_k = ranks < k
           dcg = tf.where(
               in_top_k,
               1.0 / (tf.math.log(ranks + 2.0) / tf.math.log(2.0)),
@@ -1260,9 +1270,9 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
           self.count.assign(0.0)
       
       def get_config(self):
-          config = super(NDCGAtKForInBatchTail, self).get_config()
+          config = super().get_config()
           config.update({
-              "k": int(self.k),
+              "k": self.k,
               "b_threshold": self.b_threshold,
           })
           return config
@@ -1274,7 +1284,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
           #composite_ndcg_20
           name = f"{name}_{k}"
           super(NDCGAtKComposite, self).__init__(name=name, **kwargs)
-          self.b_threshold = tf.cast(b_threshold, tf.float32)
+          self.b_threshold = b_threshold
           self.k = k
           self.use_tail = use_tail
           self.ndcg = NDCGAtKForInBatchNegatives(k=k)
@@ -1283,7 +1293,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
           else:
               self.ndcg_tail = None
       
-      def update_state(self, y_true, y_pred, sample_weight=None, table_b = None, movie_ids=None):
+      def update_state(self, y_true, y_pred, sample_weight=None,
+              table_b :tf.lookup.experimental.MutableHashTable = None, movie_ids=None):
           # Forward the data to both underlying sub-metrics
           self.ndcg.update_state(y_true, y_pred, sample_weight)
           if self.ndcg_tail is not None:
@@ -1307,7 +1318,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       def get_config(self):
           config = super(NDCGAtKComposite).get_config()
           config.update({
-              "k": int(self.k),
+              "k": self.k,
               "b_threshold": self.b_threshold,
               "use_tail": self.use_tail,
           })
@@ -1321,7 +1332,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       def __init__(self, name="recall", k: int = 100, **kwargs):
           name = f"{name}_{k}"
           super(RecallAtKForInBatchNegatives, self).__init__(name=name, **kwargs)
-          self.k = tf.cast(k, tf.float32)
+          self.k = k
           self.hits = self.add_weight(name="hits", initializer="zeros")
           self.count = self.add_weight(name="count", initializer="zeros")
       
@@ -1335,8 +1346,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
           pos_scores = tf.linalg.diag_part(y_pred)[:, tf.newaxis]
           is_greater_equal = tf.cast(y_pred >= (pos_scores - 1e-6), tf.float32)
           ranks = tf.reduce_sum(is_greater_equal, axis=1)
-          
-          is_hit = tf.cast(ranks <= self.k, tf.float32)
+          k = tf.cast(self.k, tf.float32)
+          is_hit = tf.cast(ranks <= k, tf.float32)
           
           if sample_weight is not None:
               w = tf.cast(tf.reshape(sample_weight, [-1]), tf.float32)
@@ -1360,7 +1371,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       def get_config(self):
           config = super(RecallAtKForInBatchNegatives, self).get_config()
           config.update({
-              "k": float(self.k.numpy())
+              "k": self.k
           })
           return config
   
@@ -1744,6 +1755,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
           })
   """
   #print(f"RUN_FN fn_args={fn_args}")
+  logging.info("run_fn")
   for attr_name in dir(fn_args):
     # Filter out built-in methods and private attributes
     if not attr_name.startswith('__') and not callable(
@@ -1810,6 +1822,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
     GLOBAL_BATCH_SIZE, is_train=False)
   
   #the model is built and compiled in strategy scope:
+  logging.info("create 2Tower ")
   model = _make_2tower_keras_model(hp)
   # model = _make_2tower_keras_model(hp, tf_transform_output)
 
@@ -1832,6 +1845,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
     filepath=filepath, monitor='val_loss', verbose=1, mode='min', save_best_only=True,
     save_weights_only=False, save_freq='epoch')
   """
+  logging.info("fit model")
   history = model.fit(
     train_dataset,
     steps_per_epoch=TRAIN_STEPS_PER_EPOCH,
@@ -2195,8 +2209,10 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
   #fn_args.transform_output is None so use transform_graph_ath instead
   
   if fn_args.hyperparameters:
+    logging.info("hp from fn_args.hyperparameters")
     hp = keras_tuner.HyperParameters.from_config(fn_args.hyperparameters)
   else:
+    logging.info("hp from custom_config")
     hp = get_default_hyperparameters(fn_args.custom_config)
   
   ## because _make_2tower_keras_model needs these specs for signatures, we store them as fixed hyperpareters
@@ -2273,13 +2289,13 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
     directory=fn_args.working_dir,
     project_name='movie_lens_2t_tuning_hb')
   '''
-  
+  logging.info("construct tuner BayesianOptimization")
   tuner = keras_tuner.BayesianOptimization(
       _make_2tower_keras_model,
-      objective=keras_tuner.Objective(f'val_composite_ndcg_20', 'max'),
+      objective=keras_tuner.Objective('val_composite_ndcg_20', 'max'),
       hyperparameters=hp,
       alpha=1e-2,
-      beta=3.5, #defaut 2.6;  4.0 for more exploration.  
+      beta=3.5, #defaut 2.6;  4.0 for more exploration.
 
       #use when fitting
       num_initial_points=15, #30

@@ -73,9 +73,7 @@ def input_fn(file_pattern: List[str],
 
 def _make_movie_metadata_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   
-  #input_dataset_element_spec_raw = hp.get("input_dataset_element_spec_raw_ser")
-  #input_dataset_element_spec_raw = pickle.loads(base64.b64decode(input_dataset_element_spec_raw.encode('utf-8')))
-  
+  logging.info("about to deserialize input_dataset_element_spec_trans_ser")
   input_dataset_element_spec_trans = hp.get("input_dataset_element_spec_trans_ser")
   input_dataset_element_spec_trans = pickle.loads(base64.b64decode(input_dataset_element_spec_trans.encode('utf-8')))
   
@@ -173,10 +171,6 @@ def _make_movie_metadata_model(hp: keras_tuner.HyperParameters) -> tf.keras.Mode
                      })
       return config
     
-    @classmethod
-    def from_config(cls, config):
-      return cls(**config)
-  
   # TODO: add hyper-parameter "temperature" after L2Norm
   @keras.utils.register_keras_serializable(package=package)
   class CandidateModel(keras.Model):
@@ -274,10 +268,6 @@ def _make_movie_metadata_model(hp: keras_tuner.HyperParameters) -> tf.keras.Mode
          })
       return config
     
-    @classmethod
-    def from_config(cls, config):
-      return cls(**config)
-  
   @keras.utils.register_keras_serializable(package=package)
   class MetadataDNN(keras.Model):
     """
@@ -445,8 +435,7 @@ def _make_movie_metadata_model(hp: keras_tuner.HyperParameters) -> tf.keras.Mode
     
     # call once to make sure methods are traced. This is purportedly better to use than model.build(inp)
     #print(f'input_signature_trans={input_dataset_element_spec_trans}')
-    fake_trans_ds = create_fake_transformed_batch(
-        input_dataset_element_spec_trans)
+    fake_trans_ds = create_fake_transformed_batch(input_dataset_element_spec_trans)
     #print(f'fake_trans_ds={fake_trans_ds}')
     model(fake_trans_ds, training=False)
     
