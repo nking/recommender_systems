@@ -27,22 +27,10 @@ from tensorboard.plugins.hparams.api import hparams
 # from tensorflow.python.ops.gen_experimental_dataset_ops import save_dataset
 from tfx import v1 as tfx
 
-#DEBUG
-import logging
-import sys
-logging.basicConfig(stream=sys.stderr, level=logging.INFO)
-logging.info("--- THIS WILL SHOW UP IN TFX LOGS ---")
-
 from tfx_bsl.public import tfxio
 from absl import logging
 logging.set_verbosity(logging.WARNING)
 logging.set_stderrthreshold(logging.WARNING)
-#DEBUG:
-logging.set_verbosity(logging.DEBUG)
-logging.set_stderrthreshold(logging.DEBUG)
-
-#DEBUG:
-tf.config.run_functions_eagerly(True)
 
 '''
 builds pipelines for training a TwoTowerDNN model to train Query and Candidate
@@ -1497,12 +1485,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     logging.debug(f'this is the fail at tuner.py line 167')
   # TO debug, user run_eagerly=False
   
-  #DEBUG:   jsonmodel.get_build_config() serial error for inputs from keras-tuner model.get_build_config()
-  logging.debug(f"model.get_build_config():")
-  dbg = model.get_build_config()
-  for key, val in dbg.items():
-      logging.debug(f"key: {key}, val: {val}, type: {type(val)}")
-  
   return model
 
 def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
@@ -1553,9 +1535,7 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   hp.Fixed('n_users', value=custom_config["n_users"])
   hp.Fixed('n_movies', custom_config["n_movies"])
   hp.Fixed('n_genres', custom_config["n_genres"])
-  #DEBUG:
-  #hp.Fixed('run_eagerly', custom_config.get("run_eagerly", False))
-  hp.Fixed('run_eagerly', True)
+  hp.Fixed('run_eagerly', custom_config.get("run_eagerly", False))
   hp.Fixed('device', custom_config.get("device", 'CPU'))
   num_examples = custom_config.get("num_examples", DEFAULT_NUM_EXAMPLES)
   num_train = int(num_examples * 0.8)
@@ -2242,22 +2222,6 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
   """
   # RandomSearch is a subclass of keras_tuner.Tuner which inherits from
   # BaseTuner.
-  
-  # Save reference to original dumps
-  _original_dumps = json.dumps
-  
-  def _debug_dumps(obj, *args, **kwargs):
-      try:
-          return _original_dumps(obj, *args, **kwargs)
-      except TypeError as e:
-          if "TensorShape" in str(e):
-              print("--- CAUGHT TENSORSHAPE JSON ERROR ---")
-              import traceback
-              traceback.print_stack()
-              print("Offending object structure:", obj)
-          raise e
-  
-  json.dumps = _debug_dumps
   
   #FnArgs should be from tfx.components.trainer.fn_args_utils
   #print(f"TUNER_FN fn_args={fn_args}")

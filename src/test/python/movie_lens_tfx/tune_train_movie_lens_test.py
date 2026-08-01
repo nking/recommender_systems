@@ -68,7 +68,7 @@ class TuneTrainTest(tf.test.TestCase):
       'n_users' : self.n_users,
       'n_movies' : self.n_movies,
       'n_genres' : self.n_genres,
-      'run_eagerly' : True,
+      'run_eagerly' : False,
       'incl_genres':False,
       'feature_acronym':"",
       "NUM_EPOCHS" : 2,
