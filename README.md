@@ -2,8 +2,12 @@
 
 This is a project holding a TFX MLOps pipeline to train a
 Two-Tower DNN (bi-encoder) using a contrastive listwise 
-loss and making item sampling bias corrections.  NDCG@20 on the
-validation dataset was used to choose the best model.
+loss with item sampling bias corrections and a term to suppress
+item popularity bias.   In the hyperparameter tuning stage,
+the objective to choose the best model was constructed from 
+NDCG@20 on in batch positive and negatives and from NDCG@20 for the tail
+of candidates see thus far to train the model to learn niche users better.
+The validation dataset was used to choose the best model.
 
 The results are in docs/mlops/ subdirectory.
 
@@ -20,31 +24,37 @@ The model trains Query and Candidate models that produce
 embeddings that live in the same embedding reference space, 
 hence can be used to look-up one another when stored in an 
 approximate nearest neighbor indexer like Scann or Faiss
-(the Retrieval project builds the retriever).
+(the Retrieval project builds the retriever, but even more
+robust is the end-to-end inference in the ranker project
+referenced below).
 
-This repository is source code used in Kaggle notebooks (in progress):
+This repository is source code used in Kaggle notebooks:
 
 https://www.kaggle.com/code/nicholeasuniquename/recommender-systems-with-tfx-pipelines/
 
 https://www.kaggle.com/code/nicholeasuniquename/recommender-systems/
 
-Using TFX requires a careful control of library versions for compatibility,
-see library versions compatible with tfx 1.16.0
-#see dependencies https://github.com/tensorflow/transform
-those are installed to a conda virtual environment that has python 3.10
-as the fixed installed python version.
+Using TFX requires a careful control of library versions for compatibility.
+Older versions of this project used tfx 1.16.0 which required older versions
+of python and the TF stack, but in the past year TFX has released a few
+versions, the latest as of Aug 2026 is 1.21.0.
+#see dependencies https://github.com/tensorflow/transform and compatibility
+matrix as https://pypi.org/project/tfx/
 
 to create a virtual environment to install the TFX compatible
 libraries, can use conda or virtualenv.
 (1) for conda, 
   see: https://www.kaggle.com/code/nicholeasuniquename/a-virtual-environment-w-earlier-version-of-python
-  conda create -q --name tfx_py310 python=3.10 -y
-  conda activate tfx_py310
+  conda create -q --name tfx_py313 python=3.13 -y
+  conda activate tfx_py313
+
+  note that python 3.13 is needed for array-record==0.8.3
+  and that version or array-record is compatible with TF 2.21.0
 
 (2) for virtualenv
   python3 -m pip install --user virtualenv
-  python3 -m virtualenv -p python3.10 /path/to/envs/python_310_tfx
-  source /path/to/envs/python_310_tfx/bin/activate
+  python3 -m virtualenv -p python3.13 /path/to/envs/python_313_tfx
+  source /path/to/envs/python_313_tfx/bin/activate
   
 the virtual environments are activated within a shell, and are not
 currently selectable in the Kaggle notebook 
@@ -52,7 +62,7 @@ after ipykernel install and register.  The kernels are selectable
 in Google Cloud jupyter notebooks (in Vertex AI workbenches)
 and presumably in AWS SageMaker Studio notebooks, and Azure ML Studio.
 
-Once within a shell using activated virtual env having python 3.10:
+Once within a shell using activated virtual env having python 3.13:
 
 if not using kaggle, make sure your platform glibxx libraries are
 updated because pyfarmhash needs GLIBCXX_3.4.32
@@ -73,7 +83,7 @@ libstdc++6.
 if have 3.4.32 within the host system list, you can use this to copy over
 the more complete host library:
 
-   cp /usr/lib/x86_64-linux-gnu/libstdc++.so.6 ~/miniconda3/envs/tfx_py310/lib/
+   cp /usr/lib/x86_64-linux-gnu/libstdc++.so.6 ~/miniconda3/envs/tfx_py313/lib/
 
 Then, the activated virtual environment needs these packages:
 
@@ -81,19 +91,10 @@ the dependencies can be installed most easily with:
 
    pip install --editable .
 
-or here are the manual steps:
-pip -q install pyarrow==10.0.1;
-pip -q install apache-beam==2.59.0;
-pip -q install tensorflow==2.16.1;
-pip -q install tensorflow-transform==1.16.0;
-pip -q install tfx==1.16.0;
-pip -q install tensorflow-data-validation==1.16.0;
-pip -q install pytest
+a good resource for looking at version compatability with TFX 1.21.0
+is https://github.com/tensorflow/tfx/blob/v1.21.0/test_constraints.txt
 
-a good resource for looking at version compatability with TFX 1.16.0
-is https://github.com/tensorflow/tfx/blob/v1.16.0/test_constraints.txt
-
-for other versions of TFX, need to use a different tag than v1.16.0
+for other versions of TFX, need to use a different tag than v1.21.0
 
 ============= 
 Miscellaneous project information:
@@ -148,3 +149,35 @@ or using a bash shell.
     python and pytest can be used from the project's base
     directory
   
+===========================================================
+(1) This project trains the Two-Tower bi-encoder using TF/Keras3/TFX stack.
+    https://github.com/nking/recommender_systems
+    https://www.kaggle.com/code/nicholeasuniquename/recommender-systems-with-tfx-pipelines
+    https://www.kaggle.com/code/nicholeasuniquename/recommender-systems    
+
+(2) retriever tinkers with how to use the embedding models and
+other algorithms that an be used for cold starts, etc.
+    https://github.com/nking/retrieval
+    
+(3) ranker trains a JAX AI stack  cross-encoder needed for more accurate
+personalization after the fast retrieval stage.
+The ranker project trains a cross-encoder that uses
+a Graph Attention Transformer V2 layer followed by a dens score layer.  
+The project also creates a rust server for scalable end-to-end inference that makes
+gRPC calls to the TFS deployed Query model trained in (1) 
+and the TFS deployed trained ranker cross-encoder.
+The project also stages scripts for how to use data-parallel training 
+over multiple-hosts in a K8s cluster to perform HPO (and train and test) of the model.
+    https://github.com/nking/ranker
+    https://www.kaggle.com/code/nicholeasuniquename/ranker-cross-encoder-w-gatv2/
+
+(4) re-ranker is a cross encoder to score candidate
+inputs that can have originated from different recommendations.
+The project fine-tunes a pre-trained T5 distilled LLM from hugging
+face to build a pytorch  list-wise learning to rank, re-ranker.
+It hasn't been added to the end-to-end inference in (3) because 
+I haven't time to do it yet.
+    https://github.com/nking/reranker
+    https://www.kaggle.com/code/nicholeasuniquename/re-ranker-fine-tuning-of-pre-trained
+
+

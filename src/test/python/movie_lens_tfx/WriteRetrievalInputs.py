@@ -5,7 +5,7 @@ from apache_beam.transforms.combiners import Top
 import io
 import csv
 import glob
-from array_record_beam_sdk import arrayrecordio
+from movie_lens_tfx.utils.WriteToArrayRecord import WriteToArrayRecord
 import msgpack
 from array_record.python import array_record_module
 import tempfile
@@ -186,9 +186,9 @@ class WriteRetrievalInputs(tf.test.TestCase):
         
         (movie_id_and_embeddings
          | f"serialize_movie_embeddings_with_msgpack" >> beam.Map(msgpack.packb)
-         | f'write_movie_embeddings_array_record' >> arrayrecordio.WriteToArrayRecord(
+         | f'write_movie_embeddings_array_record' >> WriteToArrayRecord(
             file_path_prefix=f'{self.output_uri1}/movie_emb',
-            num_shards=1, file_name_suffix='.array_record'))
+            file_name_suffix='.array_record'))
         
         (movie_id_and_embeddings
          | beam.Map(to_parquet_format)
@@ -339,8 +339,8 @@ class WriteRetrievalInputs(tf.test.TestCase):
         #write to array_records
         (user_id_and_embeddings
             | f"serialize_user_embeddings_with_msgpack" >> beam.Map(msgpack.packb)
-            | f'write_user_embeddings_array_record' >> arrayrecordio.WriteToArrayRecord(
-            file_path_prefix=f'{self.output_uri2}/user_emb', num_shards=1, file_name_suffix='.array_record'))
+            | f'write_user_embeddings_array_record' >> WriteToArrayRecord(
+            file_path_prefix=f'{self.output_uri2}/user_emb', file_name_suffix='.array_record'))
         
         (user_id_and_embeddings
          | beam.Map(to_parquet_format)
@@ -458,8 +458,8 @@ class WriteRetrievalInputs(tf.test.TestCase):
         out_file_prefix2 = f'{out_file_path2}/movies'
         
         (pc | f"serialize_movies_with_msgpack" >> beam.Map(lambda row: msgpack.packb((int(row[0]), row[1], row[2])))
-            | f'write_movies_array_record' >> arrayrecordio.WriteToArrayRecord(
-            file_path_prefix=out_file_prefix2, num_shards=1, file_name_suffix='.array_record'))
+            | f'write_movies_array_record' >> WriteToArrayRecord(
+            file_path_prefix=out_file_prefix2, file_name_suffix='.array_record'))
         
         out_file_path3 = os.path.join(get_bin_dir(), "movies_parquet")
         os.makedirs(out_file_path3, exist_ok=True)
@@ -572,8 +572,8 @@ class WriteRetrievalInputs(tf.test.TestCase):
             #write array_records
             (records | f"SerializeWithMsgpack_{file_name}" >> beam.Map(msgpack.packb)
              | f'write_array_record_{file_name}'
-             >> arrayrecordio.WriteToArrayRecord(
-                        file_path_prefix=out_file_path, num_shards=1))
+             >> WriteToArrayRecord(
+                        file_path_prefix=out_file_path))
             
             #write parquet files
             (records | f"ratings_{file_name} To Dict" >> beam.Map(lambda x: {
@@ -609,8 +609,8 @@ class WriteRetrievalInputs(tf.test.TestCase):
                 #write to array_record
                 (records | f"SerializeWithMsgpack_{file_dir_name}_{file_name}" >> beam.Map(msgpack.packb)
                     | f'write_array_record_{file_dir_name}_{file_name}'
-                    >> arrayrecordio.WriteToArrayRecord(
-                        file_path_prefix=out_file_path, num_shards=1))
+                    >> WriteToArrayRecord(
+                        file_path_prefix=out_file_path))
                 
                 # write parquet files
                 (records | f"ratings_{file_dir_name}_{file_name} To Dict" >> beam.Map(
@@ -842,8 +842,8 @@ class WriteRetrievalInputs(tf.test.TestCase):
         # write to array_record
         (final_pivot | f"serialize_merged_ratings_pivot_with_msgpack_{file_name}"
             >> beam.Map(msgpack.packb)
-            | f'write_array_record_{file_name}'>> arrayrecordio.WriteToArrayRecord(
-            file_path_prefix=f"{dir_path}/{file_name}.array_record", num_shards=1))
+            | f'write_array_record_{file_name}'>> WriteToArrayRecord(
+            file_path_prefix=f"{dir_path}/{file_name}.array_record"))
         
         # <apache_beam.runners.portability.fn_api_runner.fn_runner.RunnerResult object
         result = pipeline.run()
