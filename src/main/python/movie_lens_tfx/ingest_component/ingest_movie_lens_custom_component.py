@@ -244,6 +244,7 @@ class IngestMovieLensExecutor(BaseExampleGenExecutor):
         logging.debug(f"prefix_path={prefix_path}")
         example | f"Serialize_{random.randint(0, 1000000000000)}" \
           >> beam.Map(lambda x: x.SerializeToString()) \
+          | f'shuffle_{name}' >> beam.transforms.Reshuffle() \
           | f"write_to_tfrecord_{random.randint(0, 1000000000000)}" \
           >> beam.io.tfrecordio.WriteToTFRecord( \
           file_path_prefix=prefix_path, file_name_suffix='.gz')
