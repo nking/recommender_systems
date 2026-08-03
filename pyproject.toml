@@ -24,6 +24,7 @@ dependencies = [
     "pandas==2.2.3",
     "array-record==0.8.3",
     "msgpack==1.2.1",
+    "tensorboard==2.21.0",
 ]
 readme = "README.md"
 license = "MIT"

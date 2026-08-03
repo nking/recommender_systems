@@ -74,4 +74,4 @@ def test_tfx():
 
 
 if __name__ == "__main__":
-    app.run(test_tfx())
+    test_tfx()

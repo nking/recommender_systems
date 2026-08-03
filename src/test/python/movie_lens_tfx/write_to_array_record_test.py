@@ -18,26 +18,6 @@ logging.set_stderrthreshold(logging.WARNING)
 
 from apache_beam.options.pipeline_options import PipelineOptions
 
-
-def serialize_example(element):
-    user_id, movie_id, rating, timestamp = element
-    feature = {
-        'user_id': tf.train.Feature(
-            int64_list=tf.train.Int32List(value=[user_id])),
-        
-        'movie_id': tf.train.Feature(
-            int64_list=tf.train.Int32List(value=[movie_id])),
-        
-        'rating': tf.train.Feature(
-            int64_list=tf.train.Int32List(value=[rating])),
-        
-        'timestamp': tf.train.Feature(
-            int64_list=tf.train.Int32List(value=[timestamp])),
-    }
-    example_proto = tf.train.Example(
-        features=tf.train.Features(feature=feature))
-    return example_proto.SerializeToString()
-
 def cast_tuple_to_ints(element):
     """Unpacks the string element tuple and converts every value to an integer."""
     user_id, movie_id, rating, timestamp = element

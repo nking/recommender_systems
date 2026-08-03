@@ -2,7 +2,6 @@ from tfx.dsl.components.base import base_beam_component
 
 from tfx.components import StatisticsGen, SchemaGen, ExampleValidator, Evaluator, Pusher
 import tensorflow_model_analysis as tfma
-from movie_lens_tfx.bulk_infer_component.BulkInferrerBeam import BulkInferrerBeam
 import enum
 
 from tfx.proto import pusher_pb2
@@ -105,41 +104,21 @@ class PipelineComponentsFactory():
         model=tfx.dsl.Channel(type=tfx.types.standard_artifacts.Model),
         model_blessing=tfx.dsl.Channel(type=tfx.types.standard_artifacts.ModelBlessing))
           .with_id('latest_blessed_model_resolver'))
-      """
-      #BulkInferrer might work with keras3 but not keras2??  the rest of tfx 1.16.0 requires model.saved_model.save(serving_model_dir)
-      # possibly works with modles saved as tf.keras.models.save_model(model, save_model_dir_multiply, signatures=signature)
-      # but that is not compatible with tfx 1.16.0 which needs tf.saved_model.save
-      # I checked out the source code and ran penguin example test
-      # tfx/tfx/examples/penguin/penguin_pipeline_local_e2e_test.py which failed similarly
-      # added an issue for it:  https://github.com/tensorflow/tfx/issues/7782
-      ##
-      ## tf.compat.v1.saved_model.tag_constants
-      ## GPU	'gpu'
-      ## SERVING	'serve'
-      ## TPU	'tpu'
-      ## TRAINING	'train'
+      
       bulk_inferrer = tfx.components.BulkInferrer(
         examples=example_gen.outputs['output_examples'],
         model = model_resolver.outputs['model'],
         #model_spec type is bulk_inferrer_pb2.ModelSpec
-        model_spec=tfx.proto.ModelSpec(
-          model_signature_name=['serving_default'],
-          tag=tf.saved_model.SERVING
-        )
+        #can remove model_spec completely and it will default to these defaults:
+        #model_spec=tfx.proto.ModelSpec(
+        #    #  Wrap in an explicit list to prevent character splitting
+        #    tag=[tf.saved_model.SERVING],
+        #    # Pass a raw string
+        #    model_signature_name='serving_default'
+        #)
       )
       return [example_gen, model_resolver, bulk_inferrer]
-      """
-      bulk_inferrer = BulkInferrerBeam(
-        examples=example_gen.outputs['output_examples'],
-        model=model_resolver.outputs['model'],
-        # model_spec type is bulk_inferrer_pb2.ModelSpec
-        model_spec=tfx.proto.ModelSpec(
-          model_signature_name=['serving_default'],
-          tag=[tf.saved_model.SERVING]
-        )
-      )
-      return [example_gen, model_resolver, bulk_inferrer]
-   
+      
     tuner_custom_config = {
       'n_users': self.n_users,
       'n_movies': self.n_movies,
@@ -444,14 +423,14 @@ class PipelineComponentsFactory():
           type=tfx.types.standard_artifacts.ModelBlessing))
                         .with_id('latest_blessed_model_resolver'))
     
-      bulk_inferrer = BulkInferrerBeam(
+      bulk_inferrer = tfx.components.BulkInferrer(
         examples=example_gen.outputs['output_examples'],
         model=model_resolver.outputs['model'],
         # model_spec type is bulk_inferrer_pb2.ModelSpec
-        model_spec=tfx.proto.ModelSpec(
-          model_signature_name=['serving_default'],
-          tag=[tf.saved_model.SERVING]
-        )
+        #model_spec=tfx.proto.ModelSpec(
+        #  model_signature_name=['serving_default'],
+        #  tag=[tf.saved_model.SERVING]
+        #)
       )
       return [example_gen, model_resolver, bulk_inferrer]
     

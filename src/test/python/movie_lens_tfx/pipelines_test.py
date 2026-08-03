@@ -437,25 +437,21 @@ class PipelinesTest(tf.test.TestCase):
                 Reads and parses PredictionLog records from all gzipped TFRecord files
                 in the specified directory.
                 """
-                search_pattern = os.path.join(directory_path,
-                    'prediction_logs-*.gz')
+                search_pattern = os.path.join(directory_path, 'prediction_logs-*.gz')
                 log_files = glob.glob(search_pattern)
                 
                 if not log_files:
-                    print(
+                    self.fail(
                         f"Error: No prediction log files found in {directory_path} matching pattern 'prediction_logs-*.gz'")
-                    return
                 
                 total_records_processed = 0
                 
                 # Create a PredictionLog message object outside the loop for reuse
                 prediction_log = prediction_log_pb2.PredictionLog()
-                print(
-                    f"--- Found {len(log_files)} files to process ---")
+                print(f"--- Found {len(log_files)} files to process ---")
                 
                 for file_path in log_files:
-                    print(
-                        f"\nProcessing file: {os.path.basename(file_path)}")
+                    logging.info(f"\nProcessing file: {os.path.basename(file_path)}")
                     
                     # Use TFRecordDataset with the compression_type='GZIP'
                     raw_dataset = tf.data.TFRecordDataset(file_path,
@@ -476,8 +472,7 @@ class PipelinesTest(tf.test.TestCase):
                             file_records_processed += 1
                         
                         except tf.errors.DataLossError as e:
-                            print(
-                                f"  DataLossError encountered in {os.path.basename(file_path)}: {e}")
+                            print( f"  DataLossError encountered in {os.path.basename(file_path)}: {e}")
                             continue
                     
                     total_records_processed += file_records_processed

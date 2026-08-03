@@ -23,7 +23,8 @@ setup(
     "python-snappy==0.7.3",
     "pandas==2.2.3",
     "array-record==0.8.3",
-    "msgpack==1.2.1"
+    "msgpack==1.2.1",
+    "tensorboard==2.21.0",
   ],
   extras_require={"test": ["pytest", "nannyml>=0.13.1","polars>=1.35.2", "plotly>=6.4.0", "kaleido>=1.2.0"]},
   classifiers=[ 'Natural Language :: English',
