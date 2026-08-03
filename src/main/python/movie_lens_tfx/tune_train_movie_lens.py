@@ -711,11 +711,12 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
               key_dtype=tf.int32, value_dtype=tf.float32, default_value=1.0)
           self.global_step = tf.Variable(0., trainable=False,
               dtype=tf.float32)
-          self.ndcg_k_composite_metric = NDCGAtKComposite(b_threshold=100.0,
+          #TODO: change to 10.0 then 50.0 after see effect
+          self.ndcg_k_composite_metric = NDCGAtKComposite(b_threshold=0.0,
               k=20, use_tail=True)
       else:
           self.table_B = None
-          self.ndcg_k_composite_metric = NDCGAtKComposite(b_threshold=100.0,
+          self.ndcg_k_composite_metric = NDCGAtKComposite(b_threshold=0.0,
               k=20, use_tail=False)
     
     @property
@@ -1198,10 +1199,10 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
           y_pred: The [Batch, Batch] logits matrix result of matmul Q_embedd * C_embed^T
           weights: the actual ground truth, y_true vector should be set here
           """
-          #[batch_sie, 1]
+          #[batch_size, 1]
           pos_scores = tf.linalg.diag_part(y_pred)[:, tf.newaxis]
           is_greater_equal = tf.cast(y_pred >= (pos_scores - 1e-6), tf.float32)
-          ranks = tf.reduce_sum(is_greater_equal,  axis=1)  # wehere relevance is > diagonal
+          ranks = tf.reduce_sum(is_greater_equal,  axis=1)  # where relevance is >= diagonal
           log2_rank = tf.math.log(ranks + 1.0) / tf.math.log(2.0)
           k = tf.cast(self.k, tf.float32)
           relevant_mask = tf.cast(ranks <= k, tf.float32)
@@ -1233,117 +1234,106 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   
   @keras.utils.register_keras_serializable(package=package)
   class NDCGAtKForInBatchTail(keras.metrics.Metric):
-      """
-      Computes NDCG@K restricted strictly to rows where the true positive
-      candidate item is a tail item based on the streaming table_B state.
-      """
-      def __init__(self, b_threshold=100.0, name="ndcg_tail",
-              k: int = 20, **kwargs):
-          name = f"{name}_{k}"
-          super(NDCGAtKForInBatchTail, self).__init__(name=name, **kwargs)
-          self.k = k
-          self.b_threshold = b_threshold
-          self.ndcg_sum = self.add_weight(name="ndcg_sum", initializer="zeros")
-          self.count = self.add_weight(name="count", initializer="zeros")
-      
-      def update_state(self, labels, logits, movie_ids,
-              table_b:tf.lookup.experimental.MutableHashTable, sample_weight=None):
-          
-          batch_size = tf.shape(logits)[0]
-          
-          # Look up frequency state (B_new) for each movie in the batch
-          movie_ids_flat = tf.cast(tf.reshape(movie_ids, [-1]), tf.int32)
-          b_values = table_b.lookup(movie_ids_flat)
-          
-          # Items with higher B_new appear less frequently (tail items)
-          tail_mask = b_values > self.b_threshold
-          
-          # Compute ranking via top_k over in-batch logits
-          _, indices = tf.nn.top_k(logits, k=batch_size)
-          target_items = tf.expand_dims(tf.range(batch_size, dtype=indices.dtype), 1)
-          rank_matches = tf.equal(indices, target_items)
-          rank_indices = tf.where(rank_matches)
-          ranks = tf.cast(rank_indices[:, 1], tf.float32)
-          
-          # Calculate NDCG@K positional weight (1 / log2(rank + 2))
-          k = tf.cast(self.k, tf.float32)
-          in_top_k = ranks < k
-          dcg = tf.where(
-              in_top_k,
-              1.0 / (tf.math.log(ranks + 2.0) / tf.math.log(2.0)),
-              0.0
-          )
-          
-          # Filter accumulator to include only tail rows, scaled by sample weights if provided
-          weights = tf.cast(tail_mask, tf.float32)
-          if sample_weight is not None:
-              weights = weights * tf.cast(tf.reshape(sample_weight, [-1]), tf.float32)
-          
-          self.ndcg_sum.assign_add(tf.reduce_sum(dcg * weights))
-          self.count.assign_add(tf.reduce_sum(weights))
-      
-      def result(self):
-          return tf.math.divide_no_nan(self.ndcg_sum, self.count)
-      
-      def reset_state(self):
-          self.ndcg_sum.assign(0.0)
-          self.count.assign(0.0)
-      
-      def get_config(self):
-          config = super().get_config()
-          config.update({
-              "k": self.k,
-              "b_threshold": self.b_threshold,
-          })
-          return config
-      
+    """
+    Computes NDCG@K restricted strictly to rows where the true positive
+    candidate item is a tail item based on the streaming table_B state.
+    """
+    def __init__(self, b_threshold=100.0, name="ndcg_tail", k: int = 20, **kwargs):
+        name = f"{name}_{k}"
+        super(NDCGAtKForInBatchTail, self).__init__(name=name, **kwargs)
+        self.k = k
+        self.b_threshold = b_threshold
+        self.ndcg_sum = self.add_weight(name="ndcg_sum", initializer="zeros")
+        self.count = self.add_weight(name="count", initializer="zeros")
+    
+    def update_state(self, labels, logits, movie_ids,
+            table_b:tf.lookup.experimental.MutableHashTable, sample_weight=None):
+        
+        # 1. Identify Tail Items
+        movie_ids_flat = tf.cast(tf.reshape(movie_ids, [-1]), tf.int32)
+        b_values = table_b.lookup(movie_ids_flat)
+        tail_mask = b_values > self.b_threshold  # Make sure b_threshold isn't too high!
+        
+        # 2. Efficient Ranking (Aligned with NDCGAtKForInBatchNegatives)
+        pos_scores = tf.linalg.diag_part(logits)[:, tf.newaxis]
+        is_greater_equal = tf.cast(logits >= (pos_scores - 1e-6), tf.float32)
+        ranks = tf.reduce_sum(is_greater_equal, axis=1)
+        
+        k = tf.cast(self.k, tf.float32)
+        relevant_mask = tf.cast(ranks <= k, tf.float32)
+        log2_rank = tf.math.log(ranks + 1.0) / tf.math.log(2.0)
+        
+        # NDCG for ALL items in batch
+        dcg = (1.0 / log2_rank) * relevant_mask
+        
+        # 3. Filter accumulator to include only tail rows
+        weights = tf.cast(tail_mask, tf.float32)
+        if sample_weight is not None:
+            weights = weights * tf.cast(tf.reshape(sample_weight, [-1]), tf.float32)
+        
+        self.ndcg_sum.assign_add(tf.reduce_sum(dcg * weights))
+        self.count.assign_add(tf.reduce_sum(weights))
+    
+    def result(self):
+        return tf.math.divide_no_nan(self.ndcg_sum, self.count)
+    
+    def reset_state(self):
+        self.ndcg_sum.assign(0.0)
+        self.count.assign(0.0)
+    
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "k": self.k,
+            "b_threshold": self.b_threshold,
+        })
+        return config
+
   @keras.utils.register_keras_serializable(package=package)
   class NDCGAtKComposite(keras.metrics.Metric):
-      def __init__(self, b_threshold=100.0, name="composite_ndcg",
-              k: int = 20, use_tail:bool=True, **kwargs):
-          #composite_ndcg_20
-          name = f"{name}_{k}"
-          super(NDCGAtKComposite, self).__init__(name=name, **kwargs)
-          self.b_threshold = b_threshold
-          self.k = k
-          self.use_tail = use_tail
-          self.ndcg = NDCGAtKForInBatchNegatives(k=k)
-          if use_tail:
-              self.ndcg_tail = NDCGAtKForInBatchTail(b_threshold=b_threshold, k=k)
-          else:
-              self.ndcg_tail = None
-      
-      def update_state(self, y_true, y_pred, sample_weight=None,
-              table_b :tf.lookup.experimental.MutableHashTable = None, movie_ids=None):
-          # Forward the data to both underlying sub-metrics
-          self.ndcg.update_state(y_true, y_pred, sample_weight)
-          if self.ndcg_tail is not None:
-              self.ndcg_tail.update_state(y_true, y_pred, movie_ids, table_b, sample_weight)
-      
-      def result(self):
-          # Fetch the results of both sub-metrics
-          r0 = self.ndcg.result()
-          if self.ndcg_tail is not None:
-              r1 = self.ndcg_tail.result()
-              return r0 + (1.0 * r1)
-          else:
-              return r0
-          
-      def reset_state(self):
-          # Crucial step: Reset the internal accumulated states
-          self.ndcg.reset_state()
-          if self.ndcg_tail is not None:
-                self.ndcg_tail.reset_state()
-      
-      def get_config(self):
-          config = super(NDCGAtKComposite).get_config()
-          config.update({
-              "k": self.k,
-              "b_threshold": self.b_threshold,
-              "use_tail": self.use_tail,
-          })
-          return config
-      
+    def __init__(self, b_threshold=100.0, name="composite_ndcg",
+            k: int = 20, use_tail:bool=True, **kwargs):
+        name = f"{name}_{k}"
+        super(NDCGAtKComposite, self).__init__(name=name, **kwargs)
+        self.b_threshold = b_threshold
+        self.k = k
+        self.use_tail = use_tail
+        self.ndcg = NDCGAtKForInBatchNegatives(k=k)
+        if use_tail:
+            self.ndcg_tail = NDCGAtKForInBatchTail(b_threshold=b_threshold, k=k)
+        else:
+            self.ndcg_tail = None
+    
+    def update_state(self, y_true, y_pred, sample_weight=None,
+            table_b:tf.lookup.experimental.MutableHashTable = None, movie_ids=None):
+        self.ndcg.update_state(y_true, y_pred, sample_weight)
+        if self.ndcg_tail is not None and table_b is not None:
+            self.ndcg_tail.update_state(y_true, y_pred, movie_ids, table_b, sample_weight)
+    
+    def result(self):
+        r0 = self.ndcg.result()
+        if self.ndcg_tail is not None:
+            r1 = self.ndcg_tail.result()
+            return r0 + (1.0 * r1)
+        else:
+            return r0
+        
+    def reset_state(self):
+        self.ndcg.reset_state()
+        if self.ndcg_tail is not None:
+            self.ndcg_tail.reset_state()
+    
+    def get_config(self):
+        # Fix: super(NDCGAtKComposite).get_config() throws an error in python.
+        # Use super().get_config()
+        config = super().get_config()
+        config.update({
+            "k": self.k,
+            "b_threshold": self.b_threshold,
+            "use_tail": self.use_tail,
+        })
+        return config
+    
   @keras.utils.register_keras_serializable(package=package)
   class RecallAtKForInBatchNegatives(keras.metrics.Metric):
       """
