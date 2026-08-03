@@ -114,7 +114,7 @@ class PipelineComponentsFactory():
         #    #  Wrap in an explicit list to prevent character splitting
         #    tag=[tf.saved_model.SERVING],
         #    # Pass a raw string
-        #    model_signature_name='serving_default'
+        #    model_signature_name=['serving_default']
         #)
       )
       return [example_gen, model_resolver, bulk_inferrer]

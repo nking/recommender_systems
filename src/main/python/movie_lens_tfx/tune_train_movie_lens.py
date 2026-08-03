@@ -1308,7 +1308,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
           self.k = k
           self.use_tail = use_tail
           self.ndcg = NDCGAtKForInBatchNegatives(k=k)
-          if use_tail is not None:
+          if use_tail:
               self.ndcg_tail = NDCGAtKForInBatchTail(b_threshold=b_threshold, k=k)
           else:
               self.ndcg_tail = None
