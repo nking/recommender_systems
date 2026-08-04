@@ -9,22 +9,21 @@ authors = [
     { name = "Nichole King" },
 ]
 #readme = "README.md"
-requires-python = ">=3.13.0"
+requires-python = ">=3.10.0,<3.11.0"
 dependencies = [
-    "pyarrow==18.1.0",
+    "pyarrow==10.0.1",
     "python-snappy==0.7.3",
-    "numpy==2.1.0",
-    "apache-beam==2.73.0",
-    "tensorflow==2.21.0",
-    "tensorflow-transform==1.21.0",
-    "tfx==1.21.0",
-    "tensorflow-data-validation==1.21.0",
-    "tensorflow-metadata==1.21.0",
-    "ml-metadata==1.21.0",
-    "pandas==2.2.3",
-    "array-record==0.8.3",
-    "msgpack==1.2.1",
-    "tensorboard==2.21.0",
+    "numpy==1.26.4",
+    "apache-beam==2.59.0",
+    "tensorflow==2.16.1",
+    "tensorflow-transform==1.16.0",
+    "tfx==1.16.0",
+    "tensorflow-data-validation==1.16.1",
+    "tensorflow-metadata==1.16.1",
+    "ml-metadata==1.16.0",
+    "pandas==1.5.3",
+    "array-record==0.5.0",
+    "array_record_beam_sdk==0.1.0"
 ]
 readme = "README.md"
 license = "MIT"
@@ -34,9 +33,8 @@ classifiers = [
   #   4 - Beta
   #   5 - Production/Stable
   "Development Status :: 1 - development",
-  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.10",
 ]
-
 
 [tool.setuptools]
 #packages = ["movie_lens_tfx"]
@@ -50,11 +48,14 @@ include = ['movie_lens_tfx', 'movie_lens_tfx.misc',
   'movie_lens_tfx.bulk_infer_component', 'movie_lens_tfx']
 #exclude = ["tests"]
 
+#also java >= 11... 11 for pyspark compatabiltity
+# there may be kubernetes version constraints, or native cloud constraints
+
 #[tool.pytest.ini_options]
-#pythonpath = 
-#  src/main/python 
-#  src/drafts/python 
-#testpaths  = 
+#pythonpath =
+#  src/main/python
+#  src/drafts/python
+#testpaths  =
 #  src/test/python
 ## can use this to list each method to expose:
 #[project.scripts]
@@ -64,6 +65,5 @@ Homepage = "https://www.kaggle.com/code/nicholeasuniquename/recommender-systems-
 Repository = "https://github.com/nking/recommender_systems.git"
 
 [project.optional-dependencies]
-#nannml not compat w/ python 3.13?
 test = ["pytest", "nannyml>=0.13.1", "polars>=1.35.2", "plotly>=6.4.0", "kaleido>=1.2.0"]
-eda = ["dcor", "pytz", "pyspark==4.0.0", "scipy"]
+eda = ["dcor", "pytz", "pyspark==3.2.4", "scipy"]

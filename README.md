@@ -48,22 +48,22 @@ libraries, can use conda or virtualenv.
 (1) for conda, 
   see: https://www.kaggle.com/code/nicholeasuniquename/a-virtual-environment-w-earlier-version-of-python
 
-  conda create -q --name tfx_py311 python=3.11 -y
+  conda create -q --name tfx_py313 python=3.13 -y
 
-  conda activate tfx_py311
+  conda activate tfx_py313
 
-  python 3.11 was chosen for compatibility with ml-metadata, installable
-  as a whell on kaggle which is running ubuntu 22.04.
-      ml-metadata==1.17.1
-  might need numpy numpy==1.26.4? for python_version < '3.13'
+  NOTE: that because kaggle OS os ubuntu, the python version and libraries
+  are compatible with earlier versions.  for kaggle, use git checkout kaggle in
+  this branch to use the kaggle branch.  I'll try to keep it in sync with
+  the main branch, bu having different pyproject.toml, setup.py files.
 
 (2) for virtualenv
 
   python3 -m pip install --user virtualenv
 
-  python3 -m virtualenv -p python3.11 /path/to/envs/python_311_tfx
+  python3 -m virtualenv -p python3.13 /path/to/envs/python_313_tfx
 
-  source /path/to/envs/python_311_tfx/bin/activate
+  source /path/to/envs/python_313_tfx/bin/activate
   
 the virtual environments are activated within a shell, and are not
 currently selectable in the Kaggle notebook 
@@ -71,7 +71,7 @@ after ipykernel install and register.  The kernels are selectable
 in Google Cloud jupyter notebooks (in Vertex AI workbenches)
 and presumably in AWS SageMaker Studio notebooks, and Azure ML Studio.
 
-Once within a shell using activated virtual env having python 3.11:
+Once within a shell using activated virtual env having python 3.13:
 
 if not using kaggle, make sure your platform glibxx libraries are
 updated because pyfarmhash needs GLIBCXX_3.4.32
