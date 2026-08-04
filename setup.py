@@ -11,6 +11,7 @@ setup(
             'movie_lens_tfx.bulk_infer_component', 'movie_lens_tfx']),
   package_dir={'': 'src/main/python'},
   install_requires = [
+    "ml-metadata==1.17.1",
     "pyarrow==18.1.0",
     "python-snappy==0.7.3",
     "numpy==2.1.0",
@@ -19,9 +20,8 @@ setup(
     "tensorflow-transform==1.21.0",
     "tensorboard==2.21.0",
     "tfx==1.21.0",
-    "tensorflow-data-validation==1.21.0",
+    "tensorflow-data-validation==1.16.1",
     "tensorflow-metadata==1.21.0",
-    "ml-metadata==1.21.0",
     "pandas==2.2.3",
     "array-record==0.5.1",
     "msgpack==1.2.1",

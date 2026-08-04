@@ -52,7 +52,10 @@ libraries, can use conda or virtualenv.
 
   conda activate tfx_py311
 
-  python 3.11 was chosen for compatibility with Kaggle glibc libraries.
+  python 3.11 was chosen for compatibility with ml-metadata, installable
+  as a whell on kaggle which is running ubuntu 22.04.
+      ml-metadata==1.17.1
+  might need numpy numpy==1.26.4? for python_version < '3.13'
 
 (2) for virtualenv
 
