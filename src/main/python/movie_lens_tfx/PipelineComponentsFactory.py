@@ -16,6 +16,7 @@ class PIPELINE_TYPE(enum.Enum):
   BASELINE = "baseline"
   PRODUCTION = "production"
   BATCH_INFERENCE = "batch_inference"
+  TABLE_B_DIAGNOSTIC = "table_b_diagnostic"
   
 class MODEL_NAME(enum.Enum):
   USER_MOVIE = "user_movie"
@@ -95,6 +96,7 @@ class PipelineComponentsFactory():
             infiles_dict_test_ser=self.infiles_dict_ser["test"])
     
     print(f'type={type}')
+    
     if type == PIPELINE_TYPE.BATCH_INFERENCE:
       if self.serving_model_dir is None:
         raise ValueError(f"missing serving_model_dir.  location of Format-Serving directory is needed.")
@@ -218,6 +220,22 @@ class PipelineComponentsFactory():
         components.extend([example_resolver, example_diff])
       components.extend([ratings_transform, parquet_task])
       return components
+    
+    if type == PIPELINE_TYPE.TABLE_B_DIAGNOSTIC:
+        trainer = tfx.components.Trainer(
+            module_file=os.path.join(self.transform_dir, 'tune_train_movie_lens.py'),
+            examples=ratings_transform.outputs['transformed_examples'],
+            transform_graph=ratings_transform.outputs['transform_graph'],
+            custom_config=tuner_custom_config,
+        )
+        components = [example_gen, statistics_gen, schema_gen]
+        if pre_transform_schema_importer is not None:
+            components.append(pre_transform_schema_importer)
+        components.append(pre_transform_example_validator)
+        if example_resolver is not None:
+            components.extend([example_resolver, example_diff])
+        components.extend([ratings_transform, trainer])
+        return components
     
     tuner = tfx.components.Tuner(
       module_file=os.path.join(self.transform_dir, 'tune_train_movie_lens.py'),

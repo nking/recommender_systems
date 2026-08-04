@@ -669,6 +669,9 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       if isinstance(layer_sizes, str):
           layer_sizes = json.loads(layer_sizes)
       
+      # only used while inspecting table_B for threshold for dataset
+      self.calc_table_B_diagnostic = False
+      
       self.dot_layer = keras.layers.Dot(axes=1, name='dot_layer')
       #to use HeuristicLambdaLoss, train with the positives of the dataset splits
       #self.loss_function = HeuristicLambdaLoss()
@@ -711,12 +714,12 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
               key_dtype=tf.int32, value_dtype=tf.float32, default_value=1.0)
           self.global_step = tf.Variable(0., trainable=False,
               dtype=tf.float32)
-          #TODO: change to 10.0 then 50.0 after see effect
-          self.ndcg_k_composite_metric = NDCGAtKComposite(b_threshold=0.0,
+          #the threshold was determined using table_B_Test.py after editing self.calc_table_B_diagnostic = True
+          self.ndcg_k_composite_metric = NDCGAtKComposite(b_threshold=12.23,
               k=20, use_tail=True)
       else:
           self.table_B = None
-          self.ndcg_k_composite_metric = NDCGAtKComposite(b_threshold=0.0,
+          self.ndcg_k_composite_metric = NDCGAtKComposite(b_threshold=100.0,
               k=20, use_tail=False)
     
     @property
@@ -948,6 +951,75 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
             "logit_mean": logit_mean
         })
         return output
+    
+    #do not invoke this from within a tf_function because tensors won't have nump
+    def inspect_table_B_distribution(self, table_b, bins: int = 10,
+            max_bar_width: int = 35):
+        """
+        Exports values from a MutableHashTable and prints percentile stats
+        and a terminal-friendly ASCII histogram.
+        """
+        import numpy as np
+        # Export all keys and values from the table
+        keys, values = table_b.export()
+        
+        # onvert to numpy for statistical analysis
+        b_values = values.numpy()
+        
+        if len(b_values) == 0:
+            print("table_B is currently empty. Run a training pass first.")
+            return
+        
+        print(f"Total unique items in table_B: {len(b_values)}")
+        print("=" * 60)
+        
+        # Basic Stats
+        print(f"Min value:  {np.min(b_values):.2f}")
+        print(f"Max value:  {np.max(b_values):.2f}")
+        print(f"Mean value: {np.mean(b_values):.2f}")
+        print("-" * 60)
+        
+        # Percentiles
+        percentiles = [50, 75, 80, 85, 90, 95, 99]
+        calc_percentiles = np.percentile(b_values, percentiles)
+        
+        for p, val in zip(percentiles, calc_percentiles):
+            print(f"{p:>2}th percentile: {val:>8.2f}")
+        
+        print("-" * 60)
+        print(f"Recommendation: For an 80% tail cutoff, set b_threshold = {calc_percentiles[2]:.2f}")
+        print("=" * 60)
+        
+        # Terminal ASCII Histogram
+        counts, bin_edges = np.histogram(b_values, bins=bins)
+        max_count = max(counts) if max(counts) > 0 else 1
+        
+        print("\nASCII Histogram (B_new Distribution):")
+        print("Range of B_new           | Count   | Distribution")
+        print("-" * 60)
+        
+        for i in range(len(counts)):
+            low = bin_edges[i]
+            high = bin_edges[i + 1]
+            count = counts[i]
+            
+            # Calculate bar length relative to max count
+            bar_len = int((count / max_count) * max_bar_width)
+            bar = "█" * bar_len
+            
+            # Print formatted row
+            range_str = f"[{low:>7.1f} - {high:>7.1f})"
+            print(f"{range_str} | {count:>7d} | {bar}")
+        print("=" * 60)
+    
+    def fit(self, *args, **kwargs):
+        history = super().fit(*args, **kwargs)
+        
+        # 2. Run diagnostic hook at the end of the fit call
+        if self.calc_table_B_diagnostic:
+            self.inspect_table_B_distribution(self.table_B)
+        
+        return history
     
     def get_config(self):
       config = super(TwoTowerDNN, self).get_config()
@@ -1774,10 +1846,14 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       attr_value = getattr(fn_args, attr_name)
       logging.debug(f"{attr_name}: {attr_value}")
   
-  if not fn_args.hyperparameters:
-    raise ValueError('hyperparameters must be provided')
-  
-  hp = keras_tuner.HyperParameters.from_config(fn_args.hyperparameters)
+  if fn_args.hyperparameters:
+      logging.info("hp from fn_args.hyperparameters")
+      hp = keras_tuner.HyperParameters.from_config(fn_args.hyperparameters)
+  elif fn_args.custom_config:
+      logging.info("hp from custom_config")
+      hp = get_default_hyperparameters(fn_args.custom_config)
+  else:
+      raise ValueError('hyperparameters must be provided')
   
   print('HyperParameters for training: %s' % hp.get_config())
   
