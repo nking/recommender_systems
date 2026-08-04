@@ -9,7 +9,8 @@ authors = [
     { name = "Nichole King" },
 ]
 #readme = "README.md"
-requires-python = ">=3.13.0"
+#version restriction for Kaggle glibc library compatibility
+requires-python = ">=3.11.0,<3.12"
 dependencies = [
     "pyarrow==18.1.0",
     "python-snappy==0.7.3",
@@ -23,7 +24,7 @@ dependencies = [
     "tensorflow-metadata==1.21.0",
     "ml-metadata==1.21.0",
     "pandas==2.2.3",
-    "array-record==0.8.3",
+    "array-record==0.5.1",
     "msgpack==1.2.1",
 ]
 readme = "README.md"
@@ -34,7 +35,7 @@ classifiers = [
   #   4 - Beta
   #   5 - Production/Stable
   "Development Status :: 1 - development",
-  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.11",
 ]
 
 
@@ -64,6 +65,5 @@ Homepage = "https://www.kaggle.com/code/nicholeasuniquename/recommender-systems-
 Repository = "https://github.com/nking/recommender_systems.git"
 
 [project.optional-dependencies]
-#nannml not compat w/ python 3.13?
 test = ["pytest", "nannyml>=0.13.1", "polars>=1.35.2", "plotly>=6.4.0", "kaleido>=1.2.0"]
 eda = ["dcor", "pytz", "pyspark==4.0.0", "scipy"]
