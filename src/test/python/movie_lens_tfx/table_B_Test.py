@@ -75,7 +75,6 @@ class TableBTest(tf.test.TestCase):
       self.num_examples = 80_000
       self.MIN_EVAL_SIZE = 50
       self.name = 'test run for table_b'
-      infiles_dict_of_dicts_ser = get_contrastive_split_infiles_set(ds=DataSize.TINY)
       self.BATCH_SIZE = 2056
     
   def test_1_epoch_table(self):

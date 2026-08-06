@@ -1,6 +1,7 @@
 # from
 import base64
 import pickle
+import numpy as np
 import time
 # some code is adapted from https://github.com/tensorflow/tfx/blob/master/tfx/examples/penguin/penguin_utils_base.py
 # and related files
@@ -102,13 +103,30 @@ def _make_query_model(n_users : int, layer_sizes : list,
             self.max_val = max_val
         
         def call(self, inputs):
-            radians = 2 * math.pi * tf.cast(inputs, tf.float32) / self.max_val
+            radians = 2.0 * np.pi * tf.cast(inputs, tf.float32) / tf.cast(self.max_val, tf.float32)
             return tf.concat([tf.sin(radians), tf.cos(radians)], axis=-1)
         
         def get_config(self):
             config = super(CyclicalEncoding, self).get_config()
             config.update({"max_val": self.max_val})
     
+    @keras.utils.register_keras_serializable(package=package)
+    class QueryBiasConcatenationLayer(keras.layers.Layer):
+        """Appends a constant 1.0 dimension to the query vector for MIPS bias folding."""
+        
+        def __init__(self, name='query_bias_concat', **kwargs):
+            super(QueryBiasConcatenationLayer, self).__init__(name=name, **kwargs)
+        
+        def call(self, inputs):
+            res = inputs
+            batch_size = tf.shape(res)[0]
+            ones = tf.ones(shape=(batch_size, 1), dtype=res.dtype)
+            return tf.concat([res, ones], axis=-1)
+        
+        def compute_output_shape(self, input_shape):
+            # input_shape is (batch_size, dense_dim)
+            return (input_shape[0], input_shape[1] + 1)
+        
     @keras.utils.register_keras_serializable(package=package)
     class UserModel(keras.Model):
         # for init from a load, arguments are present for the compositional instance members too
@@ -184,15 +202,18 @@ def _make_query_model(n_users : int, layer_sizes : list,
             # categorical, nominal, order doesn't matter
             occupation_emb = None
             if feature_acronym.find("o") > -1:
-                occupation_emb = keras.layers.CategoryEncoding(
-                    num_tokens=21, output_mode="one_hot",
-                    name="occupation_emb")
+                occupation_emb = keras.Sequential([
+                    keras.layers.CategoryEncoding(num_tokens=21, output_mode="one_hot", name="one_hot_occ"),
+                    keras.layers.Flatten(data_format='channels_last'),
+                ], name="occupation_emb")
             
             # categorical
             gender_emb = None
             if feature_acronym.find("s") > -1:
-                gender_emb = keras.layers.CategoryEncoding(
-                    num_tokens=2, output_mode="one_hot", name="gender_emb")
+                gender_emb = keras.Sequential([
+                    keras.layers.CategoryEncoding(num_tokens=2, output_mode="one_hot", name="gender_on_hot"),
+                    keras.layers.Flatten(data_format='channels_last'),
+                ], name="gender_emb")
             
             self.feature_acronym = feature_acronym
             self.embed_out_dim = embed_out_dim
@@ -337,11 +358,13 @@ def _make_query_model(n_users : int, layer_sizes : list,
             for layer_size in layer_sizes[-1:]:
                 self.dense_query.add(keras.layers.Dense(layer_size,
                     kernel_initializer="glorot_normal", use_bias=False, name=f'_layers'))
-            
-            # removing the noramlization layers to allow the models to use dot product instead
-            # of cosine similarity for more personaized ANN searches that use the magnitudes
+                    
+            # removing the normalization layer to allow the models to use dot product instead
+            # of cosine similarity for more personalized ANN searches that use the magnitudes
             # in addition to the directions
-            # self.dense_query.add(keras.layers.UnitNormalization(axis=-1))
+            
+            self.query_bias_concat_layer = QueryBiasConcatenationLayer()
+            
             self.regl2 = regl2
             self.n_users = n_users
             self.feature_acronym = feature_acronym
@@ -352,20 +375,20 @@ def _make_query_model(n_users : int, layer_sizes : list,
         def build(self, input_shape):
             # print(f'build {self.name} input_shape={input_shape}\n')
             self.user_model.build(input_shape)
-            input_shape_2 = self.user_model.compute_output_shape(
-                input_shape)
+            input_shape_2 = self.user_model.compute_output_shape(input_shape)
             self.dense_query.build(input_shape_2)
+            dense_out_shape = self.dense_query.compute_output_shape(input_shape_2)
+            self.query_bias_concat_layer.build(dense_out_shape)
             self.built = True
         
         def compute_output_shape(self, input_shape):
             # print(f'compute_output_shape {self.name} input_shape={input_shape}, {input_shape['user_id'][0]}, {self.layer_sizes[-1:]}\n')
             # This is invoked after build by TwoTower
             # return self.output_shapes[0]
-            input_shape_3 = self.dense_query.compute_output_shape(
-                self.user_model.compute_output_shape(input_shape))
-            _shape_3 = [i for i in input_shape_3]
-            _shape_3[0] = None
-            return _shape_3
+            input_shape_2 = self.user_model.compute_output_shape(input_shape)
+            dense_out_shape = self.dense_query.compute_output_shape(input_shape_2)
+            output_shape = self.query_bias_concat_layer.compute_output_shape(dense_out_shape)
+            return output_shape
             # return None, self.layer_sizes[-1]
             # return (input_shape['user_id'][0], self.layer_sizes[-1])
         
@@ -375,7 +398,8 @@ def _make_query_model(n_users : int, layer_sizes : list,
             feature_embedding = self.user_model(inputs, **kwargs)
             res = self.dense_query(feature_embedding)
             # tf.print('CALL', self.name, ' shape=', res.shape)
-            return res
+            # Append 1.0 to the query vector to multiply against the item bias in CandidateModel calll
+            return self.query_bias_concat_layer(res)
         
         def get_config(self):
             config = super(QueryModel, self).get_config()
@@ -401,6 +425,46 @@ def _make_candidate_model(n_movies : int, movies_offset : int,
         regl2 : float, drop_rate : float, incl_genres : bool, **kwargs):
     
     @keras.utils.register_keras_serializable(package=package)
+    class CandidateBiasConcatenationLayer(keras.layers.Layer):
+        """Encapsulates bias reshaping and concatenation for MIPS folding."""
+        def __init__(self, n_movies : int, movies_offset: int, name='candidate_bias_concat', **kwargs):
+            super(CandidateBiasConcatenationLayer, self).__init__(name=name, **kwargs)
+            self.n_movies = n_movies
+            self.movies_offset = movies_offset
+            self.item_bias = tf.keras.layers.Embedding(
+                input_dim=n_movies,
+                output_dim=1,
+                embeddings_initializer='zeros'
+            )
+            
+        def call(self, inputs):
+            res, movie_ids = inputs
+            shifted_ids = movie_ids - self.movies_offset
+            safe_ids = tf.clip_by_value(shifted_ids, 0, self.n_movies - 1)
+            bias = self.item_bias(safe_ids)
+            bias_reshaped = tf.reshape(bias, [-1, 1])
+            return tf.concat([res, bias_reshaped], axis=-1)
+        
+        def build(self, input_shape):
+            res_shape, movie_ids_shape = input_shape
+            self.item_bias.build(movie_ids_shape)
+            self.built = True
+            
+        def compute_output_shape(self, input_shape):
+            res_shape, movie_ids_shape = input_shape
+            # Total dimension increases by 1 to account for the folded bias
+            return (res_shape[0], res_shape[1] + 1)
+        
+        def get_config(self):
+            # updating super config stomps over existing key names, so if need separate values one would need
+            # to use some form of package and class name in keys or uniquely name the keys to avoid collision
+            config = super(CandidateBiasConcatenationLayer, self).get_config()
+            config.update(
+                {"n_movies": self.n_movies, "movies_offset" : self.movies_offset
+                })
+            return config
+        
+    @keras.utils.register_keras_serializable(package=package)
     class MovieModel(keras.Model):
         """
         NOTE: the movie_ids are expected to be already unique and represented by range [1, n_movies] and dtype np.int32.
@@ -425,11 +489,10 @@ def _make_candidate_model(n_movies : int, movies_offset : int,
             #      to avoid using this incorrectly
             movie_embed_out_dim = round(self.n_movies ** 0.25)  # 8
             self.movie_emb = keras.Sequential([
-                keras.layers.IntegerLookup(
-                    vocabulary=[i for i in range(movies_offset + 1,
-                        movies_offset + n_movies + 1)],
-                    output_mode="int"),
-                keras.layers.Embedding(self.n_movies + 1, movie_embed_out_dim),
+                keras.layers.Embedding(
+                    self.n_movies,
+                    movie_embed_out_dim,
+                    embeddings_initializer="glorot_normal"),
                 keras.layers.Flatten(data_format='channels_last'),
             ], name="movie_emb")
             
@@ -469,7 +532,14 @@ def _make_candidate_model(n_movies : int, movies_offset : int,
             # and concatenate the result.
             # print(f'call {self.name} type={type(inputs)}, kwargs={kwargs}\n')
             # print(f'    spec={inputs.element_spec}\n')
-            x = tf.cast(inputs['movie_id'], dtype=tf.int32)
+            
+            shifted_ids = inputs['movie_id'] - self.movies_offset
+            
+            # 2. Safety guard: Clip IDs to valid range [0, n_movies - 1]
+            # This prevents crashes if an unseen offset ID is passed in serving
+            safe_ids = tf.clip_by_value(shifted_ids, 0, self.n_movies - 1)
+            
+            x = tf.cast(safe_ids, dtype=tf.int32)
             results = [self.movie_emb(x)]
             # shape is (batch_size, x, out_dim)
             if self.incl_genres:
@@ -511,6 +581,7 @@ def _make_candidate_model(n_movies : int, movies_offset : int,
               layer_sizes:
                 A list of integers where the i-th entry represents the number of units
                 the i-th layer contains.
+              movies_offset: is num_users + 1 where num_uses is the number of users in the catalog.
             """
             super(CandidateModel, self).__init__(name=name, **kwargs)
             
@@ -543,11 +614,13 @@ def _make_candidate_model(n_movies : int, movies_offset : int,
             for layer_size in layer_sizes[-1:]:
                 self.dense_candidate.add(keras.layers.Dense(layer_size,
                     kernel_initializer="glorot_normal", use_bias=False, name=f'_layers'))
+                    
+            self.bias_concat_layer = CandidateBiasConcatenationLayer(n_movies=n_movies, movies_offset=movies_offset)
             
             # removing the noramlization layers to allow the models to use dot product instead
-            # of cosine similarity for more personaized ANN searches that use the magnitudes
+            # of cosine similarity for more personalized ANN searches that use the magnitudes
             # in addition to the directions
-            # self.dense_query.add(keras.layers.UnitNormalization(axis=-1))
+            
             self.regl2 = regl2
             self.n_movies = n_movies
             self.movies_offset = movies_offset
@@ -560,20 +633,20 @@ def _make_candidate_model(n_movies : int, movies_offset : int,
         def build(self, input_shape):
             # print(f'build {self.name} input_shape={input_shape}\n')
             self.movie_model.build(input_shape)
-            input_shape_2 = self.movie_model.compute_output_shape(
-                input_shape)
+            input_shape_2 = self.movie_model.compute_output_shape(input_shape)
             self.dense_candidate.build(input_shape_2)
+            dense_out_shape = self.dense_candidate.compute_output_shape(input_shape_2)
+            self.bias_concat_layer.build((dense_out_shape, input_shape['movie_id']))
             self.built = True
         
         def compute_output_shape(self, input_shape):
             # print(f'compute_output_shape {self.name} input_shape={input_shape}\n')
             # This is invoked after build by TwoTower
-            input_shape_3 = self.dense_candidate.compute_output_shape(
-                self.movie_model.compute_output_shape(input_shape))
-            _shape_3 = [i for i in input_shape_3]
-            _shape_3[0] = None
-            return _shape_3
-            # return None, self.layer_sizes[-1]
+            input_shape_2 = self.movie_model.compute_output_shape(input_shape)
+            dense_out_shape = self.dense_candidate.compute_output_shape(input_shape_2)
+            #bias_out_shape = (dense_out_shape[0], 1)
+            output_shape = self.bias_concat_layer.compute_output_shape((dense_out_shape, input_shape['movie_id']))
+            return output_shape
         
         def call(self, inputs, **kwargs):
             # inputs should contain columns "movie_id", "genres"
@@ -584,7 +657,7 @@ def _make_candidate_model(n_movies : int, movies_offset : int,
             # returns an np.ndarray wrapped in a tensor if inputs is tensor, else not wrapped
             # logging.debug(f'CALL {self.name} SHAPE ={res.shape}\n')
             # tf.print('CALL', self.name, ' shape=', res.shape)
-            return res
+            return self.bias_concat_layer((res, inputs['movie_id']))
         
         def get_config(self):
             config = super(CandidateModel, self).get_config()
@@ -731,13 +804,24 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         
     def call(self, inputs):
       """
-      compute the cosine similarity score for the user data to movie data.
+      compute the dot product  score for the user data to movie data.
+      
+      score = <q, c> + b_m where q is query embedding and c is candidate embedding and b_m is a
+          movie bias term that is internally added by dedicating the last element in q to be value 1.0
+          and the last element in  c to be the learned b_m.
+      NOTE that the q and c embeddings are not normalized so the result is dot product, not cosine similarity.
+      NOTE that the resulting trained embeddings from the trained QueryModel and trained CandidateModel
+      will have embedding vector magnitudes and direction which helps improve personalized ANN searches.
+      
       Args:
          inputs: transformed features
       Returns:
           dot product score for the user data to movie data
       """
       #logging.debug(f'call {self.name} inputs={inputs}\n')
+      
+      
+      
       user_vector = self.query_model(inputs)
       movie_vector = self.candidate_model(inputs)
       #tf.print('U,V SHAPES: ', user_vector.shape, movie_vector.shape)
@@ -745,10 +829,12 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       return s
    
     def build(self, input_shape):
+      #tf.print("TwoTowerDNN build input_shape=", input_shape)
       normalized_input_shape = {
         k: tf.TensorShape(v) if not isinstance(v, tf.TensorShape) else v
         for k, v in input_shape.items()
       }
+      #tf.print("TwoTowerDNN build normalized_nput_shape=", normalized_input_shape)
       #print(f'build {self.name} input_shape={input_shape}\n')
       # logging.debug(f'build {self.name} input_shape={input_shape}\n')
       if not self.query_model.built:
@@ -897,14 +983,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         raw_logits = tf.matmul(user_embeddings, movie_embeddings, transpose_b=True)
         logits = raw_logits / self.temperature
         batch_size = tf.shape(logits)[0]
-        
-        if self.use_bias_corr:
-            # We use the frequencies learned during training
-            movie_ids_keys = tf.cast(tf.reshape(x['movie_id'], [-1]),
-                tf.int32)
-            p_i = self.table_B.lookup(movie_ids_keys)
-            log_q = tf.math.log(tf.clip_by_value(p_i, 1e-6, 1.))
-            logits = logits - tf.expand_dims(log_q, axis=0)
         
         # Define Ranking Labels
         user_mask = tf.equal(tf.expand_dims(x['user_id'], 0),
@@ -1538,15 +1616,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   print(f"Total Non-Trainable Params: {non_trainable_count}")
   #model.summary(expand_nested=True)
   
-  is_tf_dot_keras_model = isinstance(model, tf.keras.Model)
-  is_keras_model = isinstance(model, keras.Model)
-  is_keras_models_Model = isinstance(model, keras.models.Model)
-  logging.debug(f"is_tf_dot_keras_model: {is_tf_dot_keras_model}, "
-    f"is_keras_model: {is_keras_model}, is_keras_models_Model={is_keras_models_Model}")
-  if not isinstance(model, keras.models.Model):
-    logging.debug(f'this is the fail at tuner.py line 167')
-  # TO debug, user run_eagerly=False
-  
   return model
 
 def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
@@ -1574,8 +1643,9 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   hp.Fixed('regl2', 0.0)
   hp.Choice("embed_out_dim", values=[32], default=32)
   #layers_sizes is a list of ints, so encode each list as a string, chices can only be int,float,bool,str
-  hp.Choice("layer_sizes", values=[json.dumps([16])], default=json.dumps([16]))
-  #hp.Fixed("layer_sizes", value=json.dumps([64, 32]))
+  #the last layer in layer_sizes is the query and candidate embedding models' output dimensions-1
+  hp.Choice("layer_sizes", values=[json.dumps([16-1])], default=json.dumps([16-1]))
+  #hp.Fixed("layer_sizes", value=json.dumps([64-1, 32-1]))
   # ahmos for "age", "hr_wk", "month", "occupation", "gender"
   hp.Fixed("feature_acronym", custom_config.get("feature_acronym", "h"))
   hp.Fixed("incl_genres", custom_config["incl_genres"])

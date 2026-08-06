@@ -17,6 +17,7 @@ class PIPELINE_TYPE(enum.Enum):
   PRODUCTION = "production"
   BATCH_INFERENCE = "batch_inference"
   TABLE_B_DIAGNOSTIC = "table_b_diagnostic"
+  EAGER_MODEL_TRAIN = "eager_model_train"
   
 class MODEL_NAME(enum.Enum):
   USER_MOVIE = "user_movie"
@@ -221,6 +222,36 @@ class PipelineComponentsFactory():
       components.extend([ratings_transform, parquet_task])
       return components
     
+    if type == PIPELINE_TYPE.EAGER_MODEL_TRAIN:
+        custom_config = {
+            'n_users': self.n_users,
+            'n_movies': self.n_movies,
+            'n_genres': self.n_genres,
+            'feature_acronym': "ahosy",
+            'run_eagerly': True,
+            'incl_genres': True,
+            'BATCH_SIZE': self.batch_size,
+            "NUM_EPOCHS": self.num_epochs,
+            "device": self.device,
+            "num_examples": self.num_examples,
+            "version": self.version,
+            "model_name": MODEL_NAME.USER_MOVIE.value,
+        }
+        trainer = tfx.components.Trainer(
+            module_file=os.path.join(self.transform_dir,'tune_train_movie_lens.py'),
+            examples=ratings_transform.outputs['transformed_examples'],
+            transform_graph=ratings_transform.outputs['transform_graph'],
+            custom_config=custom_config,
+        )
+        components = [example_gen, statistics_gen, schema_gen]
+        if pre_transform_schema_importer is not None:
+            components.append(pre_transform_schema_importer)
+        components.append(pre_transform_example_validator)
+        if example_resolver is not None:
+            components.extend([example_resolver, example_diff])
+        components.extend([ratings_transform, trainer])
+        return components
+        
     if type == PIPELINE_TYPE.TABLE_B_DIAGNOSTIC:
         trainer = tfx.components.Trainer(
             module_file=os.path.join(self.transform_dir, 'tune_train_movie_lens.py'),
