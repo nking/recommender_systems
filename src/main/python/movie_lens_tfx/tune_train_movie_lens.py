@@ -1989,7 +1989,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   
   #use patience=3 with batch_size 1024, and patience=5 with batch_size 2048
   stop_early = keras.callbacks.EarlyStopping(
-    monitor=f'val_composite_ndcg_20', min_delta=1E-4, patience=5, mode="max",
+    monitor=f'val_mean_loss', min_delta=1E-4, patience=5, mode="max",
     restore_best_weights=True)
   
   """
