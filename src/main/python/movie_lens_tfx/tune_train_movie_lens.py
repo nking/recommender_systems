@@ -1988,8 +1988,9 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
     log_dir=fn_args.model_run_dir, update_freq='epoch')
   
   #use patience=3 with batch_size 1024, and patience=5 with batch_size 2048
+  # for val_ndcg_20 and batch_size=2056, min_delta should be 0.005 (random)
   stop_early = keras.callbacks.EarlyStopping(
-    monitor=f'val_mean_loss', min_delta=1E-4, patience=5, mode="max",
+    monitor=f'val_mean_loss', min_delta=0.015, patience=5, mode="max",
     restore_best_weights=True)
   
   """
