@@ -1844,8 +1844,14 @@ def create_input_shapes_from_spec(transformed_feature_spec : Dict[str, common_ty
 def get_stop_early_callback():
     # use patience=3 with batch_size 1024, and patience=5 with batch_size 2048
     # for val_ndcg_20 and batch_size=2056, min_delta should be 0.005 (random)
+    # for val_mean_loss, min_delta=0.015 and patience=3
+    # for cal_composite_ndcg_20
+    # we use val_composite_ndcg_20 in order to better recommend items to the tail users
+    # by including them in the NDCG score.
+    # note that the val_composite_ndcg_20 peaks well before ndcg_20 and the other metrics,
+    #  because those are maximized by popularity.
     return keras.callbacks.EarlyStopping(
-        monitor=f'val_mean_loss', min_delta=0.015, patience=5, mode="min",
+        monitor=f'val_composite_ndcg_20', min_delta=0.0002, patience=3, mode="min",
         restore_best_weights=True)
 
 # tfx.components.FnArgs
@@ -2464,6 +2470,23 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
     directory=fn_args.working_dir,
     project_name='movie_lens_2t_tuning_hb')
   '''
+  
+  #for max_trials=10, use alpha=1e-3, beta=2.3, num_initial_points=3
+  #for max_trials=40 we use:
+  #   num_initial_points = 13:
+  #       allocates ~32% to random sampling.
+  #       For a 5-dimensional search space, 13 points provide the Gaussian Process (GP)
+  #       of the objective function with a solid, well-sampled baseline matrix
+  #       (matrix of hyper-parm combinations) before it starts fitting its
+  #       surrogate model.
+  #    beta = 3.3:
+  #        3.3 encourages higher exploration in the Upper Confidence Bound (UCB)
+  #        acquisition function. we now have 27 guided trials remaining after the
+  #        initialization phase, the algorithm has enough runway to explore
+  #        distinct parameter pockets early on and still settle into exploiting
+  #        the best regions before trial 40.
+  #
+  # alpha = 1e-3: Setting alpha = 1e-3 acts as a gentle noise-smoothing filter. Since validation metrics like ranking NDCG exhibit micro-variance between epochs, this prevents the GP from over-fitting to minor validation jitter.
   print("construct tuner BayesianOptimization")
   tuner = keras_tuner.BayesianOptimization(
       _make_2tower_keras_model,
