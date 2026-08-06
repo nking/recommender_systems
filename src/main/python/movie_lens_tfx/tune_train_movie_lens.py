@@ -30,8 +30,8 @@ from tfx import v1 as tfx
 
 from tfx_bsl.public import tfxio
 from absl import logging
-logging.set_verbosity(logging.WARNING)
-logging.set_stderrthreshold(logging.WARNING)
+logging.set_verbosity(logging.INFO)
+logging.set_stderrthreshold(logging.INFO)
 
 '''
 builds pipelines for training a TwoTowerDNN model to train Query and Candidate
@@ -1096,6 +1096,11 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         # 2. Run diagnostic hook at the end of the fit call
         if self.calc_table_B_diagnostic:
             self.inspect_table_B_distribution(self.table_B)
+
+        try:
+            tf.print("num_epochs=", len(history.history['mean_loss']))
+        except Exception:
+            pass
         
         return history
     
@@ -1836,6 +1841,13 @@ def create_input_shapes_from_spec(transformed_feature_spec : Dict[str, common_ty
     
     return input_shapes
 
+def get_stop_early_callback():
+    # use patience=3 with batch_size 1024, and patience=5 with batch_size 2048
+    # for val_ndcg_20 and batch_size=2056, min_delta should be 0.005 (random)
+    return keras.callbacks.EarlyStopping(
+        monitor=f'val_mean_loss', min_delta=0.015, patience=5, mode="min",
+        restore_best_weights=True)
+
 # tfx.components.FnArgs
 def run_fn(fn_args):
   """Train the model based on given args.
@@ -1987,11 +1999,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   tensorboard_callback = keras.callbacks.TensorBoard(
     log_dir=fn_args.model_run_dir, update_freq='epoch')
   
-  #use patience=3 with batch_size 1024, and patience=5 with batch_size 2048
-  # for val_ndcg_20 and batch_size=2056, min_delta should be 0.005 (random)
-  stop_early = keras.callbacks.EarlyStopping(
-    monitor=f'val_mean_loss', min_delta=0.015, patience=5, mode="max",
-    restore_best_weights=True)
+  stop_early = get_stop_early_callback()
   
   """
   checkpoint_dir = os.path.join(fn_args.serving_model_dir, 'checkpoint')
@@ -2013,6 +2021,9 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
     callbacks=[tensorboard_callback, stop_early], verbose=1)
   
   print(f'fit history.history={history.history}')
+  total_epochs_run = len(history.history['val_mean_loss'])
+  print(f"total_epochs_run={total_epochs_run}", flush=True)
+  logging.info(f"total_epochs_run={total_epochs_run}")
   
   #TODO: consider adding the vocabularies as assets:
   #    see https://www.tensorflow.org/api_docs/python/tf/saved_model/Asset
@@ -2453,17 +2464,17 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
     directory=fn_args.working_dir,
     project_name='movie_lens_2t_tuning_hb')
   '''
-  logging.info("construct tuner BayesianOptimization")
+  print("construct tuner BayesianOptimization")
   tuner = keras_tuner.BayesianOptimization(
       _make_2tower_keras_model,
       objective=keras_tuner.Objective('val_composite_ndcg_20', 'max'),
       hyperparameters=hp,
-      alpha=1e-2,
-      beta=3.5, #defaut 2.6;  4.0 for more exploration.
+      alpha=1e-3,
+      beta=2.3, #defaut 2.6;  4.0 for more exploration.
 
       #use when fitting
-      num_initial_points=15, #30
-      max_trials=40, #should be 2 to 3 times num_initial_points
+      num_initial_points=3, #30
+      max_trials=10, #should be 2 to 3 times num_initial_points
       #TEMPORARY when fixing params:
       #num_initial_points=1, #30
       #max_trials=1, #should be 2 to 3 times num_initial_points
@@ -2472,11 +2483,17 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
       directory=fn_args.working_dir,
       project_name='movie_lens_2t_tuning_bayesian')
   
+  NUM_EPOCHS = hp.get("NUM_EPOCHS")
+  
+  stop_early = get_stop_early_callback()
+  
   return tfx.components.TunerFnResult(
     tuner=tuner,
     fit_kwargs={
       'x': train_dataset,
       'validation_data': eval_dataset,
       'steps_per_epoch': TRAIN_STEPS_PER_EPOCH,
-      'validation_steps': EVAL_STEPS_PER_EPOCH
+      'validation_steps': EVAL_STEPS_PER_EPOCH,
+      'epochs' : NUM_EPOCHS,
+      'callbacks' : [stop_early],
     })

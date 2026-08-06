@@ -16,8 +16,8 @@ from movie_lens_tfx.tune_train_movie_lens import *
 
 from absl import logging
 tf.get_logger().propagate = False
-logging.set_verbosity(logging.WARNING)
-logging.set_stderrthreshold(logging.WARNING)
+logging.set_verbosity(logging.INFO)
+logging.set_stderrthreshold(logging.INFO)
 
 # for the in-batch softmax, sampled softmax approach, use only positives:
 infiles_dict_of_dicts_ser = get_contrastive_split_infiles_set(ds = DataSize.FULL)
@@ -31,7 +31,7 @@ n_occupations = 21
 MIN_EVAL_SIZE = 50  # make this larger for production pipeline
 
 BATCH_SIZE = 2048
-NUM_EPOCHS = 40
+NUM_EPOCHS = 20
 
 num_examples = 463548
 
