@@ -2,6 +2,7 @@
 import base64
 import pickle
 import numpy as np
+import abc
 import time
 # some code is adapted from https://github.com/tensorflow/tfx/blob/master/tfx/examples/penguin/penguin_utils_base.py
 # and related files
@@ -783,17 +784,17 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
           self.table_A = tf.lookup.experimental.MutableHashTable(
               key_dtype=tf.int32, value_dtype=tf.float32, default_value=0.)
           # B stores the estimated probability (p_i)
+          # B holds the exponential moving average of the delta t step gap, that is,
+          # the average time in steps for a movie to be seen again.
+          # a low value means the movie is seen frequently (i.e. a popular movie),
+          # while a high value means the movie is not seen very often.
           self.table_B = tf.lookup.experimental.MutableHashTable(
               key_dtype=tf.int32, value_dtype=tf.float32, default_value=1.0)
           self.global_step = tf.Variable(0., trainable=False,
               dtype=tf.float32)
-          #the threshold was determined using table_B_Test.py after editing self.calc_table_B_diagnostic = True
-          self.ndcg_k_composite_metric = NDCGAtKComposite(b_threshold=12.23,
-              k=20, use_tail=True)
       else:
           self.table_B = None
-          self.ndcg_k_composite_metric = NDCGAtKComposite(b_threshold=100.0,
-              k=20, use_tail=False)
+      self.ndcg_k_composite_metric = NDCGAtKComposite(k=20, use_composite=self.use_bias_corr)
     
     @property
     def metrics(self):
@@ -1030,7 +1031,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         })
         return output
     
-    #do not invoke this from within a tf_function because tensors won't have nump
+    #do not invoke this from within a tf_function because tensors won't have numpy
     def inspect_table_B_distribution(self, table_b, bins: int = 10,
             max_bar_width: int = 35):
         """
@@ -1058,14 +1059,15 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         print("-" * 60)
         
         # Percentiles
-        percentiles = [50, 75, 80, 85, 90, 95, 99]
+        percentiles = [20, 50, 75, 80, 85, 90, 95, 99]
         calc_percentiles = np.percentile(b_values, percentiles)
         
         for p, val in zip(percentiles, calc_percentiles):
             print(f"{p:>2}th percentile: {val:>8.2f}")
         
         print("-" * 60)
-        print(f"Recommendation: For an 80% tail cutoff, set b_threshold = {calc_percentiles[2]:.2f}")
+        print(f"Recommendation: For a 20% head cutoff, set head_threshold = {calc_percentiles[0]:.2f}")
+        print(f"Recommendation: For an 80% tail cutoff, set b_threshold = {calc_percentiles[3]:.2f}")
         print("=" * 60)
         
         # Terminal ASCII Histogram
@@ -1388,26 +1390,38 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
           return config
   
   @keras.utils.register_keras_serializable(package=package)
-  class NDCGAtKForInBatchTail(keras.metrics.Metric):
+  class NDCGAtKForInBatchPart(keras.metrics.Metric, abc.ABC):
     """
     Computes NDCG@K restricted strictly to rows where the true positive
     candidate item is a tail item based on the streaming table_B state.
     """
-    def __init__(self, b_threshold=100.0, name="ndcg_tail", k: int = 20, **kwargs):
-        name = f"{name}_{k}"
-        super(NDCGAtKForInBatchTail, self).__init__(name=name, **kwargs)
+    def __init__(self, head_torso_tail_idx:int =2, name:str ="ndcg", k: int = 20, **kwargs):
+        if head_torso_tail_idx < 0 or head_torso_tail_idx > 2:
+            raise ValueError("head_torso_tail_idx must be >= 0 and <= 2")
+        name = self.get_name(name, k)
+        super(NDCGAtKForInBatchPart, self).__init__(name=name, **kwargs)
         self.k = k
-        self.b_threshold = b_threshold
+        self.head_torso_tail_idx=head_torso_tail_idx
         self.ndcg_sum = self.add_weight(name="ndcg_sum", initializer="zeros")
         self.count = self.add_weight(name="count", initializer="zeros")
     
+    @abc.abstractmethod
+    def get_name(self, name:str, k:int):
+        """Inheritors must implement this.  get name to be stored in metric."""
+        pass
+    
+    @abc.abstractmethod
+    def get_part_mask(self, b_values):
+        """Inheritors must implement this.  get a mask to keep b_values for the metric "part" of interest"""
+        pass
+    
     def update_state(self, labels, logits, movie_ids,
             table_b:tf.lookup.experimental.MutableHashTable, sample_weight=None):
-        
         # 1. Identify Tail Items
         movie_ids_flat = tf.cast(tf.reshape(movie_ids, [-1]), tf.int32)
         b_values = table_b.lookup(movie_ids_flat)
-        tail_mask = b_values > self.b_threshold  # Make sure b_threshold isn't too high!
+        
+        part_mask = self.get_part_mask(b_values)
         
         # 2. Efficient Ranking (Aligned with NDCGAtKForInBatchNegatives)
         pos_scores = tf.linalg.diag_part(logits)[:, tf.newaxis]
@@ -1422,7 +1436,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         dcg = (1.0 / log2_rank) * relevant_mask
         
         # 3. Filter accumulator to include only tail rows
-        weights = tf.cast(tail_mask, tf.float32)
+        weights = tf.cast(part_mask, tf.float32)
         if sample_weight is not None:
             weights = weights * tf.cast(tf.reshape(sample_weight, [-1]), tf.float32)
         
@@ -1440,52 +1454,154 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         config = super().get_config()
         config.update({
             "k": self.k,
-            "b_threshold": self.b_threshold,
+            "head_torso_tail_idx": self.head_torso_tail_idx,
         })
         return config
-
+  
+  @keras.utils.register_keras_serializable(package=package)
+  class NDCGAtKForInBatchHead(NDCGAtKForInBatchPart):
+      """
+      Computes NDCG@K restricted strictly to rows where the true positive
+      candidate item is a head item based on the streaming table_B state.
+      """
+      
+      def __init__(self,  b_threshold_head=7.92, name:str="ndcg", k: int = 20, **kwargs):
+          super().__init__(head_torso_tail_idx=0, name=name, k=k, **kwargs)
+          self.b_threshold_head = b_threshold_head
+      
+      def get_name(self, name:str,  k:int):
+          return f"{name}_head_{k}"
+      
+      def get_part_mask(self, b_values):
+          return b_values <= self.b_threshold_head
+      
+      def get_config(self):
+          config = super().get_config()
+          config.update({
+              "b_threshold_head": self.b_threshold_head,
+          })
+          return config
+  
+  @keras.utils.register_keras_serializable(package=package)
+  class NDCGAtKForInBatchTorso(NDCGAtKForInBatchPart):
+      """
+      Computes NDCG@K restricted strictly to rows where the true positive
+      candidate item is a torse item based on the streaming table_B state.
+      """
+      
+      def __init__(self, b_threshold_head=7.92, b_threshold_tail=12.21, name: str = "ndcg",
+              k: int = 20, **kwargs):
+          super().__init__(head_torso_tail_idx=1, name=name, k=k, **kwargs)
+          self.b_threshold_head = b_threshold_head
+          self.b_threshold_tail = b_threshold_tail
+      
+      def get_name(self, name: str, k: int):
+          return f"{name}_torso_{k}"
+      
+      def get_part_mask(self, b_values):
+            return tf.logical_and(
+                b_values > self.b_threshold_head,
+                b_values < self.b_threshold_tail
+            )
+          
+      def get_config(self):
+          config = super().get_config()
+          config.update({
+              "b_threshold_head": self.b_threshold_head,
+              "b_threshold_tail": self.b_threshold_tail,
+          })
+          return config
+  
+  @keras.utils.register_keras_serializable(package=package)
+  class NDCGAtKForInBatchTail(NDCGAtKForInBatchPart):
+      """
+      Computes NDCG@K restricted strictly to rows where the true positive
+      candidate item is a tail item based on the streaming table_B state.
+      """
+      
+      def __init__(self, b_threshold_tail=12.21, name: str = "ndcg", k: int = 20, **kwargs):
+          super().__init__(head_torso_tail_idx=2, name=name, k=k, **kwargs)
+          self.b_threshold_tail = b_threshold_tail
+      
+      def get_name(self, name: str, k: int):
+          return f"{name}_tail_{k}"
+      
+      def get_part_mask(self, b_values):
+          return  b_values >= self.b_threshold_tail
+      
+      def get_config(self):
+          config = super().get_config()
+          config.update({
+              "b_threshold_tail": self.b_threshold_tail,
+          })
+          return config
+      
   @keras.utils.register_keras_serializable(package=package)
   class NDCGAtKComposite(keras.metrics.Metric):
-    def __init__(self, b_threshold=100.0, name="composite_ndcg",
-            k: int = 20, use_tail:bool=True, **kwargs):
+    def __init__(self, b_threshold_head=7.92, b_threshold_tail=12.21, name="composite_ndcg",
+            k: int = 20, use_composite:bool=True, w_head:float=0.15, w_torso:float=0.35, w_tail:float=0.5, **kwargs):
+        """
+        Args:
+            b_threshold_head (float): b_table values less than this are the head of the distribution frequently picked movies but few unique movies.
+            b_threshold_tail (float): b_table values greater than this are the tail of the ditstribution rarly picked and are few in number of unique movies.
+            k (int): top k to use in NDCG metrics
+            use_composite (bool): if False, the standard NDCG metrics is used, else the composite is used.
+            The composite is w_head * NDCG_head + w_torso * NDCG_torso + w_tail * NDCG_tail.
+        """
         name = f"{name}_{k}"
         super(NDCGAtKComposite, self).__init__(name=name, **kwargs)
-        self.b_threshold = b_threshold
+        self.b_threshold_head = b_threshold_head
+        self.b_threshold_tail = b_threshold_tail
+        self.w_head = w_head
+        self.w_torso = w_torso
+        self.w_tail = w_tail
         self.k = k
-        self.use_tail = use_tail
-        self.ndcg = NDCGAtKForInBatchNegatives(k=k)
-        if use_tail:
-            self.ndcg_tail = NDCGAtKForInBatchTail(b_threshold=b_threshold, k=k)
+        self.use_composite = use_composite
+        if use_composite:
+            self.ndcg_head = NDCGAtKForInBatchHead(b_threshold_head=b_threshold_head, k=k)
+            self.ndcg_torso = NDCGAtKForInBatchTorso(b_threshold_head=b_threshold_head, b_threshold_tail=b_threshold_tail, k=k)
+            self.ndcg_tail = NDCGAtKForInBatchTail(b_threshold_tail=b_threshold_tail, k=k)
         else:
-            self.ndcg_tail = None
+            self.ndcg = NDCGAtKForInBatchNegatives(k=k)
     
     def update_state(self, y_true, y_pred, sample_weight=None,
             table_b:tf.lookup.experimental.MutableHashTable = None, movie_ids=None):
-        self.ndcg.update_state(y_true, y_pred, sample_weight)
-        if self.ndcg_tail is not None and table_b is not None:
+        if self.use_composite:
+            self.ndcg_head.update_state(y_true, y_pred, movie_ids, table_b, sample_weight)
+            self.ndcg_torso.update_state(y_true, y_pred, movie_ids, table_b, sample_weight)
             self.ndcg_tail.update_state(y_true, y_pred, movie_ids, table_b, sample_weight)
+        else:
+            self.ndcg.update_state(y_true, y_pred, sample_weight)
     
     def result(self):
-        r0 = self.ndcg.result()
-        if self.ndcg_tail is not None:
-            r1 = self.ndcg_tail.result()
-            return r0 + (1.0 * r1)
+        if self.use_composite:
+            s0 = self.w_head * self.ndcg_head.result()
+            s1 = self.w_torso * self.ndcg_torso.result()
+            s2 = self.w_tail * self.ndcg_tail.result()
+            return s0 + s1 + s2
         else:
-            return r0
+            return self.ndcg.result()
         
     def reset_state(self):
-        self.ndcg.reset_state()
-        if self.ndcg_tail is not None:
+        if self.use_composite:
+            self.ndcg_head.reset_state()
+            self.ndcg_torso.reset_state()
             self.ndcg_tail.reset_state()
-    
+        else:
+            self.ndcg.reset_state()
+        
     def get_config(self):
         # Fix: super(NDCGAtKComposite).get_config() throws an error in python.
         # Use super().get_config()
         config = super().get_config()
         config.update({
-            "k": self.k,
-            "b_threshold": self.b_threshold,
-            "use_tail": self.use_tail,
+            "b_threshold_head" : self.b_threshold_head,
+            "b_threshold_tail" : self.b_threshold_tail,
+            "w_head" : self.w_head,
+            "w_torso" : self.w_torso,
+            "w_tail" : self.w_tail,
+            "k" : self.k,
+            "use_composite" : self.use_composite,
         })
         return config
     
@@ -1852,7 +1968,47 @@ def get_stop_early_callback():
     #  because those are maximized by popularity.
     return keras.callbacks.EarlyStopping(
         monitor=f'val_composite_ndcg_20', min_delta=0.0002, patience=3, mode="min",
-        restore_best_weights=True)
+        start_from_epoch=3, restore_best_weights=True)
+
+@keras.utils.register_keras_serializable(package=package)
+class MinimumThresholdCallback(tf.keras.callbacks.Callback):
+    def __init__(self, monitor='val_composite_ndcg_20', min_threshold:float = 2*0.005,
+            start_epoch=3):
+        """
+        Args:
+            monitor: Metric key in validation logs.
+            min_threshold: Minimum metric value expected.
+            start_epoch: Warmup period (1-indexed) before pruning takes effect.
+        """
+        super().__init__()
+        self.monitor = monitor
+        self.min_threshold = min_threshold
+        self.start_epoch = start_epoch
+    
+    def on_epoch_end(self, epoch, logs=None):
+        logs = logs or {}
+        current_val = logs.get(self.monitor)
+        
+        if current_val is None or epoch < self.start_epoch:
+            return
+        
+        # Check rule after warmup period
+        if current_val < self.min_threshold:
+            print(
+                f"\n[Pruned Trial] Epoch {epoch + 1}: {self.monitor} ({current_val:.4f}) "
+                f"failed to meet threshold ({self.min_threshold:.4f}). Halting trial."
+            )
+            self.model.stop_training = True
+    
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "monitor": self.monitor,
+            "min_threshold": self.min_threshold,
+            "start_epoch": self.start_epoch,
+        })
+        return config
+
 
 # tfx.components.FnArgs
 def run_fn(fn_args):
@@ -2507,6 +2663,12 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
   
   stop_early = get_stop_early_callback()
   
+  stop_threshold = MinimumThresholdCallback(
+        monitor='val_composite_ndcg_20',
+        min_threshold=2.*0.005,
+        start_epoch=3
+    )
+  
   return tfx.components.TunerFnResult(
     tuner=tuner,
     fit_kwargs={
@@ -2515,5 +2677,6 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
       'steps_per_epoch': TRAIN_STEPS_PER_EPOCH,
       'validation_steps': EVAL_STEPS_PER_EPOCH,
       'epochs' : NUM_EPOCHS,
-      'callbacks' : [stop_early],
+      'callbacks' : [stop_early, stop_threshold],
     })
+  

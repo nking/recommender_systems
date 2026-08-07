@@ -32,36 +32,38 @@ NOTE: to run this method,  edit in class TwoTowerDNN the attribute to:
 
 stdout from this method for 1 epoch:
 
-Total unique items in table_B: 3413
+Total unique items in table_B: 3416
 ============================================================
-Min value:  1.20
-Max value:  16.45
-Mean value: 10.03
+Min value:  1.15
+Max value:  16.55
+Mean value: 10.04
 ------------------------------------------------------------
-50th percentile:     9.94
-75th percentile:    11.77
-80th percentile:    12.23
-85th percentile:    12.64
-90th percentile:    13.15
-95th percentile:    13.88
-99th percentile:    15.17
+20th percentile:     7.92
+50th percentile:     9.90
+75th percentile:    11.81
+80th percentile:    12.21
+85th percentile:    12.63
+90th percentile:    13.20
+95th percentile:    13.95
+99th percentile:    15.37
 ------------------------------------------------------------
-Recommendation: For an 80% tail cutoff, set b_threshold = 12.23
+Recommendation: For a 20% head cutoff, set head_threshold = 7.92
+Recommendation: For an 80% tail cutoff, set b_threshold = 12.21
 ============================================================
 
 ASCII Histogram (B_new Distribution):
 Range of B_new           | Count   | Distribution
 ------------------------------------------------------------
-[    1.2 -     2.7) |       9 |
-[    2.7 -     4.2) |      18 |
-[    4.2 -     5.8) |      47 | ██
-[    5.8 -     7.3) |     337 | ███████████████
-[    7.3 -     8.8) |     735 | █████████████████████████████████
-[    8.8 -    10.4) |     757 | ███████████████████████████████████
-[   10.4 -    11.9) |     708 | ████████████████████████████████
-[   11.9 -    13.4) |     535 | ████████████████████████
-[   13.4 -    14.9) |     213 | █████████
-[   14.9 -    16.5) |      54 | ██
+[    1.1 -     2.7) |       7 |
+[    2.7 -     4.2) |       7 |
+[    4.2 -     5.8) |      66 | ███
+[    5.8 -     7.3) |     342 | ███████████████
+[    7.3 -     8.9) |     738 | █████████████████████████████████
+[    8.9 -    10.4) |     770 | ███████████████████████████████████
+[   10.4 -    11.9) |     701 | ███████████████████████████████
+[   11.9 -    13.5) |     517 | ███████████████████████
+[   13.5 -    15.0) |     216 | █████████
+[   15.0 -    16.6) |      52 | ██
 ============================================================
 """
 class TableBTest(tf.test.TestCase):
