@@ -2493,15 +2493,12 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
       objective=keras_tuner.Objective('val_composite_ndcg_20', 'max'),
       hyperparameters=hp,
       alpha=1e-3,
-      beta=2.3, #defaut 2.6;  4.0 for more exploration.
-
-      #use when fitting
-      num_initial_points=3, #30
-      max_trials=10, #should be 2 to 3 times num_initial_points
+      beta=3.3, #defaut 2.6;  4.0 for more exploration.
+      num_initial_points=13, #30
+      max_trials=40, #should be 2 to 3 times num_initial_points
       #TEMPORARY when fixing params:
       #num_initial_points=1, #30
       #max_trials=1, #should be 2 to 3 times num_initial_points
-
       allow_new_entries=False,
       directory=fn_args.working_dir,
       project_name='movie_lens_2t_tuning_bayesian')
