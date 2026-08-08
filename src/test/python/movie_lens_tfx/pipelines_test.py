@@ -102,7 +102,7 @@ class PipelinesTest(tf.test.TestCase):
             n_movies=self.n_movies,
             n_genres=self.n_genres,
             min_eval_size=self.MIN_EVAL_SIZE,
-            batch_size=self.BATCH_SIZE, num_epochs=2, device="CPU",
+            batch_size=self.BATCH_SIZE, num_epochs=2,
             serving_model_dir=serving_model_dir)
         
         SETUP_FILE_PATH = os.path.join(get_project_dir(), 'setup.py')
@@ -400,7 +400,7 @@ class PipelinesTest(tf.test.TestCase):
                 n_movies=self.n_movies,
                 n_genres=self.n_genres,
                 min_eval_size=self.MIN_EVAL_SIZE,
-                batch_size=self.BATCH_SIZE, num_epochs=2, device="CPU",
+                batch_size=self.BATCH_SIZE, num_epochs=2,
                 serving_model_dir=model_uri)
             
             components = pipeline_factory.build_components(PIPELINE_TYPE.BATCH_INFERENCE)
@@ -543,7 +543,7 @@ class PipelinesTest(tf.test.TestCase):
             n_movies=self.n_movies,
             n_genres=self.n_genres,
             min_eval_size=self.MIN_EVAL_SIZE,
-            batch_size=self.BATCH_SIZE, num_epochs=2, device="CPU",
+            batch_size=self.BATCH_SIZE, num_epochs=2,
             serving_model_dir=serving_model_dir,
             output_parquet_path=output_parquet_path, version="1.0.0",
             git_hash=git_hash,

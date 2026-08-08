@@ -73,7 +73,6 @@ class TuneTrainTest(tf.test.TestCase):
       'feature_acronym':"",
       "NUM_EPOCHS" : 2,
       "BATCH_SIZE" : 10,
-      "device":"CPU",
       "MAX_TUNE_TRIALS" : 1,
       "num_examples": 1000
     }
@@ -91,7 +90,6 @@ class TuneTrainTest(tf.test.TestCase):
     #'n_users' 'n_movies' 'n_genres' 'run_eagerly'
     
     trainer_custom_config = {
-      'device': "CPU",
     }
     
     #see https://github.com/tensorflow/tfx/blob/master/tfx/examples/penguin/penguin_pipeline_local.py

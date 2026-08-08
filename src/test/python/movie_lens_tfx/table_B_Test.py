@@ -127,7 +127,7 @@ class TableBTest(tf.test.TestCase):
           n_movies=self.n_movies,
           n_genres=self.n_genres,
           min_eval_size=self.MIN_EVAL_SIZE,
-          batch_size=self.BATCH_SIZE, num_epochs=1, device="CPU",
+          batch_size=self.BATCH_SIZE, num_epochs=1,
           serving_model_dir=serving_model_dir)
       
       SETUP_FILE_PATH = os.path.join(get_project_dir(), 'setup.py')

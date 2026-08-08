@@ -53,11 +53,6 @@ LABEL_KEY = 'rating'
 N_GENRES = 18
 N_AGE_GROUPS = 7
 
-class Device(enum.Enum):
-  CPU = "CPU"
-  GPU = "GPU"
-  TPU = "TPU"
-
 package = "ttdnn"
 
 # https://github.com/tensorflow/tfx/blob/e537507b0c00d45493c50cecd39888092f1b3d79/tfx/examples/penguin/penguin_utils_base.py#L98
@@ -1666,14 +1661,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
           return config
   
   # use strategy
-  d = hp.get("device")
-  if d == "GPU":
-    device = Device.GPU
-  elif d == "TPU":
-    device = Device.TPU
-  else:
-    device = Device.CPU
-  strategy, device = _get_strategy(device)
+  strategy, device = _get_strategy()
   
   #METRICS_FN_LIST = [InBatchHitRate(name="hit_rate")]
   #tf.keras.metrics.SparseCategoricalAccuracy(name="acc")
@@ -1798,7 +1786,6 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   hp.Fixed('n_movies', custom_config["n_movies"])
   hp.Fixed('n_genres', custom_config["n_genres"])
   hp.Fixed('run_eagerly', custom_config.get("run_eagerly", False))
-  hp.Fixed('device', custom_config.get("device", 'CPU'))
   num_examples = custom_config.get("num_examples", DEFAULT_NUM_EXAMPLES)
   num_train = int(num_examples * 0.8)
   num_eval = int(num_examples * 0.1)
@@ -1815,51 +1802,33 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   return hp
 
 # TFX Trainer will call this function.
-def _get_strategy(device: Device) -> Tuple[tf.distribute.Strategy, Device]:
-  strategy = None
-  if device == Device.GPU:
-    try:
-      device_physical = tf.config.list_physical_devices('GPU')[0]
-      #batch_size is the global batch size
-      strategy = tf.distribute.MirroredStrategy(
-        devices=[device_physical])  # or [device_physical.name]
-      tf.config.optimizer.set_jit(False)
-      #or choose MultiWorkerMirroredStrategy
-    except Exception as ex:
-      logging.error(ex)
-      strategy = None
-  # or: # tf.distribute.OneDeviceStrategy(device=device_physical)
-  elif device == Device.TPU:
+def _get_strategy() -> Tuple[tf.distribute.Strategy, str]:
     if tf.config.list_physical_devices('TPU'):
-      try:
-        device_name = os.environ.get('TPU_NAME')
-        logging.info(f"os.environ TPU_NAME={device_name}")
-        # device_physical = tf.config.list_physical_devices('TPU')[0]
-        # tf.config.set_visible_devices(device_physical, 'TPU')
-        tpu = tf.distribute.cluster_resolver.TPUClusterResolver(
-          tpu='local')
-        # instantiate a distribution strategy
-        tf.config.experimental_connect_to_cluster(tpu)
-        tf.tpu.experimental.initialize_tpu_system(tpu)
-        strategy = tf.distribute.TPUStrategy(tpu)
-        # https://www.kaggle.com/docs/tpu
-        # TPU v3-8 on Kaggle has 8 cores.  increase batch_size MXU is not near 100% in TPU monitor
-        # e.g. batch_size = 16 * strategy.num_replicas_in_sync
-        tf.config.optimizer.set_jit(False)
-        logging.info(
-          f"TPU is available and set as default device:{tpu.master()}")
-      except Exception as ex2:
-        logging.error(ex2)
-        strategy = None
-    else:
-      logging.debug("TPU is not available")
-      strategy = None
-  
-  if not strategy:
+        try:
+            tpu = tf.distribute.cluster_resolver.TPUClusterResolver(
+                tpu='local')
+            tf.config.experimental_connect_to_cluster(tpu)
+            tf.tpu.experimental.initialize_tpu_system(tpu)
+            strategy = tf.distribute.TPUStrategy(tpu)
+            logging.info("Hardware auto-detected: TPU")
+            return strategy, "TPU"
+        except Exception as ex:
+            logging.error(f"TPU detected but failed to initialize: {ex}")
+            
+    gpus = tf.config.list_physical_devices('GPU')
+    if gpus:
+        try:
+            # MirroredStrategy handles both single-GPU and multi-GPU configurations automatically
+            strategy = tf.distribute.MirroredStrategy()
+            logging.info(f"Hardware auto-detected: {len(gpus)} GPU(s)")
+            return strategy, "GPU"
+        except Exception as ex:
+            logging.error(f"GPU detected but strategy failed: {ex}")
+    #NOTE a multihost strategy should use  tf.distribute.MultiWorkerMirroredStrategy
+    # Fallback to default CPU strategy
     strategy = tf.distribute.get_strategy()
-    #or use MirroredStrategy
-    device = Device.CPU
-  return strategy, device
+    logging.info("Hardware auto-detected: CPU fallback")
+    return strategy, "CPU"
 
 def _get_serve_tf_examples_fn(model, tf_transform_output):
   """Returns a function that parses a serialized tf.Example."""
@@ -2122,14 +2091,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   
   print('HyperParameters for training: %s' % hp.get_config())
   
-  d = hp.get("device")
-  if d == "GPU":
-    device = Device.GPU
-  elif d == "TPU":
-    device = Device.TPU
-  else:
-    device = Device.CPU
-  strategy, device = _get_strategy(device)
+  strategy, device = _get_strategy()
   
   logging.info(f"device={device}, distribution strategy={strategy}")
   
@@ -2586,14 +2548,7 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
   hp.Fixed('input_dataset_element_spec_trans_ser',
       (base64.b64encode(pickle.dumps(input_signature_trans))).decode('utf-8'))
     
-  d = hp.get("device")
-  if d == "GPU":
-    device = Device.GPU
-  elif d == "TPU":
-    device = Device.TPU
-  else:
-    device = Device.CPU
-  strategy, device = _get_strategy(device)
+  strategy, device = _get_strategy()
   
   BATCH_SIZE_PER_REPLICA = hp.get("BATCH_SIZE")
   NUM_EPOCHS = hp.get("NUM_EPOCHS")

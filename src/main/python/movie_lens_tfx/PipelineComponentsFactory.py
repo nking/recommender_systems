@@ -28,7 +28,7 @@ class PipelineComponentsFactory():
   def __init__(self, num_examples:int, infiles_dict_ser:Union[str, Dict[str, str]],
     output_config_ser:Union[str, None], transform_dir:str,
     n_users: int, n_movies:int, n_genres:int,
-    min_eval_size:int=100, batch_size:int=64, num_epochs:int=20, device:str="CPU",
+    min_eval_size:int=100, batch_size:int=64, num_epochs:int=20,
     serving_model_dir:str=None,
     output_parquet_path:str=None, version:str="1.0.0", git_hash:str=None, team_lead:str=None,):
     """
@@ -51,7 +51,6 @@ class PipelineComponentsFactory():
       min_eval_size: int, minimum number of examples
       batch_size: int, number of examples per batch
       num_epochs: int, number of epochs
-      device: str, device name
       serving_model_dir: str, path to serving model directory to save the default model to.
           NOTE that a hackish workaround to save the Query and Candidate embedding models
           separately for serving inference has been added to the run_fn in tune_train_movie_lens.py
@@ -74,7 +73,6 @@ class PipelineComponentsFactory():
     self.num_epochs = num_epochs
     self.serving_model_dir = serving_model_dir
     self.output_parquet_path = output_parquet_path
-    self.device = device
     self.version = version
     self.git_hash = git_hash
     self.team_lead = team_lead
@@ -131,7 +129,6 @@ class PipelineComponentsFactory():
       'incl_genres': True,
       'BATCH_SIZE':self.batch_size,
       "NUM_EPOCHS":self.num_epochs,
-      "device":self.device,
       "num_examples":self.num_examples,
       "version" : self.version,
       "model_name" : MODEL_NAME.USER_MOVIE.value,
@@ -232,7 +229,6 @@ class PipelineComponentsFactory():
             'incl_genres': True,
             'BATCH_SIZE': self.batch_size,
             "NUM_EPOCHS": self.num_epochs,
-            "device": self.device,
             "num_examples": self.num_examples,
             "version": self.version,
             "model_name": MODEL_NAME.USER_MOVIE.value,

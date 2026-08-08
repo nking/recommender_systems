@@ -81,7 +81,7 @@ class TuneTrainTest(tf.test.TestCase):
       transform_dir=tr_dir, n_users=self.n_users, n_movies=self.n_movies,
       n_genres=self.n_genres,
       min_eval_size=self.MIN_EVAL_SIZE,
-      batch_size=32, num_epochs=2, device="CPU", serving_model_dir=serving_model_dir)
+      batch_size=32, num_epochs=2, serving_model_dir=serving_model_dir)
     
     SETUP_FILE_PATH = os.path.join(get_project_dir(), 'setup.py')
     
