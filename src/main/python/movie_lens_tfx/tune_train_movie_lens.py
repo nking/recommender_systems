@@ -1410,13 +1410,11 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     
     @abc.abstractmethod
     def get_name(self, name:str, k:int):
-        """Inheritors must implement this.  get name to be stored in metric."""
-        pass
+        raise NotImplementedError("This method must be implemented by the inheritor.")
     
     @abc.abstractmethod
     def get_part_mask(self, b_values):
-        """Inheritors must implement this.  get a mask to keep b_values for the metric "part" of interest"""
-        pass
+        raise NotImplementedError("This method must be implemented by the inheritor.")
     
     def update_state(self, labels, logits, movie_ids,
             table_b:tf.lookup.experimental.MutableHashTable, sample_weight=None):

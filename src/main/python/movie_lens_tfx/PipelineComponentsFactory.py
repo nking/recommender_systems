@@ -486,7 +486,6 @@ class PipelineComponentsFactory():
       'run_eagerly': False,
       'BATCH_SIZE': self.batch_size,
       "NUM_EPOCHS": self.num_epochs,
-      "device": self.device,
       "num_examples": self.num_examples,
       "version": self.version,
       "model_name": MODEL_NAME.MOVIE_METADATA.value,

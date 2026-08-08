@@ -61,7 +61,7 @@ class PipelinesTest(tf.test.TestCase):
         # remove results from previous test runs:
         try:
             logging.debug(f"removing: {PIPELINE_ROOT}")
-            shutil.rmtree(PIPELINE_ROOT)
+            shutil.rmtree(os.path.join(get_bin_dir(), PIPELINE_NAME))
         except OSError as e:
             pass
         
@@ -91,7 +91,7 @@ class PipelinesTest(tf.test.TestCase):
         os.makedirs(query_model_dir, exist_ok=True)
         os.makedirs(candidate_model_dir, exist_ok=True)
         
-        infiles_dict_of_dicts_ser = get_contrastive_split_infiles_set(ds = DataSize.TINY)
+        infiles_dict_of_dicts_ser = get_contrastive_split_infiles_set(ds = DataSize.TINY2)
         num_examples = 100
         
         pipeline_factory = PipelineComponentsFactory(
