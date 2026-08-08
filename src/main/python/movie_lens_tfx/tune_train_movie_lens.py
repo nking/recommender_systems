@@ -800,8 +800,16 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     def metrics(self):
         # OVERRIDE to workaround tf.keras handling of validation metrics
         # It tells the model: "When you finish an epoch, pull results from these two."
-        return [self.mean_loss_metric, self.in_batch_hit_rate_metric, self.mrr_k_metric,
-                self.ndcg_k_metric, self.ndcg_k_composite_metric, self.recall_k_metric]
+        if self.use_bias_corr:
+            return [self.mean_loss_metric, self.in_batch_hit_rate_metric, self.mrr_k_metric, self.recall_k_metric,
+                self.ndcg_k_metric, self.ndcg_k_composite_metric,
+                self.ndcg_k_composite_metric.ndcg_head,
+                self.ndcg_k_composite_metric.ndcg_torso,
+                self.ndcg_k_composite_metric.ndcg_tail,
+                ]
+        else:
+            return [self.mean_loss_metric, self.in_batch_hit_rate_metric, self.mrr_k_metric, self.recall_k_metric,
+                self.ndcg_k_metric, self.ndcg_k_composite_metric]
         
     def call(self, inputs):
       """
@@ -1539,7 +1547,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   @keras.utils.register_keras_serializable(package=package)
   class NDCGAtKComposite(keras.metrics.Metric):
     def __init__(self, b_threshold_head=7.92, b_threshold_tail=12.21, name="composite_ndcg",
-            k: int = 20, use_composite:bool=True, w_head:float=0.15, w_torso:float=0.35, w_tail:float=0.5, **kwargs):
+            k: int = 20, use_composite:bool=True,
+            w_head:float=0.3, w_torso:float=0.5, w_tail:float=0.2, **kwargs):
         """
         Args:
             b_threshold_head (float): b_table values less than this are the head of the distribution frequently picked movies but few unique movies.
@@ -1967,13 +1976,15 @@ def get_stop_early_callback():
     # note that the val_composite_ndcg_20 peaks well before ndcg_20 and the other metrics,
     #  because those are maximized by popularity.
     return keras.callbacks.EarlyStopping(
-        monitor=f'val_composite_ndcg_20', min_delta=0.0002, patience=3, mode="min",
-        start_from_epoch=3, restore_best_weights=True)
+        monitor=f'val_composite_ndcg_20', min_delta=0.0002, patience=3, mode="max",
+        start_from_epoch=1,
+        restore_best_weights=True)
 
 @keras.utils.register_keras_serializable(package=package)
 class MinimumThresholdCallback(tf.keras.callbacks.Callback):
-    def __init__(self, monitor='val_composite_ndcg_20', min_threshold:float = 2*0.005,
-            start_epoch=3):
+    def __init__(self, monitor='val_composite_ndcg_20',
+            min_threshold:float = 2*0.005,
+            start_epoch=1, patience=3):
         """
         Args:
             monitor: Metric key in validation logs.
@@ -1984,6 +1995,8 @@ class MinimumThresholdCallback(tf.keras.callbacks.Callback):
         self.monitor = monitor
         self.min_threshold = min_threshold
         self.start_epoch = start_epoch
+        self.patience = patience
+        self.fail_count : int = 0
     
     def on_epoch_end(self, epoch, logs=None):
         logs = logs or {}
@@ -1993,12 +2006,19 @@ class MinimumThresholdCallback(tf.keras.callbacks.Callback):
             return
         
         # Check rule after warmup period
-        if current_val < self.min_threshold:
-            print(
-                f"\n[Pruned Trial] Epoch {epoch + 1}: {self.monitor} ({current_val:.4f}) "
-                f"failed to meet threshold ({self.min_threshold:.4f}). Halting trial."
-            )
-            self.model.stop_training = True
+        if current_val > self.min_threshold:
+            self.fail_count = 0
+        else:
+            self.fail_count += 1
+            if self.fail_count >= self.patience:
+                print(
+                    f"\n[Pruned Trial] Epoch {epoch}: {self.monitor} ({current_val:.4f}) "
+                    f"failed to meet threshold ({self.min_threshold:.4f}). Halting trial."
+                )
+                self.model.stop_training = True
+                # Bayesian Optimization learns from this low score, but for another tuner,
+                # one might want to abort the whole trial, and in that case, use:
+                #   raise kt.errors.FailedTrialError("score is too low by epoch {epoch}...")
     
     def get_config(self):
         config = super().get_config()
@@ -2006,6 +2026,7 @@ class MinimumThresholdCallback(tf.keras.callbacks.Callback):
             "monitor": self.monitor,
             "min_threshold": self.min_threshold,
             "start_epoch": self.start_epoch,
+            "patience" : self.patience,
         })
         return config
 
@@ -2665,8 +2686,6 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
   
   stop_threshold = MinimumThresholdCallback(
         monitor='val_composite_ndcg_20',
-        min_threshold=2.*0.005,
-        start_epoch=3
     )
   
   return tfx.components.TunerFnResult(
