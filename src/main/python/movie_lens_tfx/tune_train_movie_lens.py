@@ -89,7 +89,7 @@ def input_fn(file_pattern: List[str], data_accessor: tfx.components.DataAccessor
         .prefetch(tf.data.AUTOTUNE))
 
 def _make_query_model(n_users : int, layer_sizes : list,
-    embed_out_dim : int, regl2 : float, drop_rate : float,
+    regl2 : float, drop_rate : float,
     feature_acronym : str, **kwargs) :
     
     @keras.utils.register_keras_serializable(package=package)
@@ -127,7 +127,6 @@ def _make_query_model(n_users : int, layer_sizes : list,
     class UserModel(keras.Model):
         # for init from a load, arguments are present for the compositional instance members too
         def __init__(self, max_user_id: int,
-                embed_out_dim: int = 32,
                 feature_acronym: str = "",
                 name='user_model', **kwargs):
             """
@@ -212,7 +211,6 @@ def _make_query_model(n_users : int, layer_sizes : list,
                 ], name="gender_emb")
             
             self.feature_acronym = feature_acronym
-            self.embed_out_dim = embed_out_dim
             self.max_user_id = max_user_id
             self.user_emb = user_emb
             self.age_emb = age_emb
@@ -237,13 +235,11 @@ def _make_query_model(n_users : int, layer_sizes : list,
                 self.occupation_emb.build(input_shape['occupation'])
             if self.gender_emb:
                 self.gender_emb.build(input_shape['gender'])
-            # print(f'build {self.name} User {self.embed_out_dim} =>{self.user_emb.compute_output_shape(input_shape['user_id'])}\n')
             self.built = True
         
         def compute_output_shape(self, input_shape):
             # print(f'compute_output_shape {self.name} input_shape={input_shape}\n')
             # This is invoked after build by QueryModel.
-            # return (None, self.embed_out_dim)
             _shape = self.user_emb.compute_output_shape(
                 input_shape['user_id'])
             total_length = _shape[-1]
@@ -303,7 +299,6 @@ def _make_query_model(n_users : int, layer_sizes : list,
         def get_config(self):
             config = super(UserModel, self).get_config()
             config.update({"max_user_id": self.max_user_id,
-                "embed_out_dim": self.embed_out_dim,
                 "feature_acronym": self.feature_acronym,
             })
             return config
@@ -315,7 +310,6 @@ def _make_query_model(n_users : int, layer_sizes : list,
         # for init from a load, arguments are present for the compositional instance members too
         def __init__(self, n_users: int,
                 layer_sizes: list,
-                embed_out_dim: int = 32,
                 regl2: float = 0.0,
                 drop_rate: float = 0., feature_acronym: str = "",
                 name='query_model', **kwargs):
@@ -329,7 +323,6 @@ def _make_query_model(n_users : int, layer_sizes : list,
             super(QueryModel, self).__init__(name=name, **kwargs)
             
             self.user_model = UserModel(max_user_id=n_users,
-                embed_out_dim=embed_out_dim,
                 feature_acronym=feature_acronym)
             if isinstance(layer_sizes, str):
                 layer_sizes = json.loads(layer_sizes)
@@ -364,7 +357,6 @@ def _make_query_model(n_users : int, layer_sizes : list,
             self.regl2 = regl2
             self.n_users = n_users
             self.feature_acronym = feature_acronym
-            self.embed_out_dim = embed_out_dim
             self.layer_sizes = layer_sizes
             self.drop_rate = drop_rate
         
@@ -400,7 +392,6 @@ def _make_query_model(n_users : int, layer_sizes : list,
         def get_config(self):
             config = super(QueryModel, self).get_config()
             config.update({"n_users": self.n_users,
-                "embed_out_dim": self.embed_out_dim,
                 "drop_rate": self.drop_rate,
                 "layer_sizes": self.layer_sizes,
                 "feature_acronym": self.feature_acronym,
@@ -410,14 +401,13 @@ def _make_query_model(n_users : int, layer_sizes : list,
    
     return QueryModel(n_users=n_users,
                                     layer_sizes=layer_sizes,
-                                    embed_out_dim=embed_out_dim,
                                     regl2=regl2,
                                     drop_rate=drop_rate,
                                     feature_acronym=feature_acronym,
                                     **kwargs)
     
 def _make_candidate_model(n_movies : int, movies_offset : int,
-        n_genres : int, layer_sizes : List, embed_out_dim : int,
+        n_genres : int, layer_sizes : List,
         regl2 : float, drop_rate : float, incl_genres : bool, **kwargs):
     
     @keras.utils.register_keras_serializable(package=package)
@@ -470,11 +460,10 @@ def _make_candidate_model(n_movies : int, movies_offset : int,
         
         # for init from a load, arguments are present for the compositional instance members too
         def __init__(self, n_movies: int, movies_offset: int, n_genres: int,
-                embed_out_dim: int = 32, incl_genres: bool = True,
+                incl_genres: bool = True,
                 name='movie_model', **kwargs):
             super(MovieModel, self).__init__(name=name, **kwargs)
             
-            self.embed_out_dim = embed_out_dim
             self.n_movies = n_movies
             self.movies_offset = movies_offset
             self.n_genres = n_genres
@@ -555,7 +544,6 @@ def _make_candidate_model(n_movies : int, movies_offset : int,
                 {"n_movies": self.n_movies,
                     "movies_offset": self.movies_offset,
                     "n_genres": self.n_genres,
-                    "embed_out_dim": self.embed_out_dim,
                     'incl_genres': self.incl_genres
                 })
             return config
@@ -567,7 +555,6 @@ def _make_candidate_model(n_movies : int, movies_offset : int,
         # for init from a load, arguments are present for the compositional instance members too
         def __init__(self, n_movies: int, movies_offset: int, n_genres: int,
                 layer_sizes,
-                embed_out_dim: int = 32,
                 regl2: float = 0.0,
                 drop_rate: float = 0., incl_genres: bool = True,
                 name='candidate_model', **kwargs):
@@ -584,7 +571,6 @@ def _make_candidate_model(n_movies : int, movies_offset : int,
             self.movie_model = MovieModel(n_movies=n_movies,
                 movies_offset=movies_offset,
                 n_genres=n_genres,
-                embed_out_dim=embed_out_dim,
                 incl_genres=incl_genres, name="movie_model")
             
             self.dense_candidate = keras.Sequential(name="dense_candidate")
@@ -622,7 +608,6 @@ def _make_candidate_model(n_movies : int, movies_offset : int,
             self.movies_offset = movies_offset
             self.n_genres = n_genres
             self.incl_genres = incl_genres
-            self.embed_out_dim = embed_out_dim
             self.drop_rate = drop_rate
             self.layer_sizes = layer_sizes
         
@@ -661,7 +646,6 @@ def _make_candidate_model(n_movies : int, movies_offset : int,
                 {"n_movies": self.n_movies,
                     "movies_offset": self.movies_offset,
                     "n_genres": self.n_genres,
-                    "embed_out_dim": self.embed_out_dim,
                     "drop_rate": self.drop_rate,
                     "layer_sizes": self.layer_sizes,
                     "regl2": self.regl2,
@@ -672,7 +656,6 @@ def _make_candidate_model(n_movies : int, movies_offset : int,
     return CandidateModel(n_movies=n_movies, movies_offset=movies_offset,
                                             n_genres=n_genres,
                                             layer_sizes=layer_sizes,
-                                            embed_out_dim=embed_out_dim,
                                             regl2=regl2,
                                             drop_rate=drop_rate,
                                             incl_genres=incl_genres,
@@ -707,7 +690,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     def __init__(self, n_users: int, n_movies: int, movies_offset: int,
          n_genres: int,
          layer_sizes: list,
-         embed_out_dim: int,
          regl2: float = 0.0,
          drop_rate: float = 0,
          feature_acronym: str = "",
@@ -720,7 +702,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       
       self.query_model = _make_query_model(n_users=n_users,
                                     layer_sizes=layer_sizes,
-                                    embed_out_dim=embed_out_dim,
                                     regl2=regl2,
                                     drop_rate=drop_rate,
                                     feature_acronym=feature_acronym,
@@ -729,7 +710,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       self.candidate_model = _make_candidate_model(n_movies=n_movies, movies_offset=movies_offset,
                                             n_genres=n_genres,
                                             layer_sizes=layer_sizes,
-                                            embed_out_dim=embed_out_dim,
                                             regl2=regl2,
                                             drop_rate=drop_rate,
                                             incl_genres=incl_genres,
@@ -766,7 +746,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       self.incl_genres = incl_genres
       self.layer_sizes = layer_sizes
       self.feature_acronym = feature_acronym
-      self.embed_out_dim = embed_out_dim
       self.drop_rate = drop_rate
       
       self.use_bias_corr = use_bias_corr
@@ -1114,7 +1093,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       config.update({"n_users": self.n_users, "n_movies": self.n_movies,
         "movies_offset" : self.movies_offset,
         "n_genres": self.n_genres,
-        "embed_out_dim": self.embed_out_dim,
         "drop_rate": self.drop_rate,
         "layer_sizes": self.layer_sizes,
         "use_bias_corr": self.use_bias_corr,
@@ -1671,7 +1649,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       movies_offset = hp.get("n_users") + 1,
       n_genres=hp.get("n_genres"),
       layer_sizes=hp.get('layer_sizes'),
-      embed_out_dim=hp.get('embed_out_dim'),
       regl2=hp.get('regl2'),
       drop_rate=hp.get('drop_rate'),
       feature_acronym=hp.get("feature_acronym"),
@@ -1757,7 +1734,6 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   #let AdamW weight decay handle the regularization, so set regl2 to 0:
   #hp.Float('regl2', 1e-5, 1e-2, sampling="log")
   hp.Fixed('regl2', 0.0)
-  hp.Choice("embed_out_dim", values=[32], default=32)
   #layers_sizes is a list of ints, so encode each list as a string, chices can only be int,float,bool,str
   #the last layer in layer_sizes is the query and candidate embedding models' output dimensions-1
   hp.Choice("layer_sizes", values=[json.dumps([16-1])], default=json.dumps([16-1]))
@@ -2040,7 +2016,6 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       'lr'
       "regl2"
       "drop_rate"
-      "embed_out_dim"
       "layer_sizes"
       "feature_acronym"
       "incl_genres"
@@ -2194,7 +2169,6 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   
   query_model = _make_query_model(n_users=model.n_users,
       layer_sizes=model.layer_sizes,
-      embed_out_dim=model.embed_out_dim,
       regl2=model.regl2,
       drop_rate=model.drop_rate,
       feature_acronym=model.feature_acronym)
@@ -2208,7 +2182,6 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       movies_offset=model.movies_offset,
       n_genres=model.n_genres,
       layer_sizes=model.layer_sizes,
-      embed_out_dim=model.embed_out_dim,
       regl2=model.regl2,
       drop_rate=model.drop_rate,
       incl_genres=model.incl_genres)

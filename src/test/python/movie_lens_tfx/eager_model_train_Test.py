@@ -135,7 +135,6 @@ class EagerModelTrainTest(unittest.TestCase):
       
       query_model = _make_query_model(n_users=model.n_users,
           layer_sizes=model.layer_sizes,
-          embed_out_dim=model.embed_out_dim,
           regl2=model.regl2,
           drop_rate=model.drop_rate,
           feature_acronym=model.feature_acronym)
@@ -149,7 +148,6 @@ class EagerModelTrainTest(unittest.TestCase):
           movies_offset=model.movies_offset,
           n_genres=model.n_genres,
           layer_sizes=model.layer_sizes,
-          embed_out_dim=model.embed_out_dim,
           regl2=model.regl2,
           drop_rate=model.drop_rate,
           incl_genres=model.incl_genres)
