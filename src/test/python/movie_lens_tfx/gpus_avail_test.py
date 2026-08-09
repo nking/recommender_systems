@@ -7,6 +7,8 @@ from ml_metadata.proto import metadata_store_pb2
 from ml_metadata.metadata_store import metadata_store
 from tensorflow_transform.tf_metadata import schema_utils
 
+import unittest
+
 from tfx import v1 as tfx
 
 import tensorflow as tf
@@ -34,7 +36,7 @@ def GPUAvailCheck() -> None:
             print("Hardware auto-detected: TPU")
             return
         except Exception as ex:
-            raise RutimeError(f"ERROR: TPU detected but failed to initialize: {ex}")
+            raise RuntimeError(f"ERROR: TPU detected but failed to initialize: {ex}")
     gpus = tf.config.list_physical_devices('GPU')
     if gpus:
         try:
@@ -50,7 +52,7 @@ def GPUAvailCheck() -> None:
     print("Hardware auto-detected: CPU fallback")
     return
 
-class GPUsAvailableTest(tf.test.TestCase):
+class GPUsAvailableTest(unittest.TestCase):
     
     def setUp(self):
         super().setUp()
@@ -73,7 +75,7 @@ class GPUsAvailableTest(tf.test.TestCase):
         
         os.makedirs(os.path.join(PIPELINE_ROOT, 'tfx_metadata'), exist_ok=True)
         
-        ENABLE_CACHE = True
+        ENABLE_CACHE = False
         
         # metadata_connection_config = metadata_store_pb2.ConnectionConfig()
         # metadata_connection_config.sqlite.SetInParent()
@@ -103,3 +105,6 @@ class GPUsAvailableTest(tf.test.TestCase):
         tfx.orchestration.LocalDagRunner().run(my_pipeline)
         logging.debug("GPU AVAIL pipeline finished")
         
+if __name__ == '__main__':
+    unittest.main()
+
