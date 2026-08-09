@@ -23,7 +23,7 @@ from absl import logging
 
 @component()
 def GPUAvailCheck() -> None:
-    tf.print("begin avail check")
+    print("begin avail check")
     if tf.config.list_physical_devices('TPU'):
         try:
             tpu = tf.distribute.cluster_resolver.TPUClusterResolver(
@@ -31,21 +31,21 @@ def GPUAvailCheck() -> None:
             tf.config.experimental_connect_to_cluster(tpu)
             tf.tpu.experimental.initialize_tpu_system(tpu)
             strategy = tf.distribute.TPUStrategy(tpu)
-            tf.print("Hardware auto-detected: TPU")
+            print("Hardware auto-detected: TPU")
         except Exception as ex:
-            logging.error(f"TPU detected but failed to initialize: {ex}")
+            print(f"ERROR: TPU detected but failed to initialize: {ex}")
     gpus = tf.config.list_physical_devices('GPU')
     if gpus:
         try:
             # MirroredStrategy handles both single-GPU and multi-GPU configurations automatically
             strategy = tf.distribute.MirroredStrategy()
-            tf.print(f"Hardware auto-detected: {len(gpus)} GPU(s)")
+            print(f"Hardware auto-detected: {len(gpus)} GPU(s)")
         except Exception as ex:
-            tf.print(f"GPU detected but strategy failed: {ex}")
+            print(f"ERROR: GPU detected but strategy failed: {ex}")
     # NOTE a multihost strategy should use  tf.distribute.MultiWorkerMirroredStrategy
     # Fallback to default CPU strategy
     strategy = tf.distribute.get_strategy()
-    tf.print("Hardware auto-detected: CPU fallback")
+    print("Hardware auto-detected: CPU fallback")
 
 class GPUsAvailableTest(tf.test.TestCase):
     
