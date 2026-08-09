@@ -289,8 +289,6 @@ class PipelinesTest(tf.test.TestCase):
         }
         results = infer_query_for_dict_model(**inputs)['outputs']
         
-        #TODO: dig up the param layer_sizes last entry from best fitting params instead of == 16 or 24 here
-        # they are in Tuner/best_hyperparameters/18/best_hyperparameters.txt
         expected_layer_sizes = get_best_fitting_layer_sizes(store)
         expeected_embed_dim = json.loads(expected_layer_sizes)[0]
         
