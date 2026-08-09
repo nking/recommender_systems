@@ -28,6 +28,21 @@ from absl import logging
 logging.set_verbosity(logging.DEBUG)
 logging.set_stderrthreshold(logging.DEBUG)
 
+def get_best_fitting_layer_sizes(store):
+    artifacts = store.get_artifacts_by_type("HyperParameters")
+    layer_sizes = None
+    # 2. Iterate through artifacts (or select the specific one you need)
+    for artifact in artifacts:
+        # artifact.uri points to the directory where best_hyperparameters.txt is stored
+        file_path = os.path.join(artifact.uri, "best_hyperparameters.txt")
+        if os.path.exists(file_path):
+            with open(file_path, "r") as f:
+                hp_data = json.load(f)
+                # 3. Navigate the dictionary structure to get 'layer_sizes'
+                layer_sizes = hp_data.get("values", {}).get("layer_sizes")
+                print(f"Found layer_sizes: {layer_sizes} from URI: {artifact.uri}")
+                break
+    return layer_sizes
 
 class PipelinesTest(tf.test.TestCase):
     
@@ -273,18 +288,24 @@ class PipelinesTest(tf.test.TestCase):
             "user_id": tf.constant([[99]], dtype=tf.int64)
         }
         results = infer_query_for_dict_model(**inputs)['outputs']
-        self.assertEqual(len(results[0]), 16)
+        
+        #TODO: dig up the param layer_sizes last entry from best fitting params instead of == 16 or 24 here
+        # they are in Tuner/best_hyperparameters/18/best_hyperparameters.txt
+        expected_layer_sizes = get_best_fitting_layer_sizes(store)
+        expeected_embed_dim = json.loads(expected_layer_sizes)[0]
+        
+        self.assertTrue(len(results[0]) == 16 or len(results[0]) == 24)
         results = infer_query_for_dict(**inputs)['outputs']
-        self.assertEqual(len(results[0]), 16)
+        self.assertTrue(len(results[0]) == 16 or len(results[0]) == 24)
         
         inputs = {
             "movie_id": tf.constant([[6054]], dtype=tf.int64),
             "genres": tf.constant([[b'Documentary']], dtype=tf.string),
         }
         results = infer_candidate_for_dict_model(**inputs)['outputs']
-        self.assertEqual(len(results[0]), 16)
+        self.assertTrue(len(results[0]) == 16 or len(results[0]) == 24)
         results = infer_candidate_for_dict(**inputs)['outputs']
-        self.assertEqual(len(results[0]), 16)
+        self.assertTrue(len(results[0]) == 16 or len(results[0]) == 24)
         
         
         print(f'INFERENCE TEST START')

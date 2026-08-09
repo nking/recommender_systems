@@ -1734,9 +1734,11 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   #let AdamW weight decay handle the regularization, so set regl2 to 0:
   #hp.Float('regl2', 1e-5, 1e-2, sampling="log")
   hp.Fixed('regl2', 0.0)
-  #layers_sizes is a list of ints, so encode each list as a string, chices can only be int,float,bool,str
+  #layers_sizes is a list of ints, so encode each list as a string, choices can only be int,float,bool,str
   #the last layer in layer_sizes is the query and candidate embedding models' output dimensions-1
-  hp.Choice("layer_sizes", values=[json.dumps([16-1])], default=json.dumps([16-1]))
+  #hp.Choice("layer_sizes", values=[json.dumps([16-1])], default=json.dumps([16-1]))
+  hp.Fixed("layer_sizes", value=json.dumps([24 - 1]))
+  #hp.Fixed("layer_sizes", value=json.dumps([46, 24 - 1]))
   #hp.Fixed("layer_sizes", value=json.dumps([64-1, 32-1]))
   # ahmos for "age", "hr_wk", "month", "occupation", "gender"
   hp.Fixed("feature_acronym", custom_config.get("feature_acronym", "h"))
