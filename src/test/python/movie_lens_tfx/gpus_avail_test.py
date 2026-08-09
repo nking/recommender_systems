@@ -12,8 +12,8 @@ from tfx import v1 as tfx
 import tensorflow as tf
 from absl import logging
 tf.get_logger().propagate = False
-logging.set_verbosity(logging.WARNING)
-logging.set_stderrthreshold(logging.WARNING)
+logging.set_verbosity(logging.DEBUG)
+logging.set_stderrthreshold(logging.DEBUG)
 from helper import *
 
 from movie_lens_tfx.PipelineComponentsFactory import *
@@ -32,20 +32,23 @@ def GPUAvailCheck() -> None:
             tf.tpu.experimental.initialize_tpu_system(tpu)
             strategy = tf.distribute.TPUStrategy(tpu)
             print("Hardware auto-detected: TPU")
+            return
         except Exception as ex:
-            print(f"ERROR: TPU detected but failed to initialize: {ex}")
+            raise RutimeError(f"ERROR: TPU detected but failed to initialize: {ex}")
     gpus = tf.config.list_physical_devices('GPU')
     if gpus:
         try:
             # MirroredStrategy handles both single-GPU and multi-GPU configurations automatically
             strategy = tf.distribute.MirroredStrategy()
             print(f"Hardware auto-detected: {len(gpus)} GPU(s)")
+            return
         except Exception as ex:
-            print(f"ERROR: GPU detected but strategy failed: {ex}")
+            raise RuntimeError(f"ERROR: GPU detected but strategy failed: {ex}")
     # NOTE a multihost strategy should use  tf.distribute.MultiWorkerMirroredStrategy
     # Fallback to default CPU strategy
     strategy = tf.distribute.get_strategy()
     print("Hardware auto-detected: CPU fallback")
+    return
 
 class GPUsAvailableTest(tf.test.TestCase):
     
