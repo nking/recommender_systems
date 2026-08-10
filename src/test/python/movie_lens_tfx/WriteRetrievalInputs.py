@@ -1,6 +1,7 @@
 import os
 import shutil
 import numpy as np
+from apache_beam.io.filesystems import FileSystems
 from apache_beam.transforms.combiners import Top
 import io
 import csv
@@ -199,6 +200,29 @@ class WriteRetrievalInputs(tf.test.TestCase):
                     num_shards=1, file_name_suffix='.parquet',
                 ))
         
+        # ==== write embeddings metadata json file ====
+        total_records = (
+            movie_id_and_embeddings
+            | 'CountRecords' >> beam.combiners.Count.Globally()
+        )
+        # Calculate embedding dimension by sampling the length of exactly 1 embedding
+        # element is (movie_id, embedding), so element[1] is the embedding list
+        embed_dimension = (
+            movie_id_and_embeddings
+            | 'GetEmbedLengths' >> beam.Map(lambda element: len(element[1]))
+            | 'SampleOneDimension' >> beam.combiners.Sample.FixedSizeGlobally(1)
+            | 'UnpackDimension' >> beam.Map(lambda sampled: sampled[0] if sampled else 0)
+        )
+        (pipeline
+            | 'CreateMetadataTrigger' >> beam.Create([None])
+            | 'WriteMetadataFile' >> beam.Map(
+                write_embedding_metadata_json,
+                count=beam.pvalue.AsSingleton(total_records),
+                dim=beam.pvalue.AsSingleton(embed_dimension),
+                output_path= f"{self.output_uri1}/emb_metadata.json"
+            )
+        )
+        
         result = pipeline.run()
         result.wait_until_finish()
         
@@ -246,6 +270,14 @@ class WriteRetrievalInputs(tf.test.TestCase):
         self.assertTrue(df['embedding'].dtype == pl.List(pl.Float32))
         print(f'last movie = {((df.tail(1))["id"]).to_numpy().tolist()[0]}')
         print(f'last embedding={((df.tail(1))["embedding"]).to_numpy().tolist()[0]}', flush=True)
+        
+        # read f"{self.output_uri1}/emb_metadata.json"
+        with open( f"{self.output_uri1}/emb_metadata.json", 'r') as f:
+            metadata = json.load(f)
+        embed_dim = metadata['embed_dim']
+        num_records = metadata['num_records']
+        self.assertIsNotNone(embed_dim)
+        self.assertIsNotNone(num_records)
         
     def test_write_user_embeddings(self):
         """
@@ -351,6 +383,32 @@ class WriteRetrievalInputs(tf.test.TestCase):
                     num_shards=1, file_name_suffix='.parquet',
                 ))
         
+        # ==== write embeddings metadata json file ====
+        total_records = (
+                user_id_and_embeddings
+                | 'CountRecords' >> beam.combiners.Count.Globally()
+        )
+        # Calculate embedding dimension by sampling the length of exactly 1 embedding
+        # element is (movie_id, embedding), so element[1] is the embedding list
+        embed_dimension = (
+                user_id_and_embeddings
+                | 'GetEmbedLengths' >> beam.Map(
+            lambda element: len(element[1]))
+                | 'SampleOneDimension' >> beam.combiners.Sample.FixedSizeGlobally(
+            1)
+                | 'UnpackDimension' >> beam.Map(
+            lambda sampled: sampled[0] if sampled else 0)
+        )
+        (pipeline
+         | 'CreateMetadataTrigger' >> beam.Create([None])
+         | 'WriteMetadataFile' >> beam.Map(
+                    write_embedding_metadata_json,
+                    count=beam.pvalue.AsSingleton(total_records),
+                    dim=beam.pvalue.AsSingleton(embed_dimension),
+                    output_path=f"{self.output_uri2}/emb_metadata.json"
+                )
+         )
+        
         result = pipeline.run()
         result.wait_until_finish()
         
@@ -412,6 +470,14 @@ class WriteRetrievalInputs(tf.test.TestCase):
         print(f'last user = {((df.tail(1))["id"]).to_numpy().tolist()[0]}')
         print(f'last embedding={((df.tail(1))["embedding"]).to_numpy().tolist()[0]}',
             flush=True)
+        
+        # read f"{self.output_uri1}/emb_metadata.json"
+        with open(f"{self.output_uri2}/emb_metadata.json", 'r') as f:
+            metadata = json.load(f)
+        embed_dim = metadata['embed_dim']
+        num_records = metadata['num_records']
+        self.assertIsNotNone(embed_dim)
+        self.assertIsNotNone(num_records)
     
     def create_example_movie_id_prediction(row):
         # each row is a tuple like:
@@ -1092,6 +1158,15 @@ class _ParseSerializedExamples(beam.DoFn):
             else:
                 tensor_dict[key] = int(val)
         yield tensor_dict
+    
+def write_embedding_metadata_json(dummy_element, count, dim, output_path):
+    metadata = {
+        "num_records": count,
+        "embed_dim": dim
+    }
+    
+    with FileSystems.create(output_path) as f:
+        f.write(json.dumps(metadata).encode('utf-8'))
 
 def create_serialized_example_for_movies(element):
     movie_id = int(element[0])
