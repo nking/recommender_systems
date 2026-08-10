@@ -1518,7 +1518,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   class NDCGAtKComposite(keras.metrics.Metric):
     def __init__(self, b_threshold_head=7.92, b_threshold_tail=12.21, name="composite_ndcg",
             k: int = 20, use_composite:bool=True,
-            w_head:float=0.3, w_torso:float=0.5, w_tail:float=0.2, **kwargs):
+            w_head:float=0.25, w_torso:float=0.55, w_tail:float=0.2, **kwargs):
         """
         Args:
             b_threshold_head (float): b_table values less than this are the head of the distribution frequently picked movies but few unique movies.
@@ -2355,6 +2355,8 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       transformed_features = tft_layer(raw_features)
       return transformed_features
   
+  hp_config_dict = hp.get_config()
+  
   ## ==== begin the export to QUERY saved model =======
   export_archive = keras.export.ExportArchive()
   export_archive.track(query_model)
@@ -2372,7 +2374,10 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   )
   
   export_archive.write_out(serving_query_dir)
-  
+  json_file_path = f"{serving_query_dir}/assets.extra/hyperparameters.json"
+  tf.io.gfile.makedirs(f"{serving_query_dir}/assets.extra")
+  with tf.io.gfile.GFile(json_file_path, "w") as f:
+      json.dump(hp_config_dict, f, indent=4)
   logging.info(f"saved query model to {serving_query_dir}")
   
   ## ==== begin the export to CANDIDATE saved model =======
@@ -2392,6 +2397,10 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
           tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')]
   )
   export_archive.write_out(serving_candidate_dir)
+  json_file_path = f"{serving_candidate_dir}/assets.extra/hyperparameters.json"
+  tf.io.gfile.makedirs(f"{serving_candidate_dir}/assets.extra")
+  with tf.io.gfile.GFile(json_file_path, "w") as f:
+      json.dump(hp_config_dict, f, indent=4)
   
   logging.info(f"saved candidate model to {serving_candidate_dir}")
   
@@ -2440,6 +2449,10 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   )
   
   export_archive.write_out(fn_args.serving_model_dir)
+  json_file_path = f"{fn_args.serving_model_dir}/assets.extra/hyperparameters.json"
+  tf.io.gfile.makedirs(f"{fn_args.serving_model_dir}/assets.extra")
+  with tf.io.gfile.GFile(json_file_path, "w") as f:
+      json.dump(hp_config_dict, f, indent=4)
   
   logging.info(f"saved candidate model to {fn_args.serving_model_dir}")
   

@@ -44,6 +44,15 @@ def get_best_fitting_layer_sizes(store):
                 break
     return layer_sizes
 
+
+def assert_assets_extra_has_git_hash(model_uri):
+    json_file_path = f"{model_uri}/assets.extra/hyperparameters.json"
+    with tf.io.gfile.GFile(json_file_path, "r") as f:
+        assets_extra = json.loads(f.read())
+        values = assets_extra['values']
+        assert("git_hash" in values)
+        assert(values["git_hash"] is not None)
+
 class PipelinesTest(tf.test.TestCase):
     
     def setUp(self):
@@ -109,6 +118,16 @@ class PipelinesTest(tf.test.TestCase):
         infiles_dict_of_dicts_ser = get_contrastive_split_infiles_set(ds = DataSize.TINY2)
         num_examples = 100
         
+        git_hash = None
+        try:
+            import subprocess
+            process = subprocess.Popen(['git', 'rev-parse', 'HEAD'],
+                shell=False,
+                stdout=subprocess.PIPE)
+            git_hash = process.communicate()[0].strip().decode()
+        except Exception as ex:
+            pass
+        
         pipeline_factory = PipelineComponentsFactory(
             num_examples=num_examples,
             infiles_dict_ser=infiles_dict_of_dicts_ser,
@@ -118,7 +137,9 @@ class PipelinesTest(tf.test.TestCase):
             n_genres=self.n_genres,
             min_eval_size=self.MIN_EVAL_SIZE,
             batch_size=self.BATCH_SIZE, num_epochs=2,
-            serving_model_dir=serving_model_dir)
+            serving_model_dir=serving_model_dir,
+            git_hash=git_hash,
+        )
         
         SETUP_FILE_PATH = os.path.join(get_project_dir(), 'setup.py')
         
@@ -274,6 +295,8 @@ class PipelinesTest(tf.test.TestCase):
         infer_query_for_dict = loaded_saved_model.signatures["serving_query_dict"]
         infer_candidate_for_dict = loaded_saved_model.signatures["serving_candidate_dict"]
         infer_default_for_dict = loaded_saved_model.signatures["serving_default_dict"]
+        
+        assert_assets_extra_has_git_hash(model_uri)
         
         loaded_saved_query_model = tf.saved_model.load(serving_query_dir)
         infer_query_for_dict_model = loaded_saved_query_model.signatures["serving_default"]

@@ -82,13 +82,27 @@ beam_pipeline_args = [
   # f'--extra_package={ingest_tar_file}'
 ]
 
+#assume this script is running in a directory having git
+#TODO: considering refactoring this script to accept command line arguments
+#   and git_hash can be one of them
+git_hash = None
+try:
+    import subprocess
+    process = subprocess.Popen(['git', 'rev-parse', 'HEAD'], shell=False,
+        stdout=subprocess.PIPE)
+    git_hash = process.communicate()[0].strip().decode()
+except Exception as ex:
+    pass
+
 pipeline_factory = PipelineComponentsFactory(
   num_examples=num_examples, infiles_dict_ser=infiles_dict_of_dicts_ser,
   output_config_ser=None, transform_dir=tr_dir,
   n_users=n_users, n_movies=n_movies,
   n_genres=n_genres,
   min_eval_size=MIN_EVAL_SIZE, batch_size=BATCH_SIZE, num_epochs=NUM_EPOCHS,
-  serving_model_dir=serving_model_dir, output_parquet_path=output_parquet_path)
+  serving_model_dir=serving_model_dir, output_parquet_path=output_parquet_path,
+  git_hash=git_hash,
+)
 
 print(f"run baseline pipline to create a baseline model")
 baseline_components = pipeline_factory.build_components(PIPELINE_TYPE.BASELINE,
