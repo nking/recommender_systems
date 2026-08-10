@@ -26,6 +26,7 @@ setup(
     "msgpack==1.2.1",
     "tensorboard==2.21.0",
     "build==1.4.0",
+    "tomli-2.2.1",
   ],
   extras_require={"test": ["pytest", "nannyml>=0.13.1","polars>=1.35.2", "plotly>=6.4.0", "kaleido>=1.2.0"]},
   classifiers=[ 'Natural Language :: English',

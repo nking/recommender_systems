@@ -15,7 +15,7 @@ dependencies = [
     "python-snappy==0.7.3",
     "numpy==1.26.4",
     "apache-beam==2.59.0",
-    "tensorflow[and-cuda]==2.16.1",
+    "tensorflow==2.16.1",
     "tensorflow-transform==1.16.0",
     "tfx==1.16.0",
     "tensorflow-data-validation==1.16.1",
@@ -25,6 +25,7 @@ dependencies = [
     "array-record==0.5.0",
     "array_record_beam_sdk==0.1.0",
     "build==1.4.0",
+    "tomli-2.2.1",
 ]
 readme = "README.md"
 license = "MIT"

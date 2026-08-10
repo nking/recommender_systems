@@ -15,7 +15,7 @@ setup(
     "python-snappy==0.7.3",
     "numpy==1.26.4",
     "apache-beam==2.59.0",
-    "tensorflow==2.16.1",
+    "tensorflow[and-cuda]==2.16.1",
     "tensorflow-transform==1.16.0",
     "tfx==1.16.0",
     "tensorflow-data-validation==1.16.1",

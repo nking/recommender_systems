@@ -76,10 +76,9 @@ def input_fn(file_pattern: List[str], data_accessor: tfx.components.DataAccessor
       return (data_accessor.tf_dataset_factory(
         file_pattern,
         tfxio.TensorFlowDatasetOptions(batch_size=batch_size,
-        shuffle=True, shuffle_buffer_size=10000, label_key=LABEL_KEY),
+        shuffle=True, shuffle_buffer_size=2000, label_key=LABEL_KEY),
         tf_transform_output.transformed_metadata.schema)
         .repeat()
-        .shuffle(buffer_size=10000, reshuffle_each_iteration=True)
         .prefetch(tf.data.AUTOTUNE))
   return (data_accessor.tf_dataset_factory(
         file_pattern,
