@@ -2137,6 +2137,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
     validation_data=eval_dataset,
     validation_steps=EVAL_STEPS_PER_EPOCH,
     epochs=NUM_EPOCHS,
+    shuffle=False, #this is handled by tfxio pipeline already
     callbacks=[tensorboard_callback, stop_early], verbose=1)
   
   print(f'fit history.history={history.history}')
@@ -2623,6 +2624,7 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
       'steps_per_epoch': TRAIN_STEPS_PER_EPOCH,
       'validation_steps': EVAL_STEPS_PER_EPOCH,
       'epochs' : NUM_EPOCHS,
+      'shuffle' : False,  # this is handled by tfxio pipeline already
       'callbacks' : [stop_early, stop_threshold],
     })
   
