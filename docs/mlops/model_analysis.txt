@@ -1,6 +1,6 @@
 Training the TwoTowerDNN with an inbatch softmax loss
-and using the metric ndcg@20 on the validation set for early stopping
-and model selection by the keras tuner BayesianOptimization.
+and using the metric composite_ndcg@20 on the validation set for early stopping,
+minimum threshold, and model selection by the keras tuner BayesianOptimization.
 
 The model learning looks healthy.
   - The train vs validation curves for loss and metrics can be seen
@@ -9,13 +9,20 @@ The best fitting hyperparameters are also in that subdirectory.
 The model is saved to src/test/resources/serving_model
 
 Best fitting model used a batch size of 2056:
-val ndcg@20 = 0.049
-val mrr@20 = 0.048
-val recall@20 = 0.055
+   composite ndcg@20 = 0.176
+   head ndcg@20 = 0.473
+   torso ndcg@20 = 0.061
+   tail ndcg@20 = 0.018
+   ndcg@20 = 0.024
+   mrr@20 = 0.022
+   recall@20 = 0.032
+   hit rate = 0.021
 
-The ndcg@20 is 10 times random performance.
-The mrr@20 is > 10 times random performance.
-The recall@20 is 2.5 times random performance.
+The ndcg@20 is 3.6 times random performance and the
+    individual components for ndcg hard, torso, and tail are
+    94.6, 12.2,  3.6 times random perfomance respectively.
+The mrr@20 is > 9 times random performance.
+The recall@20 > 3 times random performance.
 
 Compare to these expected ranges and values for random performance:
 for k=20, can expect these metric results
@@ -24,7 +31,7 @@ Metric  Expected Range      Expected Range    random
         (batch size=2048)    (full catalog)   to beat
 NDCG@20      0.15 – 0.35     0.08 – 0.18      0.005
 MRR@20       0.10 – 0.25     0.06 – 0.12      0.0035
-Recall@20    0.30 – 0.55     0.25 – 0.40      0.02
+Recall@20    0.30 – 0.55     0.25 – 0.40      0.01
 
 
 Metric  Expected Range      Expected Range 
