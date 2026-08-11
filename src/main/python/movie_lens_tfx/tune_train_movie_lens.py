@@ -692,10 +692,11 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
          regl2: float = 0.0,
          drop_rate: float = 0,
          feature_acronym: str = "",
+         incl_genres: bool = True,
+         regl2_train: float = 0.0,
          use_bias_corr: bool = True,
          bias_corr_alpha: float=0.1,
          log_q_correction_factor: float=0.5,
-         incl_genres: bool = True,
          temperature:float=1.0, name='twotowerdnn', **kwargs):
       super(TwoTowerDNN, self).__init__(name=name, **kwargs)
       
@@ -732,6 +733,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       self.in_batch_hit_rate_metric = InBatchHitRate()
       
       self.regl2 = regl2
+      self.regl2_train = regl2_train
       
       # 1.0 : Full popularity bias
       # 0.5 : A balanced space that allows the latent tail to emerge
@@ -922,8 +924,15 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
             mask = tf.logical_and(mask, tf.logical_not(identity_mask))
             masked_logits = tf.where(mask, tf.constant(-1e9, dtype=logits.dtype), logits)
             masked_raw_logits = tf.where(mask, tf.constant(-1e9, dtype=logits.dtype), raw_logits)
-            loss = self.in_batch_softmax_loss_function(y, masked_logits)
             
+            base_loss = self.in_batch_softmax_loss_function(y, masked_logits)
+            #embedding regularization
+            user_norm_penalty = tf.reduce_mean(tf.reduce_sum(tf.square(user_embeddings), axis=1))
+            movie_norm_penalty = tf.reduce_mean(tf.reduce_sum(tf.square(movie_embeddings), axis=1))
+            
+            # Total Loss = Base Loss + Scaled L2 Penalty
+            loss = base_loss + self.regl2_train * (user_norm_penalty + movie_norm_penalty)
+        
         gradients = tape.gradient(loss, self.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
 
@@ -1096,8 +1105,9 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         "layer_sizes": self.layer_sizes,
         "use_bias_corr": self.use_bias_corr,
         "feature_acronym": self.feature_acronym,
+         "incl_genres": self.incl_genres,
         "regl2": self.regl2,
-        "incl_genres": self.incl_genres,
+        "regl2_train" : self.regl2_train,
         "bias_corr_alpha": self.bias_corr_alpha,
         "log_q_correction_factor": self.log_q_correction_factor,
         "temperature": self.temperature,
@@ -1649,6 +1659,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       n_genres=hp.get("n_genres"),
       layer_sizes=hp.get('layer_sizes'),
       regl2=hp.get('regl2'),
+      regl2_train=hp.get('regl2_train'),
       drop_rate=hp.get('drop_rate'),
       feature_acronym=hp.get("feature_acronym"),
       use_bias_corr=hp.get('use_bias_corr'),
@@ -1723,8 +1734,7 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   
   if not use_best_as_fixed:
       hp.Float('learning_rate', 1e-4, 1e-3, sampling='log')
-      #hp.Float('weight_decay', 1e-4, 1e-2, sampling='log')
-      hp.Float('weight_decay', 1e-3, 1e-2, sampling='log')
+      hp.Float('weight_decay', 1e-4, 1e-2, sampling='log')
       hp.Float('drop_rate', min_value=0.1, max_value=0.3, default=0.5)
       hp.Float('log_q_correction_factor', min_value=0.1, max_value=1.0, default=0.5)
   else:
@@ -1738,7 +1748,8 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   #hp.Float('regl2', 1e-5, 1e-2, sampling="log")
   hp.Fixed('regl2', 0.0)
   #but use regularization on the activations train_step
-  
+  hp.Float('regl2_train', 1e-5, 1e-2, sampling="log")
+
   #layers_sizes is a list of ints, so encode each list as a string, choices can only be int,float,bool,str
   #the last layer in layer_sizes is the query and candidate embedding models' output dimensions-1
   #hp.Choice("layer_sizes", values=[json.dumps([16-1])], default=json.dumps([16-1]))
