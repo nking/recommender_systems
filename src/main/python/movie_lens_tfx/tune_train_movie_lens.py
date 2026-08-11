@@ -1689,6 +1689,9 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         warmup_target=hp.get('learning_rate')
     )
     
+    #AdamW (weight_decay) targets the Parameters: AdamW applies exponential decay directly to the model's
+    # trainable weights (W and b) during the optimizer's update step. It ensures that the individual
+    # values inside your dense matrices do not grow excessively large.
     optimizer = keras.optimizers.AdamW(learning_rate=lr_scheduler,
         weight_decay=hp.get("weight_decay"))
 
@@ -1720,7 +1723,8 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   
   if not use_best_as_fixed:
       hp.Float('learning_rate', 1e-4, 1e-3, sampling='log')
-      hp.Float('weight_decay', 1e-4, 1e-2, sampling='log')
+      #hp.Float('weight_decay', 1e-4, 1e-2, sampling='log')
+      hp.Float('weight_decay', 1e-3, 1e-2, sampling='log')
       hp.Float('drop_rate', min_value=0.1, max_value=0.3, default=0.5)
       hp.Float('log_q_correction_factor', min_value=0.1, max_value=1.0, default=0.5)
   else:
@@ -1733,6 +1737,8 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   #let AdamW weight decay handle the regularization, so set regl2 to 0:
   #hp.Float('regl2', 1e-5, 1e-2, sampling="log")
   hp.Fixed('regl2', 0.0)
+  #but use regularization on the activations train_step
+  
   #layers_sizes is a list of ints, so encode each list as a string, choices can only be int,float,bool,str
   #the last layer in layer_sizes is the query and candidate embedding models' output dimensions-1
   #hp.Choice("layer_sizes", values=[json.dumps([16-1])], default=json.dumps([16-1]))
@@ -1911,7 +1917,7 @@ def create_input_shapes_from_spec(transformed_feature_spec : Dict[str, common_ty
     return input_shapes
 
 def get_stop_early_callback():
-    # use patience=3 with batch_size 1024, and patience=5 with batch_size 2048
+    # use patience=3 or so with batch_size 1024, and patience=5 with batch_size 2048
     # for val_ndcg_20 and batch_size=2056, min_delta should be 0.005 (random)
     # for val_mean_loss, min_delta=0.015 and patience=3
     # for cal_composite_ndcg_20
@@ -1920,7 +1926,7 @@ def get_stop_early_callback():
     # note that the val_composite_ndcg_20 peaks well before ndcg_20 and the other metrics,
     #  because those are maximized by popularity.
     return keras.callbacks.EarlyStopping(
-        monitor=f'val_composite_ndcg_20', min_delta=0.0002, patience=3, mode="max",
+        monitor=f'val_composite_ndcg_20', min_delta=0.0002, patience=2, mode="max",
         start_from_epoch=1,
         restore_best_weights=True)
 
@@ -2374,10 +2380,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   )
   
   export_archive.write_out(serving_query_dir)
-  json_file_path = f"{serving_query_dir}/assets.extra/hyperparameters.json"
-  tf.io.gfile.makedirs(f"{serving_query_dir}/assets.extra")
-  with tf.io.gfile.GFile(json_file_path, "w") as f:
-      json.dump(hp_config_dict, f, indent=4)
+  
   logging.info(f"saved query model to {serving_query_dir}")
   
   ## ==== begin the export to CANDIDATE saved model =======
@@ -2397,10 +2400,6 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
           tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')]
   )
   export_archive.write_out(serving_candidate_dir)
-  json_file_path = f"{serving_candidate_dir}/assets.extra/hyperparameters.json"
-  tf.io.gfile.makedirs(f"{serving_candidate_dir}/assets.extra")
-  with tf.io.gfile.GFile(json_file_path, "w") as f:
-      json.dump(hp_config_dict, f, indent=4)
   
   logging.info(f"saved candidate model to {serving_candidate_dir}")
   
@@ -2449,12 +2448,23 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   )
   
   export_archive.write_out(fn_args.serving_model_dir)
+  
+  logging.info(f"saved candidate model to {fn_args.serving_model_dir}")
+  
+  json_file_path = f"{serving_query_dir}/assets.extra/hyperparameters.json"
+  tf.io.gfile.makedirs(f"{serving_query_dir}/assets.extra")
+  with tf.io.gfile.GFile(json_file_path, "w") as f:
+      json.dump(hp_config_dict, f, indent=4)
+  
   json_file_path = f"{fn_args.serving_model_dir}/assets.extra/hyperparameters.json"
   tf.io.gfile.makedirs(f"{fn_args.serving_model_dir}/assets.extra")
   with tf.io.gfile.GFile(json_file_path, "w") as f:
       json.dump(hp_config_dict, f, indent=4)
   
-  logging.info(f"saved candidate model to {fn_args.serving_model_dir}")
+  json_file_path = f"{serving_candidate_dir}/assets.extra/hyperparameters.json"
+  tf.io.gfile.makedirs(f"{serving_candidate_dir}/assets.extra")
+  with tf.io.gfile.GFile(json_file_path, "w") as f:
+      json.dump(hp_config_dict, f, indent=4)
   
   return model
 
