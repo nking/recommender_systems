@@ -1657,8 +1657,10 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   
   if not use_best_as_fixed:
       hp.Float('learning_rate', 1e-4, 1e-3, sampling='log')
-      hp.Float('weight_decay', 1e-4, 1e-2, sampling='log')
-      hp.Float('drop_rate', min_value=0.1, max_value=0.4, default=0.3)
+      #hp.Float('weight_decay', 1e-4, 1e-2, sampling='log')
+      hp.Float('weight_decay', 1e-4, 5e-2, sampling='log')
+      #hp.Float('drop_rate', min_value=0.1, max_value=0.4, default=0.3)
+      hp.Float('drop_rate', min_value=0.35, max_value=0.65, default=0.4)
       hp.Float('log_q_correction_factor', min_value=0.1, max_value=1.0, default=0.5)
   else:
       hp.Fixed('learning_rate', 0.0001026)
