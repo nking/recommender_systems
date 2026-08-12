@@ -1658,7 +1658,7 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   if not use_best_as_fixed:
       hp.Float('learning_rate', 1e-4, 1e-3, sampling='log')
       hp.Float('weight_decay', 1e-4, 1e-2, sampling='log')
-      hp.Float('drop_rate', min_value=0.1, max_value=0.3, default=0.5)
+      hp.Float('drop_rate', min_value=0.1, max_value=0.4, default=0.3)
       hp.Float('log_q_correction_factor', min_value=0.1, max_value=1.0, default=0.5)
   else:
       hp.Fixed('learning_rate', 0.0001026)
@@ -1674,8 +1674,8 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   #layers_sizes is a list of ints, so encode each list as a string, choices can only be int,float,bool,str
   #the last layer in layer_sizes is the query and candidate embedding models' output dimensions-1
   #hp.Choice("layer_sizes", values=[json.dumps([16])], default=json.dumps([16]))
-  hp.Fixed("layer_sizes", value=json.dumps([24]))
-  #hp.Fixed("layer_sizes", value=json.dumps([48, 24]))
+  hp.Fixed("layer_sizes", value=json.dumps([16]))
+  #hp.Fixed("layer_sizes", value=json.dumps([64, 32]))
   # ahmos for "age", "hr_wk", "month", "occupation", "gender"
   hp.Fixed("feature_acronym", custom_config.get("feature_acronym", "h"))
   hp.Fixed("incl_genres", custom_config["incl_genres"])
