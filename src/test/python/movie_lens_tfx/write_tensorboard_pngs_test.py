@@ -21,7 +21,6 @@ class WriteTensorboardToPng(unittest.TestCase):
         
         p = "rs_pipeline/Trainer/model_run/19"
         logdir = os.path.join(get_bin_dir(), p)
-        logdir = "/home/nichole/projects/github/TMP_kaggle_recommend/aug13/bin/" + p
         
         train_dir = os.path.join(logdir, "train")
         val_dir = os.path.join(logdir, "validation")
