@@ -9,20 +9,21 @@ The best fitting hyperparameters are also in that subdirectory.
 The model is saved to src/test/resources/serving_model
 
 Best fitting model used a batch size of 2056:
-   composite ndcg@20 = 0.176
-   head ndcg@20 = 0.473
-   torso ndcg@20 = 0.061
-   tail ndcg@20 = 0.018
-   ndcg@20 = 0.024
-   mrr@20 = 0.022
-   recall@20 = 0.032
-   hit rate = 0.021
+   composite ndcg@20 = 0.204
+   head ndcg@20 = 0.467
+   torso ndcg@20 = 0.152
+   tail ndcg@20 = 0.017
+   ndcg@20 = 0.023
+   mrr@20 = 0.027
+   recall@20 = 0.035
+   hit rate = 0.026
 
-The ndcg@20 is 3.6 times random performance and the
+
+The ndcg@20 is 4.6 times random performance and the
     individual components for ndcg hard, torso, and tail are
-    94.6, 12.2,  3.6 times random perfomance respectively.
-The mrr@20 is > 9 times random performance.
-The recall@20 > 3 times random performance.
+    93, 30, and 3 times random perfomance respectively.
+The mrr@20 is ~ 8 times random performance.
+The recall@20 ~ 3 times random performance.
 
 Compare to these expected ranges and values for random performance:
 for k=20, can expect these metric results
