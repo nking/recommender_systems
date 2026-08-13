@@ -1,4 +1,5 @@
 - parse the movie titles to make release year a feature.
+  - that also needs forier encoding
 
 - if using the HPO objective val_composite_ndcg_20
   doesn't lead to popularity bias corrections (seen as
