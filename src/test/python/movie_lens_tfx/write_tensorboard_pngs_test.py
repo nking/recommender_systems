@@ -19,7 +19,8 @@ class WriteTensorboardToPng(unittest.TestCase):
             pass
         os.makedirs(outdir, exist_ok=True)
         
-        logdir = os.path.join(get_bin_dir(), "rs_pipeline/Trainer/model_run/19")
+        p = "rs_pipeline/Trainer/model_run/19"
+        logdir = os.path.join(get_bin_dir(), p)
         train_dir = os.path.join(logdir, "train")
         val_dir = os.path.join(logdir, "validation")
         metrics = list_tfevents_metrics(train_dir)

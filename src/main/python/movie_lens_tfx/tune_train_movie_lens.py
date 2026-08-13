@@ -1677,7 +1677,7 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   #the last layer in layer_sizes is the query and candidate embedding models' output dimensions-1
   #hp.Choice("layer_sizes", values=[json.dumps([16])], default=json.dumps([16]))
   #hp.Fixed("layer_sizes", value=json.dumps([32]))
-  hp.Fixed("layer_sizes", value=json.dumps([64]))
+  hp.Fixed("layer_sizes", value=json.dumps([16]))
   #hp.Fixed("layer_sizes", value=json.dumps([64, 32]))
   # ahmos for "age", "hr_wk", "month", "occupation", "gender"
   hp.Fixed("feature_acronym", custom_config.get("feature_acronym", "h"))
