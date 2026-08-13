@@ -1663,11 +1663,10 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
       hp.Float('drop_rate', min_value=0.35, max_value=0.65, default=0.4)
       hp.Float('log_q_correction_factor', min_value=0.1, max_value=1.0, default=0.5)
   else:
-      hp.Fixed('learning_rate', 0.0001026)
-      hp.Fixed('weight_decay', 0.00016785)
-      hp.Fixed('drop_rate', 0.11754)
-      #TODO: edit when have best value:
-      hp.Fixed('log_q_correction_factor',value=0.5)
+      hp.Fixed('learning_rate', 0.0001)
+      hp.Fixed('weight_decay', 0.0001)
+      hp.Fixed('drop_rate', 0.35)
+      hp.Fixed('log_q_correction_factor',value=1.0)
 
   #let AdamW weight decay handle the regularization, so set regl2 to 0:
   #hp.Float('regl2', 1e-5, 1e-2, sampling="log")
@@ -1677,8 +1676,7 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   #the last layer in layer_sizes is the query and candidate embedding models' output dimensions-1
   #hp.Choice("layer_sizes", values=[json.dumps([16])], default=json.dumps([16]))
   #hp.Fixed("layer_sizes", value=json.dumps([32]))
-  hp.Fixed("layer_sizes", value=json.dumps([16]))
-  #hp.Fixed("layer_sizes", value=json.dumps([64, 32]))
+  hp.Fixed("layer_sizes", value=json.dumps([32]))
   # ahmos for "age", "hr_wk", "month", "occupation", "gender"
   hp.Fixed("feature_acronym", custom_config.get("feature_acronym", "h"))
   hp.Fixed("incl_genres", custom_config["incl_genres"])

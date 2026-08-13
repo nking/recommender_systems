@@ -21,6 +21,8 @@ class WriteTensorboardToPng(unittest.TestCase):
         
         p = "rs_pipeline/Trainer/model_run/19"
         logdir = os.path.join(get_bin_dir(), p)
+        logdir = "/home/nichole/projects/github/TMP_kaggle_recommend/aug13/bin/" + p
+        
         train_dir = os.path.join(logdir, "train")
         val_dir = os.path.join(logdir, "validation")
         metrics = list_tfevents_metrics(train_dir)
@@ -28,4 +30,11 @@ class WriteTensorboardToPng(unittest.TestCase):
         for metric in metrics:
             outfile = os.path.join(outdir, f"{metric}.png")
             generate_tensorboard_chart(train_dir, val_dir, scalar_name=metric, output_path=outfile)
+        
+        for metric in ['epoch_pre_logit_min', 'epoch_pre_logit_mean', 'epoch_pre_logit_max',
+        'epoch_learning_rate']:
+            outfile = os.path.join(outdir, f"{metric}.png")
+            export_scalars_to_png(train_dir, outfile, metric)
+            
         print(f'wrote pngs to {outdir}')
+        

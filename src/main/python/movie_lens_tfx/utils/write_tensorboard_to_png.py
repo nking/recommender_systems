@@ -203,6 +203,73 @@ def generate_tensorboard_chart(train_dir, val_dir, scalar_name, output_path,
     plt.close()
     #print(f"Successfully saved chart with high-contrast grids to {output_path}")
 
+
+def export_scalars_to_png(log_dir, output_png_path, scalar_name='loss'):
+    # OPTIMIZATION: Prevent memory bloat and truncation
+    # '0' means "keep all" for scalars/tensors (default truncates at 10k steps)
+    # '1' is the minimum allowed, preventing massive RAM usage for heavy assets
+    size_guidance = {
+        'scalars': 0,
+        'tensors': 0,
+        'images': 1,
+        'audio': 1,
+        'histograms': 1,
+    }
+    
+    # Initialize accumulator and load data
+    ea = event_accumulator.EventAccumulator(log_dir,
+        size_guidance=size_guidance)
+    ea.Reload()
+    
+    steps, values = [], []
+    available_tags = ea.Tags()
+    scalar_keys = available_tags.get('scalars', [])
+    tensor_keys = available_tags.get('tensors', [])
+    
+    # Extract data (Accounts for differences between TF1 and TF2 logging)
+    if scalar_name in scalar_keys:
+        events = ea.Scalars(scalar_name)
+        steps = [e.step for e in events]
+        values = [e.value for e in events]
+    elif scalar_name in tensor_keys:
+        # TensorFlow 2.x often logs scalars as rank-0 tensors
+        events = ea.Tensors(scalar_name)
+        steps = [e.step for e in events]
+        values = [float(tensor_util.make_ndarray(e.tensor_proto)) for e in
+            events]
+    else:
+        print(f"Metric '{scalar_name}' not found.")
+        print(f"Available scalars: {scalar_keys}")
+        print(f"Available tensors: {tensor_keys}")
+        return
+        
+        # Plot using standard matplotlib
+    plt.figure(figsize=(2.5, 2.5))
+    plt.plot(steps, values, label=scalar_name, color='#ff7043', linewidth=1.5)
+    plt.xlabel('Steps')
+    plt.ylabel(scalar_name.capitalize())
+    plt.title(f'{scalar_name.capitalize()} over Time')
+    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.legend()
+    
+    # Save as PNG
+    plt.savefig(output_png_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"Successfully saved chart to {output_png_path}")
+    
+    # Plot using standard matplotlib
+    plt.figure(figsize=(8, 5))
+    plt.plot(steps, values, label=scalar_name, color='#ff7043', linewidth=1.5)
+    plt.xlabel('Steps')
+    plt.ylabel(scalar_name.capitalize())
+    plt.title(f'{scalar_name.capitalize()} over Time')
+    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.legend()
+    
+    # Save as PNG
+    plt.savefig(output_png_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    
 def list_tfevents_metrics(log_dir) -> List[str]:
     # Load the event accumulator with zero-guidance to ensure all tags are read
     ea = event_accumulator.EventAccumulator(
