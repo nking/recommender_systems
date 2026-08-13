@@ -1,4 +1,4 @@
-- add versioning to the model and metadata json file for the params it used
+- parse the movie titles to make release year a feature.
 
 - if using the HPO objective val_composite_ndcg_20
   doesn't lead to popularity bias corrections (seen as
