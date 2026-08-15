@@ -249,6 +249,7 @@ class PipelineComponentsFactory():
         return components
         
     if type == PIPELINE_TYPE.TABLE_B_DIAGNOSTIC:
+        #need TwoTowerDNN's selfcalc_table_B_diagnostic=True
         trainer = tfx.components.Trainer(
             module_file=os.path.join(self.transform_dir, 'tune_train_movie_lens.py'),
             examples=ratings_transform.outputs['transformed_examples'],

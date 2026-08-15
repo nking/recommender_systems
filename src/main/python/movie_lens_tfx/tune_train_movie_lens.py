@@ -786,6 +786,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         
         delta_t = tf.cast(t - last_t, tf.float32)
         
+        # b_new = b_old + alpha * (delta - b_old)
         B_new = (1.0 - self.bias_corr_alpha) * B_old + self.bias_corr_alpha * delta_t
         
         self.table_A.insert(movie_ids_flat, tf.fill(tf.shape(movie_ids_flat), t))
@@ -827,6 +828,9 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
             pre_logit_mean = tf.reduce_mean(logits)
 
             if self.use_bias_corr:
+                # in a batch, all other user's positive items in the batch become the negatives
+                # for the item at index i.  because popular items appear more often, the item at index i
+                # is many popular items in its negative item list.  The log q correction attempts to adjust for this.
                 # Get frequency corrections
                 p_i = self._update_frequencies(movie_ids)
                 # Allow p_i to act as expected count, which can be > 1.0 for blockbusters
@@ -952,6 +956,13 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         """
         Exports values from a MutableHashTable and prints percentile stats
         and a terminal-friendly ASCII histogram.
+        :param table_b: contains the estimated probability (p_i)
+          table_b holds the exponential moving average of the delta t step gap, that is,
+          the average time in steps for a movie to be seen again.
+          a low value means the movie is seen frequently (i.e. a popular movie),
+          while a high value means the movie is not seen very often.
+        :param bins: number of x-axis histogram bins to create
+        :param max_bar_width: width of a bin in the ascii histogram printed to stdout
         """
         import numpy as np
         # Export all keys and values from the table
@@ -1010,7 +1021,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     def fit(self, *args, **kwargs):
         history = super().fit(*args, **kwargs)
         
-        # 2. Run diagnostic hook at the end of the fit call
+        # Run diagnostic hook at the end of the fit call
         if self.calc_table_B_diagnostic:
             self.inspect_table_B_distribution(self.table_B)
 
