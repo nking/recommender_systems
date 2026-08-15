@@ -613,6 +613,9 @@ class WriteRetrievalInputs(tf.test.TestCase):
         
         out_file_path_prefix = os.path.join(get_bin_dir(), f"movie_tiers")
         
+        for file_path in glob.glob(f"{out_file_path_prefix}*"):
+            os.remove(file_path)
+        
         pipeline = beam.Pipeline(options=self.pipeline_options)
         
         rated_movies = (pipeline
@@ -643,7 +646,7 @@ class WriteRetrievalInputs(tf.test.TestCase):
             | "list_all_counts" >> beam.combiners.ToList()
             | "calc_thresholds" >> beam.Map(calculate_thresholds)
         )
-        thresholds_side_input | 'print thresholds_side_input' >> beam.Map( lambda x: print(f'threshold={thresholds_side_input}'))
+        thresholds_side_input | 'print thresholds_side_input' >> beam.Map( lambda x: print(f'threshold={x}'))
     
         # Emit (movie_id, None) to format as a Key-Value pair for the CoGroupByKey join
         catalog_movies = (pipeline
@@ -665,7 +668,7 @@ class WriteRetrievalInputs(tf.test.TestCase):
                 tier = 0  # Head
             else:
                 tier = 1  # Torso
-            return json.dumps({"movie_id": movie_id, "tier": tier})
+            return  movie_id, tier
         
         final_tiers = (
             {'catalog': catalog_movies, 'counts': movie_counts}
@@ -676,16 +679,21 @@ class WriteRetrievalInputs(tf.test.TestCase):
             )
         )
         
-        (final_tiers | "write_tiers" >> beam.io.WriteToText(
-                out_file_path_prefix,
-                file_name_suffix=".json",
+        #final_tiers | 'print final_tiers' >> beam.Map(lambda x: print(f'final_tiers={x}'))
+
+        (final_tiers
+         | f"SerializeWithMsgpack_movie_tiers" >> beam.Map(msgpack.packb)
+         | f'write_movie_tiers_array_record'
+         >> WriteToArrayRecord(file_path_prefix=out_file_path_prefix,
+                    file_name_suffix=".array_record"))
+        
+        (final_tiers
+             | "serialize_to_string" >> beam.Map(lambda x: json.dumps({"movie_id": x[0], "tier": x[1]}))
+             | "write_movie_tiers_json" >> beam.io.WriteToText(
+                out_file_path_prefix, file_name_suffix=".json",
                 shard_name_template=''  # Forces output into a single clean file if dataset is small
             )
         )
-        
-        (final_tiers | f"SerializeWithMsgpack_movie_tiers" >> beam.Map(msgpack.packb)
-            | f'write_movie_tiers'
-            >> WriteToArrayRecord(file_path_prefix=out_file_path_prefix, file_name_suffix=".array_record"))
         
         result = pipeline.run()
         result.wait_until_finish()
@@ -697,10 +705,10 @@ class WriteRetrievalInputs(tf.test.TestCase):
             try:
                 reader = array_record_module.ArrayRecordReader(file_path)
                 record = msgpack.unpackb(reader.read())
-                record = json.loads(record)
-                self.assertIsNotNone(record['movie_id'])
-                self.assertIsNotNone(record['tier'])
                 self.assertEqual(len(record), 2)
+                self.assertTrue(True, isinstance(record[0], int))
+                self.assertTrue(True, isinstance(record[1], int))
+                
             except Exception as e:
                 self.fail(e)
             finally:
@@ -710,8 +718,8 @@ class WriteRetrievalInputs(tf.test.TestCase):
         with open(f"{out_file_path_prefix}.json", "r", encoding="utf-8") as f:
             for line in f.readlines():
                 tier_dict = json.loads(line.strip())
-                self.assertTrue(tier_dict.get("movie_id"))
-                self.assertTrue(tier_dict.get("tier"))
+                self.assertTrue(isinstance(tier_dict.get("movie_id"), int))
+                self.assertTrue(isinstance(tier_dict.get("tier"), int))
                 break
                     
     def test_write_ratings_to_array_records_and_parquet(self):
