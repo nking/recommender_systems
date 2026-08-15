@@ -500,7 +500,7 @@ class WriteRetrievalInputs(tf.test.TestCase):
     
     def test_write_all_movies(self):
         """
-        writes movies.dat to movies*tfrecord*gz, array_record and parquet
+        writes movies.dat to movies*tfrecord*gz, array_record, and parquet
         """
         in_file_path = os.path.join(get_project_dir(),
             "src/main/resources/ml-1m/movies.dat")
@@ -597,6 +597,123 @@ class WriteRetrievalInputs(tf.test.TestCase):
         self.assertTrue(isinstance(actual_data[0]['genres'], str))
         self.assertTrue(isinstance(actual_data[0]['movie_id'], int))
         
+    def test_write_movie_head_torso_tail_tiers(self):
+        """
+        based upon the training data ratings, calculate histogram of views to find the tail 20%, head 20% and
+        torso in between.  thead, torso, and tail are assigned values 0, 1, 2, respectively and
+        any movie not in the training dataset gets a adefalt tail value.
+        The results are written to json and array record files.
+        The results are used in GraphRanker for calculating NDCG on the individual components
+        :return:
+        """
+        in_ratings_path = os.path.join(get_project_dir(),
+            f"src/main/resources/ml-1m/ratings_train.dat")
+        in_movies_path = os.path.join(get_project_dir(),
+            f"src/main/resources/ml-1m/movies.dat")
+        
+        out_file_path_prefix = os.path.join(get_bin_dir(), f"movie_tiers")
+        
+        pipeline = beam.Pipeline(options=self.pipeline_options)
+        
+        rated_movies = (pipeline
+            | "read_ratings" >> beam.io.ReadFromText(in_ratings_path, skip_header_lines=0)
+            | "parse_ratings" >> beam.Map(lambda line: line.split("::"))
+            | "extract_movie_id" >> beam.Map(lambda x: int(x[1]))
+        )
+        
+        # Output shape: (movie_id, count)
+        movie_counts = (rated_movies
+            | "count_frequencies" >> beam.combiners.Count.PerElement()
+        )
+        
+        def calculate_thresholds(counts_list):
+            if not counts_list:
+                return {"head_min": 0, "torso_min": 0}
+            counts = [count for _, count in counts_list]
+            # a HIGH count means Head.
+            # Example: Top 20% most frequent are Head (>= 80th percentile)
+            #          Bottom 20% are Tail (< 20th percentile)
+            head_min = np.percentile(counts, 80)
+            torso_min = np.percentile(counts, 20)
+            return {"head_min": head_min, "torso_min": torso_min}
+        
+        # Compress all counts into a single list on one worker to calculate standard percentiles.
+        # We output this as a PCollection containing a single dictionary to use as a Side Input later.
+        thresholds_side_input = (movie_counts
+            | "list_all_counts" >> beam.combiners.ToList()
+            | "calc_thresholds" >> beam.Map(calculate_thresholds)
+        )
+        thresholds_side_input | 'print thresholds_side_input' >> beam.Map( lambda x: print(f'threshold={thresholds_side_input}'))
+    
+        # Emit (movie_id, None) to format as a Key-Value pair for the CoGroupByKey join
+        catalog_movies = (pipeline
+            | "read_movies" >> beam.io.ReadFromText(in_movies_path, skip_header_lines=0)
+            | "parse_movies" >> beam.Map(lambda line: line.split("::"))
+            | "catalog_kv" >> beam.Map(lambda x: (int(x[0]), None))
+        )
+        
+        def assign_tier(joined_element, thresholds):
+            movie_id, grouped_data = joined_element
+            # grouped_data contains lists from both pipelines matching the movie_id key
+            counts = grouped_data['counts']
+            # If the movie had no ratings in train, the count list is empty. Default to 0.
+            count = counts[0] if len(counts) > 0 else 0
+            # Apply tier logic
+            if count == 0 or count < thresholds['torso_min']:
+                tier = 2  # Tail (or cold-start)
+            elif count >= thresholds['head_min']:
+                tier = 0  # Head
+            else:
+                tier = 1  # Torso
+            return json.dumps({"movie_id": movie_id, "tier": tier})
+        
+        final_tiers = (
+            {'catalog': catalog_movies, 'counts': movie_counts}
+            | "join_catalog_and_counts" >> beam.CoGroupByKey()
+            # Pass the globally calculated thresholds in as a Singleton Side Input
+            | "assign_tiers" >> beam.Map(assign_tier,
+                thresholds=beam.pvalue.AsSingleton(thresholds_side_input)
+            )
+        )
+        
+        (final_tiers | "write_tiers" >> beam.io.WriteToText(
+                out_file_path_prefix,
+                file_name_suffix=".json",
+                shard_name_template=''  # Forces output into a single clean file if dataset is small
+            )
+        )
+        
+        (final_tiers | f"SerializeWithMsgpack_movie_tiers" >> beam.Map(msgpack.packb)
+            | f'write_movie_tiers'
+            >> WriteToArrayRecord(file_path_prefix=out_file_path_prefix, file_name_suffix=".array_record"))
+        
+        result = pipeline.run()
+        result.wait_until_finish()
+        
+        #assert got written
+        files = glob.glob(f"{out_file_path_prefix}-*.array_record")
+        for file_path in files:
+            reader = None
+            try:
+                reader = array_record_module.ArrayRecordReader(file_path)
+                record = msgpack.unpackb(reader.read())
+                record = json.loads(record)
+                self.assertIsNotNone(record['movie_id'])
+                self.assertIsNotNone(record['tier'])
+                self.assertEqual(len(record), 2)
+            except Exception as e:
+                self.fail(e)
+            finally:
+                if reader is not None:
+                    reader.close()
+        
+        with open(f"{out_file_path_prefix}.json", "r", encoding="utf-8") as f:
+            for line in f.readlines():
+                tier_dict = json.loads(line.strip())
+                self.assertTrue(tier_dict.get("movie_id"))
+                self.assertTrue(tier_dict.get("tier"))
+                break
+                    
     def test_write_ratings_to_array_records_and_parquet(self):
         """
         writes all ratings*dat to ratings*array_record and parquet
@@ -638,8 +755,7 @@ class WriteRetrievalInputs(tf.test.TestCase):
             #write array_records
             (records | f"SerializeWithMsgpack_{file_name}" >> beam.Map(msgpack.packb)
              | f'write_array_record_{file_name}'
-             >> WriteToArrayRecord(
-                        file_path_prefix=out_file_path))
+             >> WriteToArrayRecord(file_path_prefix=out_file_path))
             
             #write parquet files
             (records | f"ratings_{file_name} To Dict" >> beam.Map(lambda x: {
