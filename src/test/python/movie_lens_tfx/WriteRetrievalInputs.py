@@ -607,7 +607,7 @@ class WriteRetrievalInputs(tf.test.TestCase):
         :return:
         """
         in_ratings_path = os.path.join(get_project_dir(),
-            f"src/main/resources/ml-1m/ratings_train.dat")
+            f"src/test/resources/ml-1m/ratings_train_liked.dat")
         in_movies_path = os.path.join(get_project_dir(),
             f"src/main/resources/ml-1m/movies.dat")
         
