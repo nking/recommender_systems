@@ -73,7 +73,10 @@ class TuneTrainTest(tf.test.TestCase):
     os.makedirs(serving_model_dir, exist_ok=True)
     os.makedirs(query_model_dir, exist_ok=True)
     os.makedirs(candidate_model_dir, exist_ok=True)
-
+    
+    movie_tiers_uri = os.path.join(get_project_dir(),
+        "src/test/resources/movie_tiers.json")
+    
     pipeline_factory = PipelineComponentsFactory(
       num_examples=self.num_examples,
       infiles_dict_ser=self.infiles_dict_of_dicts_ser,
@@ -81,7 +84,8 @@ class TuneTrainTest(tf.test.TestCase):
       transform_dir=tr_dir, n_users=self.n_users, n_movies=self.n_movies,
       n_genres=self.n_genres,
       min_eval_size=self.MIN_EVAL_SIZE,
-      batch_size=32, num_epochs=2, serving_model_dir=serving_model_dir)
+      batch_size=32, num_epochs=2, serving_model_dir=serving_model_dir,
+      movie_tiers_uri=movie_tiers_uri,)
     
     SETUP_FILE_PATH = os.path.join(get_project_dir(), 'setup.py')
     

@@ -30,6 +30,7 @@ class PipelineComponentsFactory():
     n_users: int, n_movies:int, n_genres:int,
     min_eval_size:int=100, batch_size:int=64, num_epochs:int=20,
     serving_model_dir:str=None,
+    movie_tiers_uri:str=None,
     output_parquet_path:str=None, version:str="1.0.0", git_hash:str=None, team_lead:str=None,):
     """
     A factory to build components for a few different workflows.
@@ -55,7 +56,8 @@ class PipelineComponentsFactory():
           NOTE that a hackish workaround to save the Query and Candidate embedding models
           separately for serving inference has been added to the run_fn in tune_train_movie_lens.py
           to create sibling directories called serving_query_model and serving_candidate_model.
-          The hack hasn't been tested in a production environment, and has only been used with file uris.
+          The hack hasn't been tested in a production environment, and has only been used with file
+      uris.movie_tiers_uri: uri to file holding movie tiers
       output_parquet_path: str, path to output parquet directory for transformed examples
       version: str, version name, e.g. string of major.mino.patch
       git_hash: str, git commit hash
@@ -76,6 +78,7 @@ class PipelineComponentsFactory():
     self.version = version
     self.git_hash = git_hash
     self.team_lead = team_lead
+    self.movie_tiers_uri = movie_tiers_uri
     
   def build_components(self, type: PIPELINE_TYPE, run_example_diff:bool=False, pre_transform_schema_dir_path:str=None,
     post_transform_schema_dir_path:str=None) -> List[base_beam_component.BaseBeamComponent]:
@@ -132,6 +135,7 @@ class PipelineComponentsFactory():
       "num_examples":self.num_examples,
       "version" : self.version,
       "model_name" : MODEL_NAME.USER_MOVIE.value,
+      "movie_tiers_uri" : self.movie_tiers_uri
     }
     push_config = {
       "version": self.version,
@@ -232,6 +236,7 @@ class PipelineComponentsFactory():
             "num_examples": self.num_examples,
             "version": self.version,
             "model_name": MODEL_NAME.USER_MOVIE.value,
+            "movie_tiers_uri" : self.movie_tiers_uri
         }
         trainer = tfx.components.Trainer(
             module_file=os.path.join(self.transform_dir,'tune_train_movie_lens.py'),

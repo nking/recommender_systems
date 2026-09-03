@@ -1,7 +1,10 @@
 '''
-splitting the data into 80:10:10 for train:val_test ratings dataset on a pers user
+splitting the data into 80:10:10 for train:val_test ratings dataset on a per user
 basis.
+
+writes files to bin/full, bin/tiny, and bin/small
 '''
+import shutil
 from collections import OrderedDict
 
 from helper import *
@@ -59,12 +62,40 @@ df_train = df.filter(pl.col("fraction") < 0.80)
 df_val = df.filter((pl.col("fraction") >= 0.80) & (pl.col("fraction") < 0.90))
 df_test = df.filter(pl.col("fraction") >= 0.90)
 
+df_train_disliked = df_train.filter(pl.col("rating") < 3)
+df_train_3 = df_train.filter(pl.col("rating") == 3)
+df_train_liked = df_train.filter(pl.col("rating") > 3)
+
+df_val_disliked = df_val.filter(pl.col("rating") < 3)
+df_val_3 = df_val.filter(pl.col("rating") == 3)
+df_val_liked = df_val.filter(pl.col("rating") > 3)
+
+df_test_disliked = df_test.filter(pl.col("rating") < 3)
+df_test_3 = df_test.filter(pl.col("rating") == 3)
+df_test_liked = df_test.filter(pl.col("rating") > 3)
+
+out_dir_full = os.path.join(get_bin_dir(), "full")
+out_dir_tiny = os.path.join(get_bin_dir(), "tiny")
+out_dir_small = os.path.join(get_bin_dir(), "small")
+for path in [out_dir_full, out_dir_tiny, out_dir_small]:
+    try :
+        shutil.rmtree(path)
+    except:
+        pass
+    os.makedirs(path, exist_ok=True)
+
 # array records are written in WriteRamkerInputArrayRecords
 # parquet records are written in WriteRetrievalInputParquet.py
 # write to .dat here
-for df_write, prefix in zip([df_train, df_val, df_test], ['train', 'val', 'test']):
+for df_write, prefix in zip(
+        [df_train, df_train_disliked, df_train_3, df_train_liked,
+        df_val, df_val_disliked, df_val_3, df_val_liked,
+        df_test, df_test_disliked, df_test_3, df_test_liked,],
+        ['train', 'train_disliked', 'train_3', 'train_liked',
+        'val', 'val_disliked', 'val_3', 'val_liked',
+        'test', 'test_disliked', 'test_3', 'test_liked',]):
     #write dat files
-    file_path = os.path.join(get_bin_dir(), f'ratings_{prefix}.dat')
+    file_path = os.path.join(out_dir_full, f'ratings_{prefix}.dat')
     
     df_formatted = df_write.select(
         pl.format("{}::{}::{}::{}",
@@ -78,4 +109,34 @@ for df_write, prefix in zip([df_train, df_val, df_test], ['train', 'val', 'test'
         include_header=False,
         quote_style="never"
     )
+    
+    file_path = os.path.join(out_dir_small, f'ratings_{prefix}.dat')
+    df_formatted = df_write.head(1000).select(
+        pl.format("{}::{}::{}::{}",
+            pl.col("user_id"),
+            pl.col("movie_id"),
+            pl.col("rating"),
+            pl.col("timestamp")).alias("output")
+    )
+    df_formatted.write_csv(
+        file_path,
+        include_header=False,
+        quote_style="never"
+    )
+    
+    file_path = os.path.join(out_dir_tiny, f'ratings_{prefix}.dat')
+    df_formatted = df_write.head(100).select(
+        pl.format("{}::{}::{}::{}",
+            pl.col("user_id"),
+            pl.col("movie_id"),
+            pl.col("rating"),
+            pl.col("timestamp")).alias("output")
+    )
+    df_formatted.write_csv(
+        file_path,
+        include_header=False,
+        quote_style="never"
+    )
+    
+print(f"wrote files to directories\n{out_dir_full}\n{out_dir_small}\n{out_dir_tiny}")
 

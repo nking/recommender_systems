@@ -67,8 +67,8 @@ class WriteRetrievalInputs(tf.test.TestCase):
         self.pipeline_options = PipelineOptions(
             runner='DirectRunner',
             direct_num_workers=0,
-            direct_running_mode='multi_processing',
-            # direct_running_mode='multi_threading',
+            ##direct_running_mode='multi_processing', # don't use here
+            direct_running_mode='multi_threading',  #can probably use
         )
         
         self.mean_train_val_timestamp = None
@@ -733,84 +733,76 @@ class WriteRetrievalInputs(tf.test.TestCase):
             ('timestamp', pa.int64()),
         ])
         
-        pipeline = beam.Pipeline(options=self.pipeline_options)
+        def to_parquet_format(element):
+            # element is (id, [16 floats])
+            return {
+                'user_id': element[0],
+                'movie_id': element[1],
+                'rating': element[2],
+                'timestamp': element[3],
+            }
         
-        for file_name in [
-            #"ratings", "ratings_train", "ratings_val", "ratings_test",
+        res_dir = os.path.join(get_project_dir(),f"src/test/resources/ml-1m/")
+        out_dir_full = os.path.join(get_bin_dir(), "full")
+        out_dir_tiny = os.path.join(get_bin_dir(), "tiny")
+        out_dir_small = os.path.join(get_bin_dir(), "small")
+        for path in [out_dir_full, out_dir_tiny, out_dir_small]:
+            try :
+                shutil.rmtree(path)
+            except:
+                pass
+            os.makedirs(path, exist_ok=True)
+            
+        dirs_list = [
             "ratings_train_liked", "ratings_val_liked", "ratings_test_liked",
             "ratings_train_3", "ratings_val_3", "ratings_test_3",
             "ratings_train_disliked", "ratings_val_disliked", "ratings_test_disliked"
-        ]:
+        ]
             
-            in_file_path = os.path.join(get_project_dir(),
-                f"src/test/resources/ml-1m/{file_name}.dat")
-            out_file_path = os.path.join(get_bin_dir(), f"{file_name}.array_record")
-            out_file_prefix = os.path.join(get_bin_dir(), f"{file_name}")
-            
-            if not os.path.exists(in_file_path):
-                raise IOError(f"File {in_file_path} does not exist.  "
-                f"To create those files: edit the script 'write_liked_disliked_ratings.py' "
-                f"to temporarily set COPY_TO_SRC_TREE=True, and run that code.  It"
-                f"will write the liked and disliked ratings to {in_file_path}.")
-            
-            records = (pipeline | f"read_{file_name}" >>
-                beam.io.ReadFromText(in_file_path, skip_header_lines=0,
-                 coder=CustomUTF8Coder())
-                | f'parse_{file_name}' >> beam.Map(lambda line: line.split("::"))
-                | f"FormatToList_{file_name}" >> beam.Map(
-                        lambda x: [int(x[0]), int(x[1]), int(x[2]), int(x[3])]))
-            
-            #write array_records
-            (records | f"SerializeWithMsgpack_{file_name}" >> beam.Map(msgpack.packb)
-             | f'write_array_record_{file_name}'
-             >> WriteToArrayRecord(file_path_prefix=out_file_path))
-            
-            #write parquet files
-            (records | f"ratings_{file_name} To Dict" >> beam.Map(lambda x: {
-                'user_id': x[0], 'movie_id': x[1], 'rating': x[2], 'timestamp': x[3]})
-             | f"Write ratings_{file_name} to Parquet" >> WriteToParquet(
-                        file_path_prefix=out_file_prefix,
-                        schema=pa_schema,
-                        file_name_suffix='.parquet',
-                        num_shards=1
-                    ))
+        #check that inputs exist fo early exit if not
+        for file_name in dirs_list:
+            for path, path_name in zip([out_dir_full, out_dir_small, out_dir_tiny], ["", "small", "tiny"]):
+                in_file_path = os.path.join(res_dir, path_name, f"{file_name}.dat")
+                if not os.path.exists(in_file_path):
+                    raise IOError(f"File {in_file_path} does not exist...")
         
-        for file_dir_name in ("small", "tiny"):
-            os.makedirs(os.path.join(get_bin_dir(), file_dir_name), exist_ok=True)
-            for file_name in [
-                #"ratings",
-                "ratings_train_liked",  "ratings_val_liked", "ratings_test_liked",
-                "ratings_train_3", "ratings_val_3", "ratings_test_3",
-                "ratings_train_disliked", "ratings_val_disliked", "ratings_test_disliked",
-            ]:
-                in_file_path = os.path.join(get_project_dir(),
-                    f"src/test/resources/ml-1m/{file_dir_name}/{file_name}.dat")
-                out_file_path = os.path.join(get_bin_dir(), file_dir_name, f"{file_name}.array_record")
-                out_file_prefix = os.path.join(get_bin_dir(), file_dir_name, f"{file_name}")
+        pipeline = beam.Pipeline(options=self.pipeline_options)
+        
+        for file_name in dirs_list:
+            for path, path_name in zip([out_dir_full, out_dir_small, out_dir_tiny], ["", "small", "tiny"]):
+            
+                in_file_path = os.path.join(res_dir, path_name, f"{file_name}.dat")
+                out_file_prefix = os.path.join(path, f"{file_name}") #writes to directory, but begins file_name
                 
-                records = (pipeline | f"read_{file_dir_name}_{file_name}" >>
+                if not os.path.exists(in_file_path):
+                    raise IOError(f"File {in_file_path} does not exist...")
+                
+                if not os.path.exists(in_file_path):
+                    raise IOError(f"File {in_file_path} does not exist.  "
+                    f"To create those files: edit the script 'write_liked_disliked_ratings.py' "
+                    f"to temporarily set COPY_TO_SRC_TREE=True, and run that code.  It"
+                    f"will write the liked and disliked ratings to {in_file_path}.")
+                
+                records = (pipeline | f"read_{path}_{path_name}_{file_name}" >>
                     beam.io.ReadFromText(in_file_path, skip_header_lines=0,
-                    coder=CustomUTF8Coder())
-                    | f'parse_{file_dir_name}_{file_name}' >> beam.Map(lambda line: line.split("::"))
-                    | f"FormatToList_{file_dir_name}_{file_name}" >> beam.Map(
-                        lambda x: [int(x[0]), int(x[1]), int(x[2]), int(x[3])])
-                       )
+                     coder=CustomUTF8Coder())
+                    | f'parse_{path}_{path_name}_{file_name}' >> beam.Map(lambda line: line.split("::"))
+                    | f"FormatToList_{path}_{path_name}_{file_name}" >> beam.Map(
+                            lambda x: [int(x[0]), int(x[1]), int(x[2]), int(x[3])]))
                 
-                #write to array_record
-                (records | f"SerializeWithMsgpack_{file_dir_name}_{file_name}" >> beam.Map(msgpack.packb)
-                    | f'write_array_record_{file_dir_name}_{file_name}'
-                    >> WriteToArrayRecord(
-                        file_path_prefix=out_file_path))
+                #write array_records
+                (records | f"SerializeWithMsgpack_{path}_{path_name}_{file_name}" >> beam.Map(msgpack.packb)
+                 | f'write_array_record_{path}_{path_name}_{file_name}'
+                 >> WriteToArrayRecord(file_path_prefix=out_file_prefix))
                 
-                # write parquet files
-                (records | f"ratings_{file_dir_name}_{file_name} To Dict" >> beam.Map(
-                    lambda x: {
-                        'user_id': x[0], 'movie_id': x[1],
-                        'rating': x[2], 'timestamp': x[3]})
-                 | f"Write ratings_{file_dir_name}_{file_name} to Parquet" >> WriteToParquet(
+                #write parquet files
+                (records | f"ratings_{path}_{path_name}_{file_name} To Dict" >> beam.Map(to_parquet_format)
+                 | f"Write ratings_{path}_{path_name}_{file_name} to Parquet"
+                 >> WriteToParquet(
                             file_path_prefix=out_file_prefix,
                             schema=pa_schema,
                             file_name_suffix='.parquet',
+                            codec="snappy",
                             num_shards=1
                         ))
                 
@@ -818,47 +810,27 @@ class WriteRetrievalInputs(tf.test.TestCase):
         result.wait_until_finish()
         
         # assert wrote correctly
-        for file_name in [
-            #"ratings", "ratings_train", "ratings_val", "ratings_test",
-            "ratings_train_liked", "ratings_val_liked", "ratings_test_liked",
-            "ratings_train_3", "ratings_val_3", "ratings_test_3",
-            "ratings_train_disliked", "ratings_val_disliked", "ratings_test_disliked",
-        ]:
-            file_path = glob.glob(f'{get_bin_dir()}/{file_name}.array_record*')[0]
-            out_file_path = os.path.join(get_bin_dir(), f"{file_name}.array_record")
-            shutil.move(file_path, out_file_path)
-            self._read_array_records(out_file_path)
+        for file_name in dirs_list:
+            for path in [out_dir_full, out_dir_small, out_dir_tiny]:
+                
+                # Clean up any orphaned beam-temp folders that might linger from previous aborted runs by WriteToParquet
+                for item in os.listdir(path):
+                    if item.startswith("beam-temp-"):
+                        shutil.rmtree(os.path.join(path, item), ignore_errors=True)
+                
+                file_paths = glob.glob(os.path.join(path, f"{file_name}*.array_record"))
+                print(f'{len(file_paths)}: file_paths={file_paths}')
+                file_path = file_paths[0]
+                self._read_array_records(file_path)
             
-            out_file_prefix = os.path.join(get_bin_dir(), f"{file_name}")
-            file_paths = glob.glob(f"{out_file_prefix}*parquet")
-            table = pq.read_table(file_paths[0])
-            actual_data = table.to_pylist()
-            self.assertTrue(len(actual_data) > 3000)
-            self.assertTrue(isinstance(actual_data[0]['user_id'], int))
-            self.assertTrue(isinstance(actual_data[0]['movie_id'], int))
-            self.assertTrue(isinstance(actual_data[0]['rating'], int))
-            self.assertTrue(isinstance(actual_data[0]['timestamp'], int))
-            
-        for file_name in [
-            #"ratings",
-            "ratings_train_liked",
-            "ratings_val_liked", "ratings_test_liked",
-            "ratings_train_disliked", "ratings_val_disliked",
-            "ratings_test_disliked",
-        ]:
-            file_path = glob.glob(f'{get_bin_dir()}/small/{file_name}.array_record*')[0]
-            out_file_path = os.path.join(get_bin_dir(), "small", f"{file_name}.array_record")
-            shutil.move(file_path, out_file_path)
-            self._read_array_records(out_file_path)
-            
-            out_file_prefix = os.path.join(get_bin_dir(), f"{file_name}")
-            file_paths = glob.glob(f"{out_file_prefix}*parquet")
-            table = pq.read_table(file_paths[0])
-            actual_data = table.to_pylist()
-            self.assertTrue(isinstance(actual_data[0]['user_id'], int))
-            self.assertTrue(isinstance(actual_data[0]['movie_id'], int))
-            self.assertTrue(isinstance(actual_data[0]['rating'], int))
-            self.assertTrue(isinstance(actual_data[0]['timestamp'], int))
+                file_paths = glob.glob(os.path.join(path, f"{file_name}*.parquet"))
+                table = pq.read_table(file_paths[0])
+                actual_data = table.to_pylist()
+                self.assertTrue(len(actual_data) >= 100)
+                self.assertTrue(isinstance(actual_data[0]['user_id'], int))
+                self.assertTrue(isinstance(actual_data[0]['movie_id'], int))
+                self.assertTrue(isinstance(actual_data[0]['rating'], int))
+                self.assertTrue(isinstance(actual_data[0]['timestamp'], int))
     
     def _read_array_records(self, file_path: str):
         

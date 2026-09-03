@@ -592,7 +592,7 @@ def _make_candidate_model(n_movies : int, movies_offset : int,
                                             drop_rate=drop_rate,
                                             incl_genres=incl_genres,
                                             **kwargs)
-    
+
 def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   
   #input_dataset_element_spec_raw = hp.get("input_dataset_element_spec_raw_ser")
@@ -629,7 +629,9 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
          use_bias_corr: bool = True,
          bias_corr_alpha: float=0.1,
          log_q_correction_factor: float=0.5,
-         temperature:float=1.0, name='twotowerdnn', **kwargs):
+         temperature:float=1.0, name='twotowerdnn',
+         movie_tiers : tf.Tensor=None,
+        **kwargs):
       super(TwoTowerDNN, self).__init__(name=name, **kwargs)
       
       self.query_model = _make_query_model(n_users=n_users,
@@ -670,6 +672,9 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       # 0.5 : A balanced space that allows the latent tail to emerge
       # 0.0 : Heavy popularity penalty.
       self.log_q_correction_factor = log_q_correction_factor
+      
+      # only present for train and test/eval, not inference, so do not save to the get_config method:
+      self.movie_tiers = movie_tiers
       
       self.n_users = n_users
       self.n_movies = n_movies
@@ -735,8 +740,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       """
       #logging.debug(f'call {self.name} inputs={inputs}\n')
       
-      
-      
       user_vector = self.query_model(inputs)
       movie_vector = self.candidate_model(inputs)
       #tf.print('U,V SHAPES: ', user_vector.shape, movie_vector.shape)
@@ -749,9 +752,9 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         k: tf.TensorShape(v) if not isinstance(v, tf.TensorShape) else v
         for k, v in input_shape.items()
       }
-      #tf.print("TwoTowerDNN build normalized_nput_shape=", normalized_input_shape)
+      #tf.print("TwoTowerDNN build normalized_input_shape=", normalized_input_shape)
       #print(f'build {self.name} input_shape={input_shape}\n')
-      # logging.debug(f'build {self.name} input_shape={input_shape}\n')
+      #logging.debug(f'build {self.name} input_shape={input_shape}\n')
       if not self.query_model.built:
         self.query_model.build(normalized_input_shape)
       if not self.candidate_model.built:
@@ -811,7 +814,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     
     def train_step(self, batch):
         x, y = batch  # y is typically not used in pure In-Batch Softmax (identity matrix is the target)
-        movie_ids = x['movie_id']
+        movie_ids = x['movie_id'] #/TensorShape([batch_size, 1]),
         beta_correction = self.log_q_correction_factor
         with tf.GradientTape() as tape:
             user_embeddings = self.query_model(x)  # [Batch, Dim]
@@ -847,7 +850,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
             # the same movie rated by the user as having more than one rating, masks are made to
             # assure those elements are not considered in the rank calculations that are in the
             # in batch loss and metric functions
-            #shapes: batch_Size x batch_size
+            #shapes: batch_size x batch_size
             user_mask = tf.equal(tf.expand_dims(x['user_id'], 0), tf.expand_dims(x['user_id'], 1))
             movie_mask = tf.equal(tf.expand_dims(movie_ids, 0), tf.expand_dims(movie_ids, 1))
             user_mask = tf.squeeze(user_mask, axis=-1)
@@ -874,11 +877,17 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         self.recall_k_metric.update_state(labels, masked_raw_logits, sample_weight=y)
         self.in_batch_hit_rate_metric(y_true=labels, y_pred=masked_raw_logits, sample_weight=y)
         
+        #form the batch of movie_tiers for the ndc metrics
+        shifted_ids = movie_ids - self.movies_offset
+        safe_ids = tf.clip_by_value(shifted_ids, 0, self.n_movies - 1)
+        safe_ids = tf.cast(safe_ids, dtype=tf.int32)
+        batch_movie_tiers = tf.gather(self.movie_tiers, safe_ids)
+        #batch_movie_tiers is shape [batch_size]
+        
         self.ndcg_k_composite_metric.update_state(
             y_true=labels,
             y_pred=masked_raw_logits,
-            movie_ids=movie_ids,
-            table_b=self.table_B,
+            batch_movie_tiers = batch_movie_tiers,
             sample_weight=y
         )
         
@@ -929,12 +938,17 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         self.recall_k_metric.update_state(labels, masked_raw_logits, sample_weight=y)
         self.in_batch_hit_rate_metric.update_state(y_true=labels, y_pred=masked_raw_logits, sample_weight=y)
         
+        # form the batch of movie_tiers for the ndc metrics
+        shifted_ids = movie_ids - self.movies_offset
+        safe_ids = tf.clip_by_value(shifted_ids, 0, self.n_movies - 1)
+        safe_ids = tf.cast(safe_ids, dtype=tf.int32)
+        batch_movie_tiers = tf.gather(self.movie_tiers, safe_ids)
+        
         #def update_state(self, y_true, y_pred, sample_weight=None, table_b = None, movie_ids=None)
         self.ndcg_k_composite_metric.update_state(
             y_true=labels,
             y_pred=masked_raw_logits,
-            table_b=self.table_B,
-            movie_ids=movie_ids,
+            batch_movie_tiers=batch_movie_tiers,
             sample_weight=y
         )
         
@@ -1334,19 +1348,16 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     def get_name(self, name:str, k:int):
         raise NotImplementedError("This method must be implemented by the inheritor.")
     
-    @abc.abstractmethod
-    def get_part_mask(self, b_values):
-        raise NotImplementedError("This method must be implemented by the inheritor.")
+    def get_part_mask(self, batch_movie_tiers):
+        return batch_movie_tiers == self.head_torso_tail_idx
     
-    def update_state(self, labels, logits, movie_ids,
-            table_b:tf.lookup.experimental.MutableHashTable, sample_weight=None):
-        # 1. Identify Tail Items
-        movie_ids_flat = tf.cast(tf.reshape(movie_ids, [-1]), tf.int32)
-        b_values = table_b.lookup(movie_ids_flat)
+    def update_state(self, labels, logits,
+            batch_movie_tiers:tf.Tensor, sample_weight=None):
         
-        part_mask = self.get_part_mask(b_values)
+        #shape is [batch_size]
+        part_mask = self.get_part_mask(batch_movie_tiers)
         
-        # 2. Efficient Ranking (Aligned with NDCGAtKForInBatchNegatives)
+        # Efficient Ranking (Aligned with NDCGAtKForInBatchNegatives)
         pos_scores = tf.linalg.diag_part(logits)[:, tf.newaxis]
         is_greater_equal = tf.cast(logits >= (pos_scores - 1e-6), tf.float32)
         ranks = tf.reduce_sum(is_greater_equal, axis=1)
@@ -1355,13 +1366,15 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         relevant_mask = tf.cast(ranks <= k, tf.float32)
         log2_rank = tf.math.log(ranks + 1.0) / tf.math.log(2.0)
         
-        # NDCG for ALL items in batch
+        # NDCG for ALL items in batch.  shape is [batch_size]
         dcg = (1.0 / log2_rank) * relevant_mask
         
-        # 3. Filter accumulator to include only tail rows
+        # Filter accumulator to include only tail rows.  shape is [batch_size]
         weights = tf.cast(part_mask, tf.float32)
         if sample_weight is not None:
+            #sampple_weight shape is [batch_size 1]
             weights = weights * tf.cast(tf.reshape(sample_weight, [-1]), tf.float32)
+            #weights is shape [batch_size]
         
         self.ndcg_sum.assign_add(tf.reduce_sum(dcg * weights))
         self.count.assign_add(tf.reduce_sum(weights))
@@ -1387,23 +1400,11 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       Computes NDCG@K restricted strictly to rows where the true positive
       candidate item is a head item based on the streaming table_B state.
       """
-      
-      def __init__(self,  b_threshold_head=7.92, name:str="ndcg", k: int = 20, **kwargs):
+      def __init__(self, name:str="ndcg", k: int = 20, **kwargs):
           super().__init__(head_torso_tail_idx=0, name=name, k=k, **kwargs)
-          self.b_threshold_head = b_threshold_head
       
       def get_name(self, name:str,  k:int):
           return f"{name}_head_{k}"
-      
-      def get_part_mask(self, b_values):
-          return b_values <= self.b_threshold_head
-      
-      def get_config(self):
-          config = super().get_config()
-          config.update({
-              "b_threshold_head": self.b_threshold_head,
-          })
-          return config
   
   @keras.utils.register_keras_serializable(package=package)
   class NDCGAtKForInBatchTorso(NDCGAtKForInBatchPart):
@@ -1412,28 +1413,12 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       candidate item is a torse item based on the streaming table_B state.
       """
       
-      def __init__(self, b_threshold_head=7.92, b_threshold_tail=12.21, name: str = "ndcg",
+      def __init__(self, name: str = "ndcg",
               k: int = 20, **kwargs):
           super().__init__(head_torso_tail_idx=1, name=name, k=k, **kwargs)
-          self.b_threshold_head = b_threshold_head
-          self.b_threshold_tail = b_threshold_tail
       
       def get_name(self, name: str, k: int):
           return f"{name}_torso_{k}"
-      
-      def get_part_mask(self, b_values):
-            return tf.logical_and(
-                b_values > self.b_threshold_head,
-                b_values < self.b_threshold_tail
-            )
-          
-      def get_config(self):
-          config = super().get_config()
-          config.update({
-              "b_threshold_head": self.b_threshold_head,
-              "b_threshold_tail": self.b_threshold_tail,
-          })
-          return config
   
   @keras.utils.register_keras_serializable(package=package)
   class NDCGAtKForInBatchTail(NDCGAtKForInBatchPart):
@@ -1442,26 +1427,15 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       candidate item is a tail item based on the streaming table_B state.
       """
       
-      def __init__(self, b_threshold_tail=12.21, name: str = "ndcg", k: int = 20, **kwargs):
+      def __init__(self, name: str = "ndcg", k: int = 20, **kwargs):
           super().__init__(head_torso_tail_idx=2, name=name, k=k, **kwargs)
-          self.b_threshold_tail = b_threshold_tail
       
       def get_name(self, name: str, k: int):
           return f"{name}_tail_{k}"
       
-      def get_part_mask(self, b_values):
-          return  b_values >= self.b_threshold_tail
-      
-      def get_config(self):
-          config = super().get_config()
-          config.update({
-              "b_threshold_tail": self.b_threshold_tail,
-          })
-          return config
-      
   @keras.utils.register_keras_serializable(package=package)
   class NDCGAtKComposite(keras.metrics.Metric):
-    def __init__(self, b_threshold_head=7.92, b_threshold_tail=12.21, name="composite_ndcg",
+    def __init__(self, name="composite_ndcg",
             k: int = 20, use_composite:bool=True,
             w_head:float=0.25, w_torso:float=0.55, w_tail:float=0.2, **kwargs):
         """
@@ -1474,26 +1448,24 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         """
         name = f"{name}_{k}"
         super(NDCGAtKComposite, self).__init__(name=name, **kwargs)
-        self.b_threshold_head = b_threshold_head
-        self.b_threshold_tail = b_threshold_tail
         self.w_head = w_head
         self.w_torso = w_torso
         self.w_tail = w_tail
         self.k = k
         self.use_composite = use_composite
         if use_composite:
-            self.ndcg_head = NDCGAtKForInBatchHead(b_threshold_head=b_threshold_head, k=k)
-            self.ndcg_torso = NDCGAtKForInBatchTorso(b_threshold_head=b_threshold_head, b_threshold_tail=b_threshold_tail, k=k)
-            self.ndcg_tail = NDCGAtKForInBatchTail(b_threshold_tail=b_threshold_tail, k=k)
+            self.ndcg_head = NDCGAtKForInBatchHead(k=k)
+            self.ndcg_torso = NDCGAtKForInBatchTorso(k=k)
+            self.ndcg_tail = NDCGAtKForInBatchTail(k=k)
         else:
             self.ndcg = NDCGAtKForInBatchNegatives(k=k)
     
     def update_state(self, y_true, y_pred, sample_weight=None,
-            table_b:tf.lookup.experimental.MutableHashTable = None, movie_ids=None):
+            batch_movie_tiers:tf.Tensor = None):
         if self.use_composite:
-            self.ndcg_head.update_state(y_true, y_pred, movie_ids, table_b, sample_weight)
-            self.ndcg_torso.update_state(y_true, y_pred, movie_ids, table_b, sample_weight)
-            self.ndcg_tail.update_state(y_true, y_pred, movie_ids, table_b, sample_weight)
+            self.ndcg_head.update_state(y_true, y_pred, batch_movie_tiers, sample_weight)
+            self.ndcg_torso.update_state(y_true, y_pred, batch_movie_tiers, sample_weight)
+            self.ndcg_tail.update_state(y_true, y_pred, batch_movie_tiers, sample_weight)
         else:
             self.ndcg.update_state(y_true, y_pred, sample_weight)
     
@@ -1519,8 +1491,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         # Use super().get_config()
         config = super().get_config()
         config.update({
-            "b_threshold_head" : self.b_threshold_head,
-            "b_threshold_tail" : self.b_threshold_tail,
             "w_head" : self.w_head,
             "w_torso" : self.w_torso,
             "w_tail" : self.w_tail,
@@ -1580,6 +1550,31 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
           })
           return config
   
+  def load_movie_tiers_as_tensor(movie_tiers_ndjson_uri: str,
+          n_movies: int = 3883, movies_offset: int = 6041) -> tf.Tensor:
+      # Initialize a numpy array with a default tier. 0=head, 1=torso, 2=tail
+      tiers_array = np.full(shape=(n_movies,), fill_value=2, dtype=np.int32)
+      # Parse NDJSON line by line
+      with open(movie_tiers_ndjson_uri, 'r', encoding='utf-8') as f:
+          for line in f:
+              line = line.strip()
+              if not line:
+                  continue
+              row = json.loads(line)
+              movie_id = row["movie_id"]
+              tier = row["tier"]
+              shifted_id = movie_id - movies_offset
+              if 0 <= shifted_id < n_movies:
+                  tiers_array[shifted_id] = tier
+      # Convert to a static TF constant for native graph execution
+      return tf.constant(tiers_array, dtype=tf.int32)
+  
+  movies_offset = hp.get("n_users") + 1
+  n_movies_arg = hp.get("n_movies") + 1
+  movie_tiers_uri = hp.get('movie_tiers_uri')
+  movie_tiers = load_movie_tiers_as_tensor(movie_tiers_uri, n_movies=n_movies_arg,
+      movies_offset=movies_offset)
+  
   # use strategy
   strategy, device = _get_strategy()
   
@@ -1589,8 +1584,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   with strategy.scope():
     model = TwoTowerDNN(
       n_users=hp.get("n_users") + 1,
-      n_movies=hp.get("n_movies") + 1,
-      movies_offset = hp.get("n_users") + 1,
+      n_movies=n_movies_arg,
+      movies_offset = movies_offset,
       n_genres=hp.get("n_genres"),
       layer_sizes=hp.get('layer_sizes'),
       regl2=hp.get('regl2'),
@@ -1601,6 +1596,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       log_q_correction_factor = hp.get('log_q_correction_factor'),
       incl_genres=hp.get('incl_genres'),
       temperature=hp.get('temperature'),
+      movie_tiers = movie_tiers,
     )
     
     # call model once to trace methods.
@@ -1706,6 +1702,7 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   else:
       hp.Choice("bias_corr_alpha", values=[0.1], default=0.05)  # 0.01, 0.05, 0.1
       hp.Fixed("temperature", value=1.0)
+  hp.Fixed('movie_tiers_uri', value=custom_config["movie_tiers_uri"])
   hp.Fixed('n_users', value=custom_config["n_users"])
   hp.Fixed('n_movies', custom_config["n_movies"])
   hp.Fixed('n_genres', custom_config["n_genres"])
@@ -2013,6 +2010,9 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       raise ValueError('hyperparameters must be provided')
   
   print('HyperParameters for training: %s' % hp.get_config())
+  
+  if hp.get("movie_tiers_uri") == None:
+      raise ValueError("hyperparameters in run_fn is missing 'movie_tiers_uri'")
   
   strategy, device = _get_strategy()
   
@@ -2473,6 +2473,9 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
   else:
     logging.info("hp from custom_config")
     hp = get_default_hyperparameters(fn_args.custom_config)
+  
+  if hp.get("movie_tiers_uri") == None:
+      raise ValueError("hyperparameters in tuner_fn is missing 'movie_tiers_uri'")
   
   ## because _make_2tower_keras_model needs these specs for signatures, we store them as fixed hyperpareters
   # Also oote that the tuner method needs to use fn_args.transform_graph_path

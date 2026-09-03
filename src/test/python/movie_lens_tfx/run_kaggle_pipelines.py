@@ -54,8 +54,9 @@ metadata_connection_config = metadata.sqlite_metadata_connection_config(
 
 store = metadata_store.MetadataStore(metadata_connection_config)
 
-tr_dir = os.path.join(get_project_dir(),
-                      "src/main/python/movie_lens_tfx")
+tr_dir = os.path.join(get_project_dir(), "src/main/python/movie_lens_tfx")
+
+movie_tiers_uri = os.path.join(get_project_dir(), "src/test/resources/movie_tiers.json")
 
 serving_model_dir = os.path.join(PIPELINE_ROOT, 'serving_model')
 query_model_dir = os.path.join(PIPELINE_ROOT, 'serving_query_model')
@@ -102,6 +103,7 @@ pipeline_factory = PipelineComponentsFactory(
   min_eval_size=MIN_EVAL_SIZE, batch_size=BATCH_SIZE, num_epochs=NUM_EPOCHS,
   serving_model_dir=serving_model_dir, output_parquet_path=output_parquet_path,
   git_hash=git_hash,
+  movie_tiers_uri=movie_tiers_uri,
 )
 
 print(f"run baseline pipline to create a baseline model")

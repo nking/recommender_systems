@@ -1,0 +1,43 @@
+logits = dotproduct(emb1, emb2)
+scaled_logits = logits/temperature
+
+loss uses softwmax(scaled_logits)
+
+let x1 = 2
+let x2 = 1
+
+p1 = exp(t1)/(exp(t1) + exp(t2))
+p2 = exp(t2)/(exp(t1) + exp(t2)) 
+   
+no scaling:
+p1 = 0.73
+p2 = 0.27
+
+scaling: div by 0.1  makes distribution more peaked, pushes logits further apart
+helping to learn the tail and diversity for example.
+p1 = 0.9999546021312976
+p2 = 4.5397868702434395e-05
+
+scaling by div 10 makes a flatter more uniform distribution
+p1 = 0.52497918747894
+p2 = 0.4750208125210601
+
+to learn the hard negatives, we want a more peaked dist so we divide
+by a number between roughly 0.05 and 0.15 or so.
+if the distribution is made too peaked, then the model only learns the
+peak and the model collapses due to:
+- in the 1000s of negatives in a batch, there will likely be a few that
+  are actually ones that the user liked and it will penalize those by
+  making them all like the negatives. anything that is not the positive
+  is pure negative if distr is too peaked.
+- can cause loss collapse to NANs if the temperature is too small, i.e. < 0.01
+- 1 positive nearly equal to 1 and all else are negatives nearly 0 means
+  the gradients will have large zig-zag variance while trying to push
+  pairs apart.
+
+the temperature scaling should be applied in train and eval
+step, but is not necessary in the model call because
+the values of the scored list are relative.   the scaling
+can be applied or not in the model call.
+
+

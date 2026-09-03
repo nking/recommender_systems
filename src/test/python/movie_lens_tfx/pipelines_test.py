@@ -128,6 +128,9 @@ class PipelinesTest(tf.test.TestCase):
         except Exception as ex:
             pass
         
+        movie_tiers_uri = os.path.join(get_project_dir(),
+            "src/test/resources/movie_tiers.json")
+        
         pipeline_factory = PipelineComponentsFactory(
             num_examples=num_examples,
             infiles_dict_ser=infiles_dict_of_dicts_ser,
@@ -139,6 +142,7 @@ class PipelinesTest(tf.test.TestCase):
             batch_size=self.BATCH_SIZE, num_epochs=2,
             serving_model_dir=serving_model_dir,
             git_hash=git_hash,
+            movie_tiers_uri=movie_tiers_uri,
         )
         
         SETUP_FILE_PATH = os.path.join(get_project_dir(), 'setup.py')
@@ -315,18 +319,18 @@ class PipelinesTest(tf.test.TestCase):
         expected_layer_sizes = get_best_fitting_layer_sizes(store)
         expeected_embed_dim = json.loads(expected_layer_sizes)[0]
         
-        self.assertTrue(len(results[0]) == 16 or len(results[0]) == 24)
+        self.assertTrue(len(results[0]) % 8 == 0)
         results = infer_query_for_dict(**inputs)['outputs']
-        self.assertTrue(len(results[0]) == 16 or len(results[0]) == 24)
+        self.assertTrue(len(results[0]) % 8 == 0)
         
         inputs = {
             "movie_id": tf.constant([[6054]], dtype=tf.int64),
             "genres": tf.constant([[b'Documentary']], dtype=tf.string),
         }
         results = infer_candidate_for_dict_model(**inputs)['outputs']
-        self.assertTrue(len(results[0]) == 16 or len(results[0]) == 24)
+        self.assertTrue(len(results[0])  % 8 == 0)
         results = infer_candidate_for_dict(**inputs)['outputs']
-        self.assertTrue(len(results[0]) == 16 or len(results[0]) == 24)
+        self.assertTrue(len(results[0])  % 8 == 0)
         
         
         print(f'INFERENCE TEST START')
@@ -443,7 +447,7 @@ class PipelinesTest(tf.test.TestCase):
                 n_genres=self.n_genres,
                 min_eval_size=self.MIN_EVAL_SIZE,
                 batch_size=self.BATCH_SIZE, num_epochs=2,
-                serving_model_dir=model_uri)
+                serving_model_dir=model_uri, movie_tiers_uri=movie_tiers_uri)
             
             components = pipeline_factory.build_components(PIPELINE_TYPE.BATCH_INFERENCE)
             

@@ -119,6 +119,9 @@ class TableBTest(tf.test.TestCase):
       infiles_dict_of_dicts_ser = get_contrastive_split_infiles_set(ds=DataSize.FULL)
       num_examples = 800167
       
+      movie_tiers_uri = os.path.join(get_project_dir(),
+          "src/test/resources/movie_tiers.json")
+      
       pipeline_factory = PipelineComponentsFactory(
           num_examples=num_examples,
           infiles_dict_ser=infiles_dict_of_dicts_ser,
@@ -128,7 +131,9 @@ class TableBTest(tf.test.TestCase):
           n_genres=self.n_genres,
           min_eval_size=self.MIN_EVAL_SIZE,
           batch_size=self.BATCH_SIZE, num_epochs=1,
-          serving_model_dir=serving_model_dir)
+          serving_model_dir=serving_model_dir,
+          movie_tiers_uri=movie_tiers_uri,
+      )
       
       SETUP_FILE_PATH = os.path.join(get_project_dir(), 'setup.py')
       
