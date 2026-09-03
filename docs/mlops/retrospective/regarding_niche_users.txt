@@ -1,0 +1,147 @@
+At the time of this retrospective look at training the 3 tiers
+and the results:
+
+data:
+  - the ratings data from he ml-1m dataset
+  - split is temporal into 80:10:10 for train:val:test
+  - only the positive ratings (rating>3) are used to
+    train the TwoTwoerDNN and the GraphRanker models
+    because contrastive learning is used.
+
+TwoTowerDNN (bi-encoder):
+   - has user features:
+     user_id, age, occupation, gender, year of rating, a cross of hr*weekday of rating 
+   - has movie feaures:
+     movie_id, and genres.
+   - uses log-q correction
+   - uses in-batch soft-max
+   - uses the table_B statistics to determine whether
+     a movie is in the head, torso, or tail of movie
+     frequency.
+     table_B is populated dynamically in the code.  It stores
+     the estimated probability (p_i).  it holds the exponential moving 
+     average of the delta t step gap, that is, the average time in 
+     steps for a movie to be seen again.
+     a low value means the movie is seen frequently (i.e. a popular movie),
+     while a high value means the movie is not seen very often.
+     - we pre-run the code to populate table_B to get the boundaries
+       for the head, torso, and tail membership of movies.
+   - calculates several metrics including ndcg_head_29,
+     ndcg_torso_20, and ndcg_tail_20
+     - ndcg_composite_20 is composed of 
+          w_head*ndcg_hea_29 + w_torso*ndcg_torso + w_tail*ndcg_tail_20
+   - HPO uses max ndcg_composite_20.
+   ==>  The resulting train, val curves look healthy and the
+        ndcg_tail_20 curve shows learning and it is well above random.
+   ==> UMAP and t-SNE plots of the embeddings colored by their 
+       tier of head, torso, or tail look healthy.
+       (made in retrieval project, file src/test/python/movie_lens_retrieval/plot_embeddings_clusters.py
+       The different tiers are present in each cluster and not separated geographically
+       in the figures.
+       
+We determine new definitions of the head, torso, and tail of the train 
+liked ratings distribution by frequency. 
+* Note that these "static" boundaries for head, torso, and tail are what I
+should have used in the metrics for TwoTowerDNN instead of the table_B
+derived "movie tiers" of head, torso, and tail.  The table_b derived
+tail cohort likely has torso members in it because early in the population
+of the table_B table, the torso members are not yet frequent enough to be
+considered orso.  Hence the ndcg_tail_20 train, val curve of the TwoTowerDNN
+likely has torso members in it.
+
+
+GraphRanker (cross-encoder):
+   - input is the train_liked ratings,
+     and from that an graph is built enriched by the user's history
+     and a candidate list made of the one positive rating and 
+     hard negatives for the contrastive list.
+   - the architecture is a GATV2 followed by a 2-layer MLP.
+     the user mebedding and movie embeddings output from the
+     trained TwoTower models are put through the GATv2 with
+     the graph to make user enriched movie embeddings.
+     The 2-layer MLP then provides interaction between the user and movie embeddings
+     and scores them.
+   - the metrics calculated are several including ndcg_head, torso and tail
+     but the static definitions for the head, torso, and tail membership mentioned
+     above are used.
+   - the HPO uses max ndcg_composite_20
+   ==>  The resulting train, val curves look healthy but the
+        ndcg_tail_20 curve are flat and about equal to what one would
+        expect for random selection.
+              N=80 candidates, k=20
+              E[NDCG@20] = (1/N) * sum_{i=1,k}( 1/log2(i+1) ) = 0.088
+
+So in retrospect, should have used the static definition in the TwoTowerDNN.
+And now, how to have avoided no learning for the tail in the GraphRanker?
+
+There is more EDA to have done, given these cohort, a.k.a. movie tier categories:
+  movie tiers: head=0, torso=1, tail=2
+  uniq movies in common w/ training_liked and val_liked for movie tier 2 =     253,
+  the total movies in intersection between val and train =                   2_860,
+  train intersection with val has movies all 3 tiers, #ratings =           460_036,
+      *train intersection movies tier=2, #ratings=      =                      871,
+  val intersection with train has movies all 3 tiers, #ratings =            57_262,
+      *val intersection movies tier=2, #ratings       =                        256,
+  length of intersect_users_then_movies, #ratings =                              0
+
+To successfully train a model that can make niche recommendations to
+users with non-popular preferences, the data must provide three
+specific types of signal.
+   (1) collaborative item to item interactions
+       we have 871 tier=2 train ratings for 253 unique movie_ids
+       so the avg number of ratings per tier=2 movie is 3.44.
+       To be distinguisable above noise of 15 to 20, where
+       the 15 to 20 is the industry standard used in collaborative filtering.
+       We can also see that 3.44 ratings is probably not enough to train
+       a 32 length embedding even though there are half a dozen features
+       per rating.
+   (2) for user validation continuity:
+       we would want the intersection of train and validation by
+       user, then by movies with tier=2 to be greater than a noise
+       level of 30 to 50 continuous user-item pairs.  That would give
+       us the minimum to confidently measure an improvement in
+       ndcg_tail_20 over the baseline.
+       the current value is 0.
+       we cannot achieve above random for ndcg_tail_20 based on what is
+       learned for a user based on this dataset as it is.
+       (though interactions between user and movie and back to user can
+        help with that as long as the niche users niche movie data is
+        not completely disjoint from the popular data)
+   (3) content-based (item information)
+       enrichment of the item information can help make a better signal
+       for all products enabling niche to niche and niche to popular
+       product relationships to be found.
+       And then a cross-encoder can further find relationships between
+       the user informed product back to users including niche users.
+       These item features to improve can be actors, directors,
+       release year of movies.
+       enrichment in the user information can come from sentiment analysis,
+       watch time, etc.
+
+To increase (1) might require adjusting the window of time so that
+there are enough niche users in common with train and val.
+(the dataset splits are sequential by time, at this point)
+If niche users drop off before they can make it to the vaidation timeframe
+inspite of exploring window sizes?  Aside from addressing churn,
+one could consider changing from time paritition splits to splits
+for each user into 80:10:10 for train:val:test ordered by time.
+In that way, the overlap of users in train and val should be improved.
+
+Either using the temporal split as is, or the per user temporal split,
+the industry standard is still to drop users and movies having fewer
+than 30 ratings.
+That itself, would result in some of what used to be torso being defined
+as tail.
+
+So in retrospect that are 2 things to do this better:
+(1) Make the splits by user into 80:10:10 by their timestamps
+    and drop users and movies with fewer than 30 ratings.
+(2) re-do the calculation of movie tiers from the new ratings_train_liked dataset
+(3) use these static memberships in the metrics cacluations
+    in TwoTowerDNN and GraphRanker (already used in GraphRanker).
+
+Then, even though the definition of "tail" has changed, there should
+be learning of it visible in the training, val curves of the GrpahRanker.
+
+
+   

@@ -1,13 +1,6 @@
 '''
-splitting the data into 80:10:10 for train:val_test ratings datasets
-
-The first split is by time for (train + val) split from test.
-
-The second split is by user between train and val.
-
-The temporal split avoids leakage of user data between train and test.
-The user split allows the validation dataset to truly check for generalization
-of the trained model.
+splitting the data into 80:10:10 for train:val_test ratings dataset on a pers user
+basis.
 '''
 from collections import OrderedDict
 
@@ -38,31 +31,33 @@ with open(file_path, "r", encoding='iso-8859-1') as file:
         new_columns=schema.names(),
         use_pyarrow=True)
 
-#order by time and take last 10% for test
-df = df.sort("timestamp")
-train_val_size = int(len(df) * 0.9)
-df1 = df.head(train_val_size)
-df_test = df.tail(len(df) - train_val_size)
+df = df.sort(["user_id", "timestamp"])
 
-# split df1 by user_id, into partitions that are 88.89% : 11.11%
-# subsetsum is np-hard, so use an approx solution instead
+# Calculate per-user sequence index and total ratings count
+df = df.with_columns(
+    user_seq=pl.cum_count("rating").over("user_id") - 1,
+    user_total=pl.len().over("user_id")
+)
 
-def choose_randomly(df1):
-    unique_users = df1.select("user_id").unique()
-    unique_users = unique_users.sample(fraction=1.0, shuffle=True, seed=42)
-    
-    split_idx = int(len(unique_users) * 0.8889)
-    train_user_ids = unique_users.head(split_idx)
-    val_user_ids = unique_users.tail(len(unique_users) - split_idx)
-    
-    df_train = df1.filter(pl.col("user_id").is_in(train_user_ids["user_id"].implode()))
-    df_val = df1.filter(pl.col("user_id").is_in(val_user_ids["user_id"].implode()))
-    return df_train, df_val
+if True:
+    #filter out users with less than 30 ratings and movies with less than 30 ratings
+    # until convergence (since removing a user can drop a movie below 30 and vice versa)
+    prev_len = 0
+    while len(df) != prev_len:
+        prev_len = len(df)
+        df = df.filter(
+            (pl.count("rating").over("user_id") >= 30) &
+            (pl.count("rating").over("movie_id") >= 30)
+        )
 
-df_train, df_val = choose_randomly(df1)
+# Compute fractional position to execute an 80:10:10 temporal split per user
+df = df.with_columns(
+    fraction=pl.col("user_seq") / pl.col("user_total")
+)
 
-#print(f'{len(df_train)} train samples,  {len(df_val)}')
-print(f'{len(df_train)} train2 samples,  {len(df_val)}, ratio = {len(df_val)/len(df_train)}')
+df_train = df.filter(pl.col("fraction") < 0.80)
+df_val = df.filter((pl.col("fraction") >= 0.80) & (pl.col("fraction") < 0.90))
+df_test = df.filter(pl.col("fraction") >= 0.90)
 
 # array records are written in WriteRamkerInputArrayRecords
 # parquet records are written in WriteRetrievalInputParquet.py
