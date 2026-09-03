@@ -1,0 +1,64 @@
+Continuous Integration, Continous Development/Deployment (CICD)
+
+one time init or after data changes such as pulling in new data:
+    (1) renumber users and movies
+        using RenumberIds.py
+    (2) write splits
+        using write_train_val_test_splits_by_user.py
+    (3) move the new files to
+           src/main/resources/ml-1m/
+           and src/test/rescources/ml-1m/
+    (4) write movie_tiers
+        (4a) WriteRetrievalInputs::test_write_movie_head_torso_tail_tiers
+        (4b) make sure movie_tiers in user_id, movie_id interesect across train and val
+             is high enough to allow training for tier=2 (tail of ratings frequency)
+             count_movie_tiers.py
+    (5) EDA including movie_tiers stats
+         scripts in dir src/main/python/eda
+
+after each model change:
+    (6) run pipelines_test::test_main_models
+    (7) run other tests
+    (8) commit to and tag repository
+    (9) DEPLOY for training:
+        run https://www.kaggle.com/code/nicholeasuniquename/recommender-systems-with-tfx-pipelines/
+
+post train1 EDA:
+    (10) examine best params
+    (11) plot train, val curves
+    (12) APPROVE or REVISE (above) or STOP
+    (13) run the WriteRetrievalInputs.py
+    (14) copy files to the retrieval and ranker projects including models and embeddings
+
+post train1 CI-CD continued in retrieval project:
+    (15) plot embeddings in UMAP and t-SNE as a function of movie
+    (16) APPROVE or REVISE (above) or STOP
+    (17) run tests
+    (18) APPROVE or REVISE (above) or STOP
+    (19) write user recommendations and copy to ranker test resources
+
+post train1 CI-CD continued in ranker:
+    (20) run tests with the new data files and embeddings and query, candidate models
+    (21) DEPLOY to Kaggle to train on T4x2 GPUs
+         https://www.kaggle.com/code/nicholeasuniquename/ranker-cross-encoder-w-gatv2/edit
+    (22) download from Kaggle
+    (23) plot train, val curves and look at best params
+    (24) run other tests
+    (25) if look healthy,
+           run calc metrics scripts
+           if niche is learned
+              APPROVE bi-encoder and cross-encoder
+           else
+              REVISE (above) or STOP
+
+post train2 CI-CD continued in ranker:
+    for staging and alpha-beta testing before full-production:
+        (26) export trained ranker model
+             in ranker's export_src
+             and move it to ranker project dir src/test/resources/model_repositories/saved_model_formats/cross-encoder
+        (27) DEPLOY models to TFS servers
+             see deploy/compose/docker-compose-TFS.yaml
+        (28) DEPLOY orchestrator of end-to-end bulk and single inference to cloud
+             in ranker's inference_src
+             see tests to see how to configure
+        (29) monitor
