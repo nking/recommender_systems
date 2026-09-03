@@ -6,6 +6,8 @@ from apache_beam.transforms.combiners import Top
 import io
 import csv
 import glob
+
+from jedi.api.completion import filter_names
 from movie_lens_tfx.utils.WriteToArrayRecord import WriteToArrayRecord
 import msgpack
 from array_record.python import array_record_module
@@ -753,14 +755,14 @@ class WriteRetrievalInputs(tf.test.TestCase):
                 pass
             os.makedirs(path, exist_ok=True)
             
-        dirs_list = [
+        file_names_list = [
             "ratings_train_liked", "ratings_val_liked", "ratings_test_liked",
             "ratings_train_3", "ratings_val_3", "ratings_test_3",
             "ratings_train_disliked", "ratings_val_disliked", "ratings_test_disliked"
         ]
             
         #check that inputs exist fo early exit if not
-        for file_name in dirs_list:
+        for file_name in file_names_list:
             for path, path_name in zip([out_dir_full, out_dir_small, out_dir_tiny], ["", "small", "tiny"]):
                 in_file_path = os.path.join(res_dir, path_name, f"{file_name}.dat")
                 if not os.path.exists(in_file_path):
@@ -768,7 +770,7 @@ class WriteRetrievalInputs(tf.test.TestCase):
         
         pipeline = beam.Pipeline(options=self.pipeline_options)
         
-        for file_name in dirs_list:
+        for file_name in file_names_list:
             for path, path_name in zip([out_dir_full, out_dir_small, out_dir_tiny], ["", "small", "tiny"]):
             
                 in_file_path = os.path.join(res_dir, path_name, f"{file_name}.dat")
@@ -810,7 +812,7 @@ class WriteRetrievalInputs(tf.test.TestCase):
         result.wait_until_finish()
         
         # assert wrote correctly
-        for file_name in dirs_list:
+        for file_name in file_names_list:
             for path in [out_dir_full, out_dir_small, out_dir_tiny]:
                 
                 # Clean up any orphaned beam-temp folders that might linger from previous aborted runs by WriteToParquet

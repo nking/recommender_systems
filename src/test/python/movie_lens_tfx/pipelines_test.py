@@ -115,7 +115,7 @@ class PipelinesTest(tf.test.TestCase):
         os.makedirs(query_model_dir, exist_ok=True)
         os.makedirs(candidate_model_dir, exist_ok=True)
         
-        infiles_dict_of_dicts_ser = get_contrastive_split_infiles_set(ds = DataSize.TINY2)
+        infiles_dict_of_dicts_ser = get_contrastive_split_infiles_set(ds = DataSize.TINY3)
         num_examples = 100
         
         git_hash = None
@@ -423,7 +423,7 @@ class PipelinesTest(tf.test.TestCase):
             # and create new infiles_dict_ser for those files
             
             infiles_dict_of_dicts_ser = get_contrastive_split_infiles_set(
-                ds=DataSize.TINY)
+                ds=DataSize.TINY3)
             num_examples = 100
             
             print(f'serving_model_dir={serving_model_dir}')

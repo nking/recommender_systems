@@ -36,6 +36,7 @@ class DataSize(Enum):
     SMALL = 'small'
     TINY = 'tiny' #only has a few unique users
     TINY2 = 'tiny2' #has 33 unique users
+    TINY3 = 'tiny3'  # contains all tiers
 
 def get_contrastive_split_infiles_set(ds : DataSize = DataSize.SMALL) -> Dict[str, str]:
     prefix_test = os.path.join(get_project_dir(), "src/test/resources/ml-1m/")
@@ -52,6 +53,8 @@ def get_contrastive_split_infiles_set(ds : DataSize = DataSize.SMALL) -> Dict[st
         ratings_prefix = os.path.join(prefix_test, "tiny/")
     elif (ds == DataSize.TINY2):
         ratings_prefix = os.path.join(prefix_test, "tiny2/")
+    elif (ds == DataSize.TINY3):
+        ratings_prefix = os.path.join(prefix_test, "tiny3/")
     else:
         ratings_prefix = prefix_test
     movies_dict = create_infile_dict(for_file='movies',
