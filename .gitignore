@@ -9,6 +9,8 @@ bin/
 tt?
 src/test/resources/ml-1m/*parquet
 
+TMP1/
+
 *.ipynb
 
 # C extensions

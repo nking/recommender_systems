@@ -135,7 +135,11 @@ def _make_query_model(n_users : int, layer_sizes : list,
             # https://developers.googleblog.com/introducing-tensorflow-feature-columns/
             user_embed_out_dim = round(max_user_id ** 0.25)  # 9
             user_emb = keras.Sequential([
-                keras.layers.Embedding(max_user_id + 1, user_embed_out_dim),
+                keras.layers.Embedding(
+                    max_user_id + 1,
+                    user_embed_out_dim,
+                    embeddings_regularizer=keras.regularizers.l2(1e-5)
+                ),
                 keras.layers.Flatten(data_format='channels_last'),
             ], name="user_emb")
             
@@ -156,7 +160,8 @@ def _make_query_model(n_users : int, layer_sizes : list,
                 yr_z_emb = keras.Sequential([
                     keras.layers.Dense(yr_embed_out_dim, activation='swish',
                         kernel_initializer='he_normal', use_bias=False,
-                        kernel_regularizer=keras.regularizers.l2(1e-3), name='yr_z_emb_dense'),
+                        kernel_regularizer=keras.regularizers.l2(1e-3),
+                        name='yr_z_emb_dense'),
                     keras.layers.Flatten(data_format='channels_last'),
                 ], name="yr_z_emb")
             
@@ -304,8 +309,10 @@ def _make_query_model(n_users : int, layer_sizes : list,
             """
             super(QueryModel, self).__init__(name=name, **kwargs)
             
-            self.user_model = UserModel(max_user_id=n_users,
-                feature_acronym=feature_acronym)
+            self.user_model = UserModel(max_user_id=n_users, feature_acronym=feature_acronym)
+            
+            self.feature_dropout = keras.layers.Dropout(drop_rate)
+            
             if isinstance(layer_sizes, str):
                 layer_sizes = json.loads(layer_sizes)
             
@@ -362,6 +369,9 @@ def _make_query_model(n_users : int, layer_sizes : list,
             # inputs should contain columns:
             # print(f'call {self.name} type={type(inputs)}, inputs={inputs}\n')
             feature_embedding = self.user_model(inputs, **kwargs)
+            feature_embedding = self.feature_dropout(
+                feature_embedding, training=kwargs.get("training", False)
+            )
             res = self.dense_query(feature_embedding)
             res = self.norm(res)
             return res
@@ -414,7 +424,8 @@ def _make_candidate_model(n_movies : int, movies_offset : int,
                 keras.layers.Embedding(
                     self.n_movies,
                     movie_embed_out_dim,
-                    embeddings_initializer="glorot_normal"),
+                    embeddings_regularizer=keras.regularizers.l2(1e-5)
+                ),
                 keras.layers.Flatten(data_format='channels_last'),
             ], name="movie_emb")
             
@@ -510,6 +521,8 @@ def _make_candidate_model(n_movies : int, movies_offset : int,
                 n_genres=n_genres,
                 incl_genres=incl_genres, name="movie_model")
             
+            self.feature_dropout = keras.layers.Dropout(drop_rate)
+            
             self.dense_candidate = keras.Sequential(name="dense_candidate")
             if isinstance(layer_sizes, str):
                 layer_sizes = json.loads(layer_sizes)
@@ -566,6 +579,9 @@ def _make_candidate_model(n_movies : int, movies_offset : int,
             # inputs should contain columns "movie_id", "genres"
             # logging.debug(f'call {self.name} type ={type(inputs)}\ntype ={inputs}\n')
             feature_embedding = self.movie_model(inputs, **kwargs)
+            feature_embedding = self.feature_dropout(
+                feature_embedding, training=kwargs.get("training", False)
+            )
             # tf.print('invoked movie_emb.  shape=', feature_embedding.shape)
             res = self.dense_candidate(feature_embedding)
             res = self.norm(res)
@@ -1681,8 +1697,8 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
 
   #layers_sizes is a list of ints, so encode each list as a string, choices can only be int,float,bool,str
   #the last layer in layer_sizes is the query and candidate embedding models' output dimensions-1
-  #hp.Choice("layer_sizes", values=[json.dumps([16])], default=json.dumps([16]))
-  hp.Fixed("layer_sizes", value=json.dumps([32]))
+  hp.Choice("layer_sizes", values=[json.dumps([32]), json.dumps([64, 32])], default=json.dumps([32]))
+  #hp.Fixed("layer_sizes", value=json.dumps([32]))
   #hp.Fixed("layer_sizes", value=json.dumps([24])) # 16 too low, 24 too low, 64 too high.   32 good.
   # ahmos for "age", "hr_wk", "month", "occupation", "gender"
   hp.Fixed("feature_acronym", custom_config.get("feature_acronym", "h"))
@@ -1695,7 +1711,7 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   if use_bias_corr:
       if not use_best_as_fixed:
           hp.Choice("bias_corr_alpha", values=[0.01, 0.05, 0.1], default=0.05)
-          hp.Float('temperature', 0.05, 0.15, step=0.01)
+          hp.Float('temperature', 0.1, 0.25, step=0.01)
       else:
           hp.Fixed("bias_corr_alpha", 0.01)
           hp.Fixed('temperature', 0.1)
