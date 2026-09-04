@@ -1,5 +1,9 @@
 At the time of this retrospective look at training the 3 tiers
 and the results:
+git commit hash 204c0c302c16dd96a54d5de36a5f9f699ead1982
+Sep 2, 2026
+NOTE that changes were made for splits and regularization after
+this retrospective review.
 
 data:
   - the ratings data from he ml-1m dataset

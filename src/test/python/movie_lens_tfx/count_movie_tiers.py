@@ -110,6 +110,26 @@ class ExploreMovieTiers(unittest.TestCase):
             f"ratings in train intersect by movies then users for tier=2={df_train_ratings_inter_u_2['movie_id'].count()}")
         print(
             f"ratings in val intersect by movies then users for tier=2={df_val_ratings_inter_u_2['movie_id'].count()}")
-    
+        
+        #count the unique movies and unique users in the later 2
+        common_movie_ids = (
+            df_train_ratings_inter_u_2.select("movie_id").unique()
+            .join(df_val_ratings_inter_u_2.select("movie_id").unique(), on="movie_id",
+                how="inner")
+            .get_column("movie_id")
+        )
+        print(
+            f"unique movies in intersection of train and val by movies then users for tier=2: {len(common_movie_ids)}")
+        
+        common_user_ids = (
+            df_train_ratings_inter_u_2.select("user_id").unique()
+            .join(df_val_ratings_inter_u_2.select("user_id").unique(),
+                on="user_id",
+                how="inner")
+            .get_column("user_id")
+        )
+        print(
+            f"unique users in intersection of train and val by movies then users for tier=2: {len(common_user_ids)}")
+        
     if __name__ == '__main__':
         unittest.main()

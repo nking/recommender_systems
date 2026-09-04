@@ -1,0 +1,17 @@
+the counts using the movie_tiers and ratings follow where intersect refers to intersection of the train and val datasets by the specific characteristic such as movie_id or user_id. tier=0 is head, tier=1 is torso, tier=2 is tail of movie ratings frequency distribution.
+
+number of unique movies = 3883
+ratings in train dataset, filtered to intersection of train and val by movies=458445
+ratings in val  ... =51571
+ratings in train intersect by movies for tier=2=4330
+ratings in val  ... =1055
+unique users intersection of train and val after unique movies intersection: 5135
+ratings in train intersect by movies then users=454245
+ratings in val ... =51571
+ratings in train intersect by movies then users for tier=2=4291
+ratings in val ... =1055
+unique movies in intersection of train and val by movies then users for tier=2: 446
+unique users ... =2: 414
+
+The later 4 counts show that there are enough ratings of tier=2 movies
+to learn the niche (tail) recommendations.
