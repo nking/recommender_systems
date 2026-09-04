@@ -7,10 +7,14 @@ writes files to bin/full, bin/tiny, and bin/small
 import shutil
 from collections import OrderedDict
 
+import msgpack
+
 from helper import *
 import polars as pl
 import os
 import io
+
+from array_record.python import array_record_module
 
 pl.Config.set_fmt_str_lengths(900)
 
@@ -84,6 +88,19 @@ for path in [out_dir_full, out_dir_tiny, out_dir_small]:
         pass
     os.makedirs(path, exist_ok=True)
 
+def write_to_array_record(df_write: pl.DataFrame, out_file_path: str):
+    writer = array_record_module.ArrayRecordWriter(out_file_path, "group_size:1")
+    try:
+        for user_id, movie_id, rating, timestamp in df_write.select(
+                ["user_id", "movie_id", "rating", "timestamp"]
+        ).iter_rows():
+            # Pack the 4 integers as a tuple into MessagePack bytes
+            record_tuple = (int(user_id), int(movie_id), int(rating), int(timestamp))
+            packed_bytes = msgpack.packb(record_tuple)
+            writer.write(packed_bytes)
+    finally:
+        writer.close()
+
 # array records are written in WriteRamkerInputArrayRecords
 # parquet records are written in WriteRetrievalInputParquet.py
 # write to .dat here
@@ -109,6 +126,8 @@ for df_write, prefix in zip(
         include_header=False,
         quote_style="never"
     )
+    write_to_array_record(df_write, os.path.join(out_dir_full, f'ratings_{prefix}.array_record'))
+    df_write.write_parquet(os.path.join(out_dir_full, f'ratings_{prefix}.parquet'))
     
     file_path = os.path.join(out_dir_small, f'ratings_{prefix}.dat')
     df_formatted = df_write.head(1000).select(
@@ -123,6 +142,10 @@ for df_write, prefix in zip(
         include_header=False,
         quote_style="never"
     )
+    write_to_array_record(df_write.head(1000),
+        os.path.join(out_dir_small, f'ratings_{prefix}.array_record'))
+    df_write.head(1000).write_parquet(
+        os.path.join(out_dir_small, f'ratings_{prefix}.parquet'))
     
     file_path = os.path.join(out_dir_tiny, f'ratings_{prefix}.dat')
     df_formatted = df_write.head(100).select(
@@ -137,6 +160,12 @@ for df_write, prefix in zip(
         include_header=False,
         quote_style="never"
     )
+    write_to_array_record(df_write.head(100),
+        os.path.join(out_dir_tiny, f'ratings_{prefix}.array_record'))
+    df_write.head(100).write_parquet(
+        os.path.join(out_dir_tiny, f'ratings_{prefix}.parquet'))
+    
+    ## array_record and parquet
     
 print(f"wrote files to directories\n{out_dir_full}\n{out_dir_small}\n{out_dir_tiny}")
 
