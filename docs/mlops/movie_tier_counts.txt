@@ -1,0 +1,105 @@
+the counts using the movie_tiers and ratings follow where intersect refers to intersection of the train and val datasets by the specific characteristic such as movie_id or user_id. tier=0 is head, tier=1 is torso, tier=2 is tail of movie ratings frequency distribution.
+
+number of unique movies = 3883
+ratings in train dataset, filtered to intersection of train and val by movies=458445
+ratings in val  ... =51571
+ratings in train intersect by movies for tier=2=4330
+ratings in val  ... =1055
+unique users intersection of train and val after unique movies intersection: 5135
+ratings in train intersect by movies then users=454245
+ratings in val ... =51571
+ratings in train intersect by movies then users for tier=2=4291
+ratings in val ... =1055
+unique movies in intersection of train and val by movies then users for tier=2: 446
+unique users ... =2: 414
+
+The later 4 counts show that there are enough ratings of tier=2 movies
+to learn the niche (tail) recommendations.
+
+Let's calculate the expected number of tail items/batch and its variance
+in order to understand the expected variance
+note that for each positive, there are batch_size - 1 negatives 
+in the in-batch softmax loss.
+
+# train ratings intersect             =   454_245
+# train ratings intersect, tail(tier=2) =   4_291
+p_tail = 4_291/454_245 = 0.00924
+
+batch_size      λ as expected tails   
+  256           2.4
+ 1024           9.7
+ 2048          19.3 
+
+Sampling in batches follows a binomial distribution
+(technically, we are drawing without replacement which is
+hypergeometric distribution, but with large N that is equiv
+to the bionmial distribution).
+
+for small p such as p_tail 0.009 we can use Poisson distribution.
+mean is λ 
+variance is λ, hence st dev = sqrt(λ) 
+
+The coefficient of variation is the ratio of the st dev to the mean:
+    CV = sqrt(λ) / λ = 1/sqrt(λ)
+
+batch_size      λ as expected tails   stdev(=S/N)   CV         comment
+  256           2.4                   1.56         0.64        low signal-to-noise (S/N)
+ 1024           9.7                   3.11         0.32        
+ 1059          10.0                   3.16         0.31        S/N here and higher for gaussian
+ 2048          19.3                   4.40         0.23        
+
+    at λ >= 10 the poisson distribution resembles a gaussian distribution
+
+    a 95% confidence interval is λ += 2 * sqrt(λ)
+
+For stable in-batch softmax learning—especially when using heavily 
+weighted loss functions like focal loss or IPW — a standard 
+statistical rule of thumb is that the minority class must have 
+an expected representation of λ >= 10 per batch and then the
+long tail where k=0 vanishes.  (see k=0 calcs below).
+
+Let's calculate the likelihood of counting 0 or less than some
+number to be determined number of tails in a batch.
+
+P(k) = (exp^(-λ)) * (λ^(k))/ k!
+    where k is the number of tail items in a batch.
+ 
+batch_size    P(0)       P(1)    
+   256        8.9E-02   2.1E-01 
+  1024        6.3E-05   6.1E-04 
+  2048        4.0E-09   7.7E-08 
+
+for the batch_size=256, 1 out of 11 times the model will see 0 tail items.
+                        1 out of 5 times the model will see 1 tail item
+    - 95% of all batches will contain between  (λ ± 2√λ)
+        = 2.4 += 2*1.56 = 0 to 5 tail items
+   - for the 1 out of 11 times where the batch positive is not a tail item,
+     the learning is purely torso and head
+   - for the 1 out of 5 times when the positive is a tail, it is not very 
+     likely that there will be a tail item in the 254 negatives and so
+     learning tail-to-tail relationships is nearly impossible in this case.
+   - for the case when there is a positive tail item, the IPW weights
+       are increased leading to very large gradient, in contrast to
+       the 0s before, leading to erratic and large variations (unstable)
+    => expect unstable learning of the tail distribution
+
+for the batch_size=1024, 1 out of 15_885 times the model will see 0 tail items.
+                         1 out of 1_642 times the model will see 1 tail item
+    - 95% of all batches will contain between  (λ ± 2√λ)
+        = 10 += 6.28 = 3 to 16 tail items
+    - for case of 1 positive tail and 3 to 16 negatives that are tail items
+      the model successfully learns negative boundaries for the tail content
+    - the IPW multipliers are no longer rarely increasing tail weights,
+      smoothing out the gradient updates and reducing variation.
+    => expect stable learning of the tail distribution
+   
+or the batch_size=2048, 1 out of 252 million times the model will see 0 tail items.
+                        1 out of 13 million times the model will see 1 tail item
+    - 95% of all batches will contain between  (λ ± 2√λ)
+        = 19.3 += 2*4.4 = 10 to 28 tail items
+    - for case of 1 positive tail and 10 to 28 negatives that are tail items
+      the model successfully learns negative boundaries for the tail content
+    - the IPW multipliers are no longer rarely increasing tail weights,
+      smoothing out the gradient updates and reducing variation.
+    => expect highly stable learning of the tail distribution
+

@@ -30,16 +30,58 @@ TFR 0.6.0 is needed for tf 2.16 and then the
 versions of keras would conflict.
 So any ranking metrics and losses used here are implemented.
 
-Data distributed data pre-processing and transformation:
+==================================================================================
+Pre-processing: Renumerbing user and movie ids
+   - user_ids are renumbered from 1 to num_users (already done by MovieLens)
+   - movie_ids are renumber from num_users+1 to num_users+1+num_movies
+     the offset for movies allows both the user embeddings and movie embeddings to
+     be present in same file with implicit indexing.  It's not necessary because
+     that kind of matrix is no longer present downstrea.
+     having the offset in id ranges makes debugging easier.
+==================================================================================
+Pre-Processing:  Data splits:
+   - the first versions of the pipeline used data splits by timestamp into
+     80:10:10 for train, val, test
+     and did not filter for rare users or rare movies.
+     the result was that there was not enough overlap in tail distribution
+     between training and validation.
+   - the correct split used in the final version of this pipeline is to
+     partition on a per user basis where each user's ratings are ordered by
+     their timestamps and placed 80:10:10 into train, val, and test, respectively.
+   - users and movies with fewer than 30 ratings are dropped
+==================================================================================
+Analysis of feasibility of learning the tail distribution
+   - the ratings datasets for train, val and test were further partitioned into
+     ratings_<split>_liked.dat for rating > 3 data
+     ratings_<split>_3.dat for rating=3 data
+     ratings_<split>_disliked.dat for rating < 3 data
+   - the ratings_train_liked data are needed to train the cross-encoder for list-wise contrastive
+     learning so this is the dataset that is used to determine the movie "tiers".
+   - the top 20%, bottom 20% and in between counts of movies rated in ratings_train_liked.dat
+     are used to find thresholds to use to assign a movie_id a tier category.
+     tier=0, a.k.a. head is top 20%, highly frequent movies
+     tier=1, a.k.a. torso  is the next 60% of the frequency dustribution
+     tier=2, a.k.a. tail is the last 20% of the distribution.  this is the defaul assignment
+   - a look at the data for whether or not the "tail" cohort can be learned is in
+     file movie_tier_counts.txt
+     ==> the result is that the batch_size should be >= 1024.
+==================================================================================
+Data inputs to the Pipeline
+   - users.dat
+   - movies.dat
+   - ratings_train.dat
+===================================================================================
+Pipeline pre-processing and transformation:
 - data ingestion:
   - apache beam components in TFX pipeline are highly distibutable
   and there are options and many examples on how to make custom
   components with dsl annotatings as needed
-  - custom component is needed to join the ratings records
+  - a custom component is needed to join the ratings records
     with user and movie information.
 - transformations
   - normalizing rating to a relevance value between 0 and 1
   - transforming timestamp into features that might be used in the model.
+  - cateogorization needed for renumber
   - options for library to use:
     - tf.data is for in-memory size data processing so not an option here.
     - considered using keras layers

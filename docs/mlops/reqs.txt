@@ -14,6 +14,8 @@ goal of the recommender systems notebook:
   - for monitoring, provide the details and how to, espec
     with code where possible.  include triggers for retraining
     and alerts.
+  - save the model withe signatures that are usable for efficient single and
+     bulk inference.
 
 metrics:
   - the model will be a Two-Tower bi-encoder and will
@@ -21,17 +23,21 @@ metrics:
     popularity bias following  the Yi et al. 2019 
     paper "Sampling-bias-corrected neural modeling
     for large corpus item recommendations".
-    Such corrections increase the recommendation diversity
+    Such corrections can help increase the recommendation diversity
     and long tail recall of the movie distribution.
-  - the model will be trained with a contrastive loss
-    and the best model will be selected by hit rate 
-    on the validation dataset.
+  - the model will be trained with a contrastive list-wise loss
+    and the best model will be selected by ndcg_composite@20,
+    the composite score calculates the metric for each o3 3 partitions of the
+    movie frequency distribution into head, torso, and tail, respectively.
+    (learning the tail in addition to the popular tail and torso helps
+    to result in recommendations for nice users).
   - the model will be designed as a listwise discriminitive
     model for calculations needed to compare results in the
     increasingly more relevant recommendations and ranking from 
     projects:  retriever, ranker, and re-ranker.
     The metrics are NHR, NDCG@K, recall_tail@K, and 
-    intra-list diversity.
+    intra-list diversity.  the NDCG metrics are paritioned into head, torso and tail and combined
+    into a composite metric used for HPO to find best model, and early-stopping of training.
 
 ---------------------------------------
 
@@ -49,9 +55,10 @@ build an entire recommender system:
    - Retrieval : returns 1000 top K recommendations
    - Ranker : pares down 1000 to 100 top K recommendations
    - Re-Ranker: parse down 100 to 10 top K recommendations
+(these numbers are open to adjustment)
 
 This repository builds the bi-encoder used by Retrieval
-by using an MLOps pipeline.
+by using a TFX MLOps pipeline.
 
 The Retrieval is at
 https://www.github.com/nking/nking/retrieval.git
@@ -63,6 +70,5 @@ The Re-Ranker is at:
 https://www.github.com/nking/nking/reranker.git
 
 Different versions are in progress for different
-technology implementations, but they might be
-incomplete and not public.
+technology implementations.
 
