@@ -148,4 +148,5 @@ Then, even though the definition of "tail" has changed, there should
 be learning of it visible in the training, val curves of the GrpahRanker.
 
 
-   
+The new tier counts from splite by users are in:
+    src/test/resources/movie_tier_counts.txt 

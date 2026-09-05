@@ -47,6 +47,18 @@ MRR@20    0.05-0.12
 Recall@20  0.15-0.35
 
 
+Embeddings:
+   the user and candidate embeddings made from these trained models
+   were plotted use t-SNE and UMAP in the retrieval github project
+   and the results are in the images subdirectory here.
+
+   - there are distinct well separated clusters representing latent
+     features.
+   - the tier 0,1, and 2 are cohabiting the clusters and not isolated
+     into their own clusters and so it appears that popularity bias
+     has been successfully avoided.
+
+
 ------------------------------------
 Some details of viewing the fit results:
 
