@@ -20,8 +20,10 @@ pl.Config.set_fmt_str_lengths(900)
 
 file_path = os.path.join(get_project_dir(), "src/main/resources/ml-1m/ratings.dat")
 
-schema = pl.Schema(OrderedDict({'user_id': pl.Int64,
-    'movie_id': pl.Int64, 'rating': pl.Int64,
+schema = pl.Schema(OrderedDict({
+    'user_id': pl.Int32,
+    'movie_id': pl.Int32,
+    'rating': pl.Int32,
     'timestamp' : pl.Int64}))
 
 processed_buffer = io.StringIO()

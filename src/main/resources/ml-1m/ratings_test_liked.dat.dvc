@@ -1,5 +1,5 @@
 outs:
-- md5: 2dcc52d2d5ed20dae64798362d2f3245
-  size: 1363372
+- md5: 078438374a18b28e924dbbdc7ed5f86f
+  size: 1206795
   hash: md5
   path: ratings_test_liked.dat

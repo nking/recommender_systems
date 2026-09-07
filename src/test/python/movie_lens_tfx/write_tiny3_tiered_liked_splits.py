@@ -19,8 +19,10 @@ except:
     pass
 os.makedirs(outdir, exist_ok=True)
 
-schema = pl.Schema(OrderedDict({'user_id': pl.Int64,
-    'movie_id': pl.Int64, 'rating': pl.Int64,
+schema = pl.Schema(OrderedDict({
+    'user_id': pl.Int32,
+    'movie_id': pl.Int32,
+    'rating': pl.Int32,
     'timestamp' : pl.Int64}))
 
 in_path_movie_tiers = os.path.join(get_project_dir(),
