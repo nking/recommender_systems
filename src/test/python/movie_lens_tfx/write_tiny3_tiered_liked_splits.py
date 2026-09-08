@@ -3,6 +3,10 @@ all 3 tiers in each and an overlap of users'''
 import io
 import shutil
 from typing import OrderedDict
+import sys
+import os
+sys.path.append(os.path.join(os.getcwd(), "src/test/python/movie_lens_tfx"))
+sys.path.append(os.path.join(os.getcwd(), "src/main/python/movie_lens_tfx"))
 
 from helper import *
 import os
@@ -205,9 +209,11 @@ for fl1 in ["liked", "3", "disliked"]:
     test_final = sample_100_with_tiers(test_subset, target_rows=100)
 
     for name2, df in zip([name_train, name_val, name_test], [train_final, val_final, test_final]):
-        print(f"Writing {name2}")
+        print(f"Writing {name2} to {outdir}")
         out1 = os.path.join(outdir, f"{name2}.dat")
         out2 = os.path.join(outdir, f"{name2}.array_record")
         write_to_outfile(df, out1)
         write_to_array_record(df, out2)
         verify_array_record(out2)
+        
+        df.write_parquet( os.path.join(outdir, f"{name2}.parquet"))

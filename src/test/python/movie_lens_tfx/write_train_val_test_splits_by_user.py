@@ -38,7 +38,9 @@ with open(file_path, "r", encoding='iso-8859-1') as file:
         skip_rows=0, separator='\t', schema=schema,
         try_parse_dates=True,
         new_columns=schema.names(),
+        schema_overrides=schema,
         use_pyarrow=True)
+    print(f'dtypes={df.dtypes}', flush=True)
 
 df = df.sort(["user_id", "timestamp"])
 
@@ -116,6 +118,10 @@ for df_write, prefix in zip(
     #write dat files
     file_path = os.path.join(out_dir_full, f'ratings_{prefix}.dat')
     
+    df_write = df_write.select(
+        pl.col("user_id"), pl.col("movie_id"), pl.col("rating"), pl.col("timestamp")
+    )
+    
     df_formatted = df_write.select(
         pl.format("{}::{}::{}::{}",
             pl.col("user_id"),
@@ -149,6 +155,7 @@ for df_write, prefix in zip(
     df_write.head(1000).write_parquet(
         os.path.join(out_dir_small, f'ratings_{prefix}.parquet'))
     
+    #print(f'dtypes={df_write.dtypes}', flush=True)
     file_path = os.path.join(out_dir_tiny, f'ratings_{prefix}.dat')
     df_formatted = df_write.head(100).select(
         pl.format("{}::{}::{}::{}",
