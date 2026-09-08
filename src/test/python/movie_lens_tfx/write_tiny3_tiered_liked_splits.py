@@ -47,6 +47,7 @@ def read_rating_file(file_path):
         skip_rows=0, separator='\t', schema=schema,
         try_parse_dates=True,
         new_columns=schema.names(),
+        schema_overrides=schema,
         use_pyarrow=True)
     df = df.join(movie_tiers_df, on="movie_id", how="left")
     return df
