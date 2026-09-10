@@ -58,6 +58,13 @@ Embeddings:
      into their own clusters and so it appears that popularity bias
      has been successfully avoided.
 
+How large should num_candidates found from an approx nearest 
+neighbor search of user embeddings who rated tail movies?
+This can be done as post-data analysis of the trained 
+TwoTowerDNN models (in the retrieval stage).
+The common advice is that num_candidates should be 10x to 100x
+the final top_k=20 that end-to-end inference will produce.
+
 
 ------------------------------------
 Some details of viewing the fit results:
