@@ -644,7 +644,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
          incl_genres: bool = True,
          use_bias_corr: bool = True,
          bias_corr_alpha: float=0.1,
-         log_q_correction_factor: float=0.5,
+         log_q_correction_factor: float=1.0,
          temperature:float=1.0, name='twotowerdnn',
          movie_tiers : tf.Tensor=None,
         **kwargs):
@@ -1453,7 +1453,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   class NDCGAtKComposite(keras.metrics.Metric):
     def __init__(self, name="composite_ndcg",
             k: int = 20, use_composite:bool=True,
-            w_head:float=0.25, w_torso:float=0.55, w_tail:float=0.2, **kwargs):
+            w_head:float=0.33, w_torso:float=0.33, w_tail:float=0.33, **kwargs):
         """
         Args:
             b_threshold_head (float): b_table values less than this are the head of the distribution frequently picked movies but few unique movies.
@@ -1684,7 +1684,8 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
       hp.Float('weight_decay', 1e-4, 5e-2, sampling='log')
       #hp.Float('drop_rate', min_value=0.1, max_value=0.4, default=0.3)
       hp.Float('drop_rate', min_value=0.35, max_value=0.65, default=0.4)
-      hp.Float('log_q_correction_factor', min_value=0.1, max_value=1.0, default=0.5)
+      #hp.Float('log_q_correction_factor', min_value=0.1, max_value=1.0, default=0.5)
+      hp.Fixed('log_q_correction_factor', value=1.0)
   else:
       hp.Fixed('learning_rate', 0.0001)
       hp.Fixed('weight_decay', 0.0001)
@@ -1711,7 +1712,7 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   if use_bias_corr:
       if not use_best_as_fixed:
           hp.Choice("bias_corr_alpha", values=[0.01, 0.05, 0.1], default=0.05)
-          hp.Float('temperature', 0.1, 0.25, step=0.01)
+          hp.Float('temperature', 0.05, 0.1, step=0.01)
       else:
           hp.Fixed("bias_corr_alpha", 0.01)
           hp.Fixed('temperature', 0.1)

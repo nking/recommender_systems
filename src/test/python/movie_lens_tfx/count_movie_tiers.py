@@ -44,6 +44,97 @@ class ExploreMovieTiers(unittest.TestCase):
             use_pyarrow=True)
         return df
     
+    def test_tail_users_across_all_datasets(self):
+        df_train_ratings = self.read_ratings_into_df(
+            os.path.join(get_project_dir(),
+                'src/test/resources/ml-1m/ratings_train_liked.dat'))
+        df_train_ratings = df_train_ratings.join(self.movie_tiers_df,
+            on="movie_id", how="left")
+        print(f'len(df_train_ratings) = {len(df_train_ratings)}')
+        counts_train_unique_users = [
+            df_train_ratings.filter(pl.col("tier") == t)
+            .select("user_id")
+            .n_unique()
+            for t in [0, 1, 2]
+        ]
+        df_train_ratings = df_train_ratings.filter(pl.col("tier") == 2)
+        
+        df_val_ratings = self.read_ratings_into_df(
+            os.path.join(get_project_dir(),
+                'src/test/resources/ml-1m/ratings_val_liked.dat'))
+        df_val_ratings = df_val_ratings.join(self.movie_tiers_df,
+            on="movie_id", how="left")
+        print(f'len(df_val_ratings) = {len(df_val_ratings)}')
+        counts_val_unique_users= [
+            df_val_ratings.filter(pl.col("tier") == t)
+            .select("user_id")
+            .n_unique()
+            for t in [0, 1, 2]
+        ]
+        df_val_ratings = df_val_ratings.filter(pl.col("tier") == 2)
+        
+        df_test_ratings = self.read_ratings_into_df(
+            os.path.join(get_project_dir(),
+                'src/test/resources/ml-1m/ratings_test_liked.dat'))
+        df_test_ratings = df_test_ratings.join(self.movie_tiers_df,
+            on="movie_id", how="left")
+        print(f'len(df_test_ratings) = {len(df_test_ratings)}')
+        counts_test_unique_users = [
+            df_test_ratings.filter(pl.col("tier") == t)
+            .select("user_id")
+            .n_unique()
+            for t in [0, 1, 2]
+        ]
+        df_test_ratings = df_test_ratings.filter(pl.col("tier") == 2)
+        
+        # intersection of train and test
+        common_train_test_user_ids = (
+            df_train_ratings.select("user_id").unique()
+            .join(df_test_ratings.select("user_id").unique(),
+                on="user_id",
+                how="inner")
+            .get_column("user_id")
+        )
+        df_train_ratings_inter_test_u = df_train_ratings.filter(
+            pl.col("user_id").is_in(common_train_test_user_ids)
+        )
+        df_test_ratings_inter_train_u = df_test_ratings.filter(
+            pl.col("user_id").is_in(common_train_test_user_ids)
+        )
+        
+        common_train_val_test_user_ids = (
+            df_train_ratings.select("user_id").unique()
+            .join(df_val_ratings.select("user_id").unique(),
+                on="user_id",
+                how="inner")
+            .join(df_test_ratings.select("user_id").unique(),
+                on="user_id",
+                how="inner")
+            .get_column("user_id")
+        )
+        df_train_ratings_inter_val_test_u = df_train_ratings.filter(
+            pl.col("user_id").is_in(common_train_val_test_user_ids)
+        )
+        df_val_ratings_inter_val_train_u = df_val_ratings.filter(
+            pl.col("user_id").is_in(common_train_val_test_user_ids)
+        )
+        df_test_ratings_inter_val_train_u = df_test_ratings.filter(
+            pl.col("user_id").is_in(common_train_val_test_user_ids)
+        )
+        print(f'===============================')
+        print(f'counts_train_unique_users by tier={counts_train_unique_users}')
+        print(f'counts_val_unique_users by tier ={counts_val_unique_users}')
+        print(f'counts_test_unique_users by tier ={counts_test_unique_users}')
+        print(f'len(common_train_test_user_ids)={len(common_train_test_user_ids)}')
+        print(f'len(df_train_ratings_inter_test_u)={len(df_train_ratings_inter_test_u)}')
+        print(f'len(df_test_ratings_inter_train_u)={len(df_test_ratings_inter_train_u)}')
+        
+        print(f'len(common_train_val_test_user_ids={len(common_train_val_test_user_ids)}')
+        print(f'len(df_train_ratings_inter_val_test_u)={len(df_train_ratings_inter_val_test_u)}')
+        print(f'len(df_val_ratings_inter_val_train_u)={len(df_val_ratings_inter_val_train_u)}')
+        print(f'len(df_test_ratings_inter_val_train_u)={len(df_test_ratings_inter_val_train_u)}')
+    
+    
     def test_0(self):
         
         df_train_ratings = self.read_ratings_into_df(
