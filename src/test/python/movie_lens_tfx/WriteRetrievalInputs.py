@@ -221,7 +221,7 @@ class WriteRetrievalInputs(tf.test.TestCase):
                 write_embedding_metadata_json,
                 count=beam.pvalue.AsSingleton(total_records),
                 dim=beam.pvalue.AsSingleton(embed_dimension),
-                output_path= f"{self.output_uri1}/emb_metadata.json"
+                output_path= f"{self.output_uri1}/movie_emb_metadata.json"
             )
         )
         
@@ -274,7 +274,7 @@ class WriteRetrievalInputs(tf.test.TestCase):
         print(f'last embedding={((df.tail(1))["embedding"]).to_numpy().tolist()[0]}', flush=True)
         
         # read f"{self.output_uri1}/emb_metadata.json"
-        with open( f"{self.output_uri1}/emb_metadata.json", 'r') as f:
+        with open( f"{self.output_uri1}/movie_emb_metadata.json", 'r') as f:
             metadata = json.load(f)
         embed_dim = metadata['embed_dim']
         num_records = metadata['num_records']
@@ -407,7 +407,7 @@ class WriteRetrievalInputs(tf.test.TestCase):
                     write_embedding_metadata_json,
                     count=beam.pvalue.AsSingleton(total_records),
                     dim=beam.pvalue.AsSingleton(embed_dimension),
-                    output_path=f"{self.output_uri2}/emb_metadata.json"
+                    output_path=f"{self.output_uri2}/user_emb_metadata.json"
                 )
          )
         
@@ -474,7 +474,7 @@ class WriteRetrievalInputs(tf.test.TestCase):
             flush=True)
         
         # read f"{self.output_uri1}/emb_metadata.json"
-        with open(f"{self.output_uri2}/emb_metadata.json", 'r') as f:
+        with open(f"{self.output_uri2}/user_emb_metadata.json", 'r') as f:
             metadata = json.load(f)
         embed_dim = metadata['embed_dim']
         num_records = metadata['num_records']
@@ -1368,3 +1368,6 @@ def dict_to_csv_string(row_dict: Dict[str, Any],
     writer = csv.writer(output, quoting=csv.QUOTE_MINIMAL)
     writer.writerow(values)
     return output.getvalue().strip()
+
+if __name__ == '__main__':
+  tf.test.main()

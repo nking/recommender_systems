@@ -1,0 +1,8 @@
+{
+    "latest_train_step": 8,
+    "latest_train_value": 3.0122249126434326,
+    "latest_train_smoothed": 2.9702671384454344,
+    "latest_val_step": 8,
+    "latest_val_value": 0.6651453971862793,
+    "latest_val_smoothed": 0.6415859696954346
+}

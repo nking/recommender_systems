@@ -1,3 +1,4 @@
+import os
 import shutil
 import unittest
 
@@ -13,16 +14,14 @@ class WriteTensorboardToPng(unittest.TestCase):
     
     def test_write_tensorboard_to_png(self):
         outdir = os.path.join(get_bin_dir(), "pngs")
-        try:
-            shutil.rmtree(outdir)
-        except OSError:
-            pass
+        shutil.rmtree(outdir, ignore_errors=True)
         os.makedirs(outdir, exist_ok=True)
         
         p = "rs_pipeline/Trainer/model_run/19"
         logdir = os.path.join(get_bin_dir(), p)
         
-        logdir = os.path.join(get_project_dir(), "TMP2/bin", p)
+        #temporarily point to recently trained model:
+        logdir = os.path.join(get_project_dir(), "../TMP3/bin", p)
     
         train_dir = os.path.join(logdir, "train")
         val_dir = os.path.join(logdir, "validation")

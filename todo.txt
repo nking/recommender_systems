@@ -1,6 +1,11 @@
 - parse the movie titles to make release year a feature.
   - that also needs forier encoding
 
+- since time is important in the TwoTower Query model,
+  for using data spanning years larger than the categorical bins
+  of users age in users.dat, one would want to adjust the
+  ages in the ratings-user-movie join during ingestion.
+
 - if using the HPO objective val_composite_ndcg_20
   doesn't lead to popularity bias corrections (seen as
   user affinity difference between niche and mainstream

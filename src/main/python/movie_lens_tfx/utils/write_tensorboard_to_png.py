@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 from tensorboard.backend.event_processing import event_accumulator
 from tensorboard.util import tensor_util
@@ -156,7 +159,7 @@ def generate_tensorboard_chart(train_dir, val_dir, scalar_name, output_path,
     latest_val_value = val_values[-1]
     latest_val_smoothed = val_smoothed[-1]
     latest_val_relative = val_relative[-1]
-    
+   
     cell_text = [
         [f"{latest_train_smoothed:.4f}", f"{latest_train_value:.4f}",
             f"{latest_train_step}", f"{latest_train_relative:.2f}m"],
@@ -201,6 +204,19 @@ def generate_tensorboard_chart(train_dir, val_dir, scalar_name, output_path,
         exist_ok=True) if os.path.dirname(output_path) else None
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     plt.close()
+    
+    #write the summary to text too:
+    out_dict = {
+        "latest_train_step": latest_train_step,
+        "latest_train_value": latest_train_value,
+        "latest_train_smoothed": latest_train_smoothed,
+        "latest_val_step": latest_val_step,
+        "latest_val_value": latest_val_value,
+        "latest_val_smoothed": latest_val_smoothed,
+    }
+    output_file_path = output_path.replace(".png", ".json")
+    with open(output_file_path, "w") as f:
+        json.dump(out_dict, f, indent=4)
     #print(f"Successfully saved chart with high-contrast grids to {output_path}")
 
 

@@ -1,0 +1,20 @@
+{
+    "Global Item Uniformity": -2.0044803619384766,
+    "user_tier_0": {
+        "alignment": 1.8253906965255737,
+        "user_uniformity": -2.5532054901123047
+    },
+    "user_tier_1": {
+        "alignment": 1.6865334510803223,
+        "user_uniformity": -2.710251808166504
+    },
+    "user_tier_2": {
+        "alignment": 1.619107723236084,
+        "user_uniformity": -2.6773953437805176
+    },
+    "automated_conclusions": [
+        "MODERATE ITEM UNIFORMITY: Items are adequately distributed (-2.00).",
+        "USER GEOMETRY HEALTHY: Power users maintain distinct spatial representations without collapsing into a dense cluster.",
+        "POOR ALIGNMENT: Average positive pair distance is 1.71 (Max is 4.0). User embeddings are struggling to map closely to their interacted items."
+    ]
+}

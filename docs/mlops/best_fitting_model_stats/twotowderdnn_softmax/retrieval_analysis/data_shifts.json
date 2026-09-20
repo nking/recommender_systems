@@ -1,0 +1,70 @@
+{
+    "movie_tier_0_catalog_counts": 567,
+    "movie_tier_1_catalog_counts": 1680,
+    "movie_tier_2_catalog_counts": 577,
+    "movie_tier_catalog_distribution": [
+        0.20077903682719547,
+        0.5949008498583569,
+        0.2043201133144476
+    ],
+    "movie_tier_0_train_counts": 313874,
+    "movie_tier_1_train_counts": 140209,
+    "movie_tier_2_train_counts": 5503,
+    "user_tier_0_train_counts": 239146,
+    "user_tier_1_train_counts": 199552,
+    "user_tier_2_train_counts": 20888,
+    "movie_tier_train_distribution": [
+        0.6829494371020876,
+        0.30507674298172704,
+        0.011973819916185437
+    ],
+    "user_tier_train_distribution": [
+        0.5203509245277271,
+        0.43419947517983576,
+        0.04544960029243711
+    ],
+    "movie_tier_0_val_counts": 30553,
+    "movie_tier_1_val_counts": 19891,
+    "movie_tier_2_val_counts": 1127,
+    "user_tier_0_val_counts": 26053,
+    "user_tier_1_val_counts": 22889,
+    "user_tier_2_val_counts": 2631,
+    "movie_tier_val_distribution": [
+        0.5924453665819938,
+        0.3857012662155087,
+        0.021853367202497528
+    ],
+    "user_tier_val_distribution": [
+        0.5051674325713067,
+        0.44381750140577436,
+        0.05101506602291897
+    ],
+    "movie_tier_0_test_counts": 27123,
+    "movie_tier_1_test_counts": 19822,
+    "movie_tier_2_test_counts": 1336,
+    "user_tier_0_test_counts": 24271,
+    "user_tier_1_test_counts": 21577,
+    "user_tier_2_test_counts": 2437,
+    "movie_tier_test_distribution": [
+        0.5617737826474183,
+        0.41055487665955553,
+        0.027671340693026243
+    ],
+    "user_tier_test_distribution": [
+        0.5026612819716268,
+        0.4468675572123848,
+        0.0504711608159884
+    ],
+    "movie_tier_emd_train_to_val": 0.05019180890320296,
+    "movie_tier_emd_val_to_test": 0.01824477871255209,
+    "movie_tier_emd_train_to_test": 0.06843658761575505,
+    "movie_tier_emd_catalog_to_train": 0.3372583468365772,
+    "user_tier_emd_train_to_val": 0.010374478843451107,
+    "user_tier_emd_val_to_test": 0.0015250279033052205,
+    "user_tier_emd_train_to_test": 0.011355601539825733,
+    "automated_conclusions": [
+        "HIGH MOVIE TIER DRIFT WARNING: Significant item popularity shift between Train and Test splits (Train-Test EMD: 0.0684). Evaluation may be biased.",
+        "USER TIER STABILITY EXCELLENT: Activity profile distribution remains consistent across splits (Train-Test EMD: 0.0114).",
+        "EXPECTED INTERACTION POPULARITY BIAS: Catalog vs. Train EMD is 0.3373. Training interactions heavily concentrate on high-tier items relative to catalog availability."
+    ]
+}
