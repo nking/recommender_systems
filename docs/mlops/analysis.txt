@@ -39,20 +39,178 @@ Pre-processing: Renumerbing user and movie ids
      that kind of matrix is no longer present downstrea.
      having the offset in id ranges makes debugging easier.
 ==================================================================================
-Pre-Processing:  Data splits:
-   - the first versions of the pipeline used data splits by timestamp into
-     80:10:10 for train, val, test
-     and did not filter for rare users or rare movies.
+Pre-Processing:
+   - choosing test dataset size for ML model development requires 2 different approaches for the 2 different metrics:
+     - for hit rate and recall:
+       success or fail for every test input as a discrete binary result is a Bernoulii process
+       and the sum of the success follows a binomical distibution.
+           The standard error of the accuracy is then the sqrt of the Binomial distribution variance:
+              stderr = sqrt( (p*(1-p)) / N )
+                 where N is test set size
+              - choose accuracy of model p
+                   e.g. p=0.90
+              - choose the margin of error the experiment needs
+                 e.g. E=0.01
+                 e.g. E=0.005 for medical accuracy
+              - detemine z from confidence interval or alpha (where alpha=1-confidence interval)
+                  c.i.   z
+                  0.8    1.28
+                  0.9    1.64
+                  0.95   1.96
+                  0.99   2.56
+                  0.999  3.29
+               stderr^2 = (p*(1-p)) / N
+                  where stderr = E/z
+             N = (p*(1-p)) / (stderr^2)
+                = z^2 * (p*(1-p)) / E^2
+              e.g. for p=0.90 and E=0.01 and confidence interval=95%
+                   N = 3458 samples
+              e.g. for p=0.90 and E=0.005 (medical accuracy!) and confidence interval=95%
+                   N = 13,830 samples
+              e.g. for p=0.95 and E=0.005 (medical accuracy!) and confidence interval=95%
+                   N = 7300 samples
+                     so, if the model is more accurate, need fewer samples...
+              e.g. for p=0.95 and E=0.10 and confidence interval=95%
+                   N = 18
+              e.g. for p=0.95 and E=0.05 and confidence interval=95%
+                   N = 73
+    - for NDCG@K metric:
+        each test input has a continous scaler score NDCG@K y_i which is between 0 and 1 as output and so the
+        standard error follows from the Cetnral Limit Theorem (the distr of the normalized sample
+        mean converges to the standard normal distribution).
+            mean(NDCG@K) = sample mean = (1/K) * sum_{i=1,N}(y_i) where y_i is the score for test_i.
+            stderr = stdev / sqrt(N)
+                where stdev = sqrt( (1/(N-1)) * sum_{i=1,N}( (y_i - mean(NDCG@K))^2 )
+            - choose the margin of error the experiment needs
+                 e.g. E=0.01
+                 e.g. E=0.005 for medical accuracy
+            - determine z from confidence interval or alpha (where alpha=1-confidence interval) of std normal distr.
+                e.g. confidence interval 95% where alpha = 0.05
+                for two tail significance use alpha/2
+            - *also need an estimate of the expected population standard deviation of user-level NDCG@K scores.
+               see below next section
+
+            E = Z_{alpha/2} * stderr = Z_{alpha/2} * stdev / sqrt(N)
+
+            ==> N = ( Z_{alpha/2} * stdev / E)^2
+
+     - for stating that the NDCG@K metric of model A is better than model B by a minimum detectable effect:
+       delta = mu_b - mu_a
+       with statisticl power 1 - beta
+          (e.g. 80% power)
+       and signifcance level of alpha
+          (e.g. 0.05)
+       For paired test across same users:
+          - N = (stdev_diff^2 * ( (Z_{alpha/2} + Z_beta)^2 ) / (delta^2)
+
+          - choose delta as min diff in NDCG@K to detect (e.g. 0.005)
+          - chose above Z_beta as the critical desired power (e.g. Z_0.2 ~ 0.84 for 80% power)
+          - chose above A_{alpha/2} for 2-tailed significance (e.g. Z_{0.025} ~ 1.96}
+          - stdev_diff is the std dev of the per-user differences scores (y_{B,i} - y_{A,i})
+          - e.g. stdev=0.3, Z_al[ha/2=1.96, Z_0.2 = 0.84, delta=0.005,
+                 N = 280
+  - how to estimate stdev NDCG@K in 3 ways:
+       (1) Historical or Pilot data:
+           calc empiical sample stdev across test samples from a previous model:
+               stdev = sqrt( (1/(M-1)) * sum_{i=1,M}( (y_i-y_mean)^2 )
+               expect NDCG@10 stdev~0.35-0.45, NDG@20 stdev ~ 0.25-0.35, NDCG@100 stdev ~ 0.2-0.3
+       (2) theoretcial upper bound (worst case)
+           max possible variance is half the users get 1.0 and half get 0.1
+              stdev_max^2 = 0.25
+              stdev_max = 0.5
+              ** use this for a conservative estimate of N
+  - example estimates of test size N for NDCG@K metrics:
+     - want NDCG@20 within a +-0.01 margin of error E, w/ 95% confidence (Z_{0.05/2}=1.96)
+       and a stdev from baseline model eval : srdev=0.30
+           N = ( Z_{alpha/2} * stdev / E)^2
+             = (1.96 * 0.30 / 0.01)^2
+             = 3_458
+  ** The number of positive ratings in movie-lens MovieLens 1-M ratings.dat is 559444
+     - val_HPO: validation partition to select best model in HPO needs to have
+        N >= 1_000 ratings
+        * caveat is that user and movie stratification may require more than 1_000
+
+     - val_irred: validation partition to estimate the irreducible error on the model
+       algorithm after best params determined.  Estimation involves run the model
+       training through datasets of size N=10%, 25%, 50%, 75%, 100% of training data
+       separately and fitting the losses and N to a power-law in order to estimate the
+       irreducible error as the projection to a very large N.
+          - choose desired Margin of Error (MoE) at confidence level Z_{alpha/2} for the confidence
+            N_val_irred = ( ((Z_{alpha/2} * gamma * stdev_loss)/MoE)*^2)
+               where MoE is the max acceptable margin of error on irred error estimate c.
+                     e.g. MoE=0.002 for x accurate withi +00.002 loss units
+                     stdev_loss is stdev of indev loss values (or metric idicators) across indev val samples.
+                     Z_alpha/2 is critical z-score for desired conidence, e.g. Z=1.96 for 95% confidence;
+                     gamma is extrapolaion inflation factor (gamma > 1) measures how much parameter
+                     variance is magnfied when project c = lim_{N_train->inf}( E(N_train) )
+                     in NonLinear least squares regression, we have
+                        covar matrix Va(theta) = stdev_C^2 * (J^T * J)^-1 where J is the mx3 jacobian of
+                        partial deivs evaluated on train sizes and stdev_E is stderr per point = stdev_loss/sqrt(N_val_irred)
+               e.g. N_val_irred = ( (1.96 * 3.0 * 0.50) / (0.003) )^2
+                  = 960_400 eval instances
+              NOTE: if measure the irred_error using a binary metric like hitrate or recall@k,
+                    the stdev_loss is lower.  e.g. sqrt(p*(1-p) ~ 0.3-0.4
+                    which can be nearly 3 times smaller N as a result
+              ==> not feasible for this dataset
+
+     - test parition size determined by
+       N = ( Z_{alpha/2} * stdev / E)^2
+       N >= 5_000.
+        * caveat is that user and movie stratification may require more than 5_000
+          see docs/mlops/movie_tier_counts.txt
+          if the script count_movie_tiers::test_explore_movie_stratification_for_splits
+          for each ues, splitting on fraction of timestammps 95:2.5:2.5  which leaves about 10_000 ratings in train and val:
+                number of positive ratings = 536364
+                number of positive ratings = 12396
+                number of positive ratings = 10684
+                in the intersection of train and val by movie_id:
+                    ratings in train intersect by movies=918953
+                    ratings in val intersect by movies=24273
+                    w/ unique movie ids = 2672 out of 3883 possible
+                in the intersection of train and test by movie_id:
+                    ratings in train intersect by movies=916343
+                    ratings in test intersect by movies=21503
+                movie_tier counts for smallest of the positive partitions, test:
+                    test intersect by movies, movie_tier=0 #ratings=8629, #unique_movies=565
+                    test intersect by movies, movie_tier=1 #ratings=10791, #unique_movies=1623
+                    test intersect by movies, movie_tier=2 #ratings=2083, #unique_movies=484
+             ** ==> can learn the tail distribution of movies
+                ratings in train intersect by users=905349
+                    ratings in test intersect by users=21503
+                    test intersect by users, user_tier=0 #ratings=12432, #unique_users=1056
+                    test intersect by users, user_tier=1 #ratings=8622, #unique_users=3164
+                    test intersect by users, user_tier=2 #ratings=448, #unique_users=442
+             ** ==> cannot learn well the tail distribution of users (users with few number of ratings)
+          The same analysis when done on an 80:10:10 split to leav about 50_000 in val and test each,
+             test intersect by users, user_tier=2 #ratings=3914, #unique_users=1097
+             ** ==> is possible to learn user_tier=2 and everything else has more counts to easier to learn
+       ==> therefore, the best split considered so far is
+           for each user, split their ratings by timestamp into 80:10:10 percentages.
+
+  - the first versions of the pipeline used data splits by timestamp into
+     80:10:10 for train, val, test and did not filter for rare users or rare movies.
      the result was that there was not enough overlap in tail distribution
      between training and validation.
-   - the correct split used in the final version of this pipeline is to
-     partition on a per user basis where each user's ratings are ordered by
+   - the corrected final split uses a partition on a per user basis where each user's ratings are ordered by
      their timestamps and placed 80:10:10 into train, val, and test, respectively.
    - users and movies with fewer than 30 ratings are dropped
+   - consider splitting the data into 4 partitions to keep an untouched extra validation dataset for
+     use in estimating the irreducible error.  The irreduclbe error can be calculated once a
+     trained healthy model is made.
+
+   - after have designed model, can examine whether the train, val, and test sizes are enough to well
+     determine the trainable parameters.  The estimate here use the positives ratings of the dataset only in estimates.
+     the TwoTowerDNN model number of trainable parameters = 86_394
+         (1)) the layers in the model which process a single interaation are :
+            dense_query: 4_992 parameters
+            dense_candidate: 3_200 parameters
+         - if [train, val, test] =
+         - [train, val_hpo, val_irred, test] / 8_192 =
+
 ==================================================================================
-Analysis of feasibility of learning the tail distribution
+Exploratory Data Analysis of feasibility of learning the tail distribution
    - the ratings datasets for train, val and test were further partitioned into
-     ratings_<split>_liked.dat for rating > 3 data
+     ratings_<split>_liked.dat for  rating > 3 data
      ratings_<split>_3.dat for rating=3 data
      ratings_<split>_disliked.dat for rating < 3 data
    - the ratings_train_liked data are needed to train the cross-encoder for list-wise contrastive
@@ -65,8 +223,11 @@ Analysis of feasibility of learning the tail distribution
    - a look at the data for whether or not the "tail" cohort can be learned is in
      file movie_tier_counts.txt
      ==> the result is that the batch_size should be >= 1024.
+   - <adding more details here and in notebook>
+   - data coverage
+   - data shifts
 ==================================================================================
-Data inputs to the Pipeline
+Data inputs to the Pipeline (see src/main/resources/ml-1m/README)
    - users.dat
    - movies.dat
    - ratings_train.dat
@@ -80,7 +241,8 @@ Pipeline pre-processing and transformation:
     with user and movie information.
 - transformations
   - normalizing rating to a relevance value between 0 and 1
-  - transforming timestamp into features that might be used in the model.
+  - transforming timestamp into features that might be used in the model
+    such as year, and a cross between hour of day and weekday.
   - cateogorization needed for renumber
   - options for library to use:
     - tf.data is for in-memory size data processing so not an option here.

@@ -1,11 +1,18 @@
 DATA
 
+- EDA
+  - coverage across splits
+    - user and movie stratified
+  - feasibility of personalization
+  - data shifts between splits by user and movie stratification
 - pre-ingest data:
-    - used RenumberIds.py to reassign movie_ids to begin
-      at n_users + 1 and end at n_users + 1 + n_movies
-    - used write_train_val_test_splits.py to split the
-      data by time into train, val, and test
-      such that percentages are train:val:test is 80:10:10.
+    - used src/test/python/movie_lens_tfx/RenumberIds.py to reassign movie_ids to begin
+      at n_users + 1 and end at n_users + 1 + n_movies.
+      - user_ids were already number 1 - n_users, consecutively.
+    - used src/test/python/movie_lens_tfx/write_train_val_test_splits_by_user.py to split the
+      data by user then for each user by time into train, val, and test
+      such that percentages are train:val:test is 80:10:10 and such that
+      users and movies with < 30 ratings were dropped.
     - wrote the movie_tiers file using scriot
       WriteRetrievalInputs.py, method test_write_movie_head_torso_tail_tiers
 - preprocessing data in TFX pipeline transform preprocessing_fn
@@ -22,6 +29,11 @@ DATA
     - data are validated against a schema in the pipeline
     - changes of the data distribution with respect to recent 
       distributions are looked for
+- post-training analysis
+  - retrieval metrics stratified by user and movie
+    - include cold-start simulations
+  - embeddings analyss stratified by user and movie
+    - include cold-start simulations
 - live monitoring
     - methods are presented including exploration with NannyML 
 

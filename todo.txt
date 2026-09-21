@@ -1,15 +1,21 @@
-- parse the movie titles to make release year a feature.
-  - that also needs forier encoding
-
-- since time is important in the TwoTower Query model,
-  for using data spanning years larger than the categorical bins
-  of users age in users.dat, one would want to adjust the
-  ages in the ratings-user-movie join during ingestion.
-
-- if using the HPO objective val_composite_ndcg_20
-  doesn't lead to popularity bias corrections (seen as
-  user affinity difference between niche and mainstream
-  users), change to use val_ndcg_tail_20
+- data items:
+  - parse the movie titles to make release year a feature.
+     - that also needs fourier encoding in the model
+  - consider making the hour of day crossed with weekday feature more course than 24 hour bins
+  - since time is important in the TwoTower Query model,
+    for using data spanning years larger than the categorical bins
+    of users age in users.dat, one would want to adjust the
+    ages in the ratings-user-movie join during ingestion.
+  - add ZCTA and geohashing to transform the user zipcodes
+    to proximity aware values
+    - could also consider a feature that includes size of the
+      ZCTA demographic into large medium small
+  - supplement the movies data (needed for the movie tail distribution!)
+     - MM-ML-1M (Multimodal MovieLens 1M)
+       - summary says rich data to supplment the users and movies of ML-1M
+     - KGAT (by Xiang Wang) or KGCN (by Hongwei Wang) for director graph data.
+  - consider changing partition size based on expectations regarding 
+    data shifts from train to test and retraining on new data, etc
 
 - change the bi-encoder to use pretrained LLM for
   the User and Movie properties that are not
@@ -19,11 +25,13 @@
   use "unknown".  the rest of the mode remains
   the same.  see google doc folder for models to
   try.
+  - this is done in reranker, so would need to consider
+    pros cons of new tiers or single tier recommendations
+    and compare the metrics.
 
-- consider making a Factorization Machine model
-  pipeline with the model implemented from scratch
-  in Tensorflow/Keras2
-- consider implementing a Jax MLOps pipeline
+- consider implementing a Jax MLOps pipeline 
+ (ranker project uses JAX AI stack so can start there, w/ caveat 
+ that a TFX pipeline w/ MLMD needs less customization)
   with Jax, Grain (w/ ArrayRecord format), 
   Flax/NNX, Optax, Orbax, XLA
   and possibly Pallas and Qwix.
@@ -61,8 +69,6 @@
 
 - see TODO throughout code
  
-- future: consider use of ZCTAs and geohashing for 'zipcodes'
-
 - future:
   consider modifying the custom ingest components to add 3 properties 
   to make the data and configuration self-consistent:
@@ -89,3 +95,6 @@
 - CI/CD
   - a linter usable w/ terraform:
     https://www.markcallen.com/tflint-static-analysis-for-terraform/
+  - consider tindying up the use of pre-processsing scripts including eda,
+    running the pipeline, running script to analyze trained model,
+    and copying approved trained model outputs to other locations.

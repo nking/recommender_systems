@@ -745,14 +745,14 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       score = <q, c> + b_m where q is query embedding and c is candidate embedding and b_m is a
           movie bias term that is internally added by dedicating the last element in q to be value 1.0
           and the last element in  c to be the learned b_m.
-      NOTE that the q and c embeddings are not normalized so the result is dot product, not cosine similarity.
-      NOTE that the resulting trained embeddings from the trained QueryModel and trained CandidateModel
-      will have embedding vector magnitudes and direction which helps improve personalized ANN searches.
+      NOTE that the q and c embeddings are unit normalized so the result is cosine similarity.
+      The unit normalization helped stablize the logits.  If the norm wasn't needed, then
+      would have had results here being a dot product that kept the magnitudes which helps with retrieval.
       
       Args:
          inputs: transformed features
       Returns:
-          dot product score for the user data to movie data
+          cosie similarity score for the user data to movie data
       """
       #logging.debug(f'call {self.name} inputs={inputs}\n')
       

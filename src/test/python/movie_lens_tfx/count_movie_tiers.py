@@ -44,6 +44,168 @@ class ExploreMovieTiers(unittest.TestCase):
             use_pyarrow=True)
         return df
     
+    def read_all_ratings_into_df(self):
+        ratings = []
+        for t1 in ("train", "val", "test"):
+            for t2 in ("liked", "3", "disliked"):
+                tmp = self.read_ratings_into_df(
+                    os.path.join(get_project_dir(),
+                    f'src/test/resources/ml-1m/ratings_{t1}_{t2}.dat'))
+                ratings.append(tmp)
+        return pl.concat(ratings)
+        
+    def test_explore_movie_tier_stratification_for_splits(self):
+        df = self.read_all_ratings_into_df()
+        df = df.join(self.movie_tiers_df, on="movie_id", how="left")
+        df = df.rename({"tier": "movie_tier"})
+        
+        #split into partitions
+        df = df.sort(["user_id", "timestamp"])
+        
+        # Calculate per-user sequence index and total ratings count
+        df = df.with_columns(
+            user_seq=pl.cum_count("rating").over("user_id") - 1,
+            user_total=pl.len().over("user_id")
+        )
+        
+        # filter out users with less than 30 ratings and movies with less than 30 ratings
+        # until convergence (since removing a user can drop a movie below 30 and vice versa)
+        prev_len = 0
+        while len(df) != prev_len:
+            prev_len = len(df)
+            df = df.filter(
+                (pl.count("rating").over("user_id") >= 30) &
+                (pl.count("rating").over("movie_id") >= 30)
+            )
+        
+        # Compute fractional position to execute an 80:10:10 temporal split per user
+        df = df.with_columns(
+            fraction=pl.col("user_seq") / pl.col("user_total")
+        )
+        
+        # trying psotive partition size: 539444, 10000, 10000  for ths positives
+        total_pos_len = (df.filter(pl.col("rating") > 3))['user_id'].count()
+        train_pos_len = total_pos_len - 2 * 10_000  #to use existing split, use 50_000 here
+        
+        #train partition
+        last_p = None
+        for p in np.arange(0.8, 1.0, 0.01):
+            tmp = df.filter(pl.col("fraction") < p)
+            if (tmp.filter(pl.col("rating")>3))['user_id'].count() > train_pos_len:
+                break
+            last_p = p
+        print(f"p={last_p}")
+        df_train = df.filter(pl.col("fraction") < last_p)
+        
+        #(1 - last_p)/2.
+        next_p = last_p + ( (1.-last_p)/2.)
+        df_val = df.filter((pl.col("fraction") >= last_p) & (pl.col("fraction") < next_p))
+        df_test = df.filter(pl.col("fraction") > next_p)
+        for tmp in (df_train, df_val, df_test):
+            print(f'number of positive ratings = {(tmp.filter(pl.col("rating")>3))['user_id'].count()}')
+        
+        # ======================================================================================
+        #count intersection of movies:  train and val
+        common_movie_ids = (
+            df_train.select("movie_id").unique()
+            .join(df_val.select("movie_id").unique(), on="movie_id",
+                how="inner")
+            .get_column("movie_id")
+        )
+        print(
+            f"unique movies intersection of train and val: {len(common_movie_ids)}")
+        df_train_ratings_inter = df_train.filter(
+            pl.col("movie_id").is_in(common_movie_ids)
+        )
+        df_val_ratings_inter = df_val.filter(
+            pl.col("movie_id").is_in(common_movie_ids)
+        )
+        print(
+            f"ratings in train intersect by movies={df_train_ratings_inter['movie_id'].count()}")
+        print(
+            f"ratings in val intersect by movies={df_val_ratings_inter['movie_id'].count()}")
+        
+        #intersection of movies: train and test
+        common_movie_ids = (
+            df_train.select("movie_id").unique()
+            .join(df_test.select("movie_id").unique(), on="movie_id",
+                how="inner")
+            .get_column("movie_id")
+        )
+        print(
+            f"unique movies intersection of train and test: {len(common_movie_ids)}")
+        df_train_ratings_inter = df_train.filter(
+            pl.col("movie_id").is_in(common_movie_ids)
+        )
+        df_test_ratings_inter = df_test.filter(
+            pl.col("movie_id").is_in(common_movie_ids)
+        )
+        print(
+            f"ratings in train intersect by movies={df_train_ratings_inter['movie_id'].count()}")
+        print(
+            f"ratings in test intersect by movies={df_test_ratings_inter['movie_id'].count()}")
+        
+        ## count the tiers
+        for tier in range(0, 3):
+            tmp = df_test_ratings_inter.filter(pl.col("movie_tier") == tier)
+            count_ratings = tmp['movie_id'].count()
+            count_unique_movies = tmp['movie_id'].unique().count()
+            print(f"test intersect by movies, movie_tier={tier} #ratings={count_ratings}, #unique_movies={count_unique_movies                                                           }")
+        
+        # ======================================================================================
+        # count intersection of users:  train and val
+        user_tiers_df = self.get_user_tiers_df(df_train.filter(pl.col("rating") >= 3))
+        df_train = df_train.join(user_tiers_df, on="user_id", how="left")
+        df_val = df_val.join(user_tiers_df, on="user_id", how="left")
+        df_test = df_test.join(user_tiers_df, on="user_id", how="left")
+        
+        common_user_ids = (
+            df_train.select("user_id").unique()
+            .join(df_val.select("user_id").unique(), on="user_id",
+                how="inner")
+            .get_column("user_id")
+        )
+        print(
+            f"unique users intersection of train and val: {len(common_user_ids)}")
+        df_train_ratings_inter = df_train.filter(
+            pl.col("user_id").is_in(common_user_ids)
+        )
+        df_val_ratings_inter = df_val.filter(
+            pl.col("user_id").is_in(common_user_ids)
+        )
+        print(
+            f"ratings in train intersect by users={df_train_ratings_inter['user_id'].count()}")
+        print(
+            f"ratings in val intersect by users={df_val_ratings_inter['user_id'].count()}")
+        
+        # intersection of movies: train and test
+        common_user_ids = (
+            df_train.select("user_id").unique()
+            .join(df_test.select("user_id").unique(), on="user_id",
+                how="inner")
+            .get_column("user_id")
+        )
+        print(
+            f"unique users intersection of train and test: {len(common_user_ids)}")
+        df_train_ratings_inter = df_train.filter(
+            pl.col("user_id").is_in(common_user_ids)
+        )
+        df_test_ratings_inter = df_test.filter(
+            pl.col("user_id").is_in(common_user_ids)
+        )
+        print(
+            f"ratings in train intersect by users={df_train_ratings_inter['user_id'].count()}")
+        print(
+            f"ratings in test intersect by users={df_test_ratings_inter['user_id'].count()}")
+        
+        ## count the tiers
+        for tier in range(0, 3):
+            tmp = df_test_ratings_inter.filter(pl.col("user_tier") == tier)
+            count_ratings = tmp['user_id'].count()
+            count_unique = tmp['user_id'].unique().count()
+            print(
+                f"test intersect by users, user_tier={tier} #ratings={count_ratings}, #unique_users={count_unique}")
+    
     def test_tail_users_across_all_datasets(self):
         df_train_ratings = self.read_ratings_into_df(
             os.path.join(get_project_dir(),
@@ -221,6 +383,35 @@ class ExploreMovieTiers(unittest.TestCase):
         )
         print(
             f"unique users in intersection of train and val by movies then users for tier=2: {len(common_user_ids)}")
+    
+    def get_user_tiers_df(self, ratings_df: pl.DataFrame) -> pl.DataFrame:
+        """
+        Given a Polars DataFrame with ['user_id', ...],
+        returns DataFrame with columns 'user_id', 'user_tier' where tier is 0, 1, or 2 for
+             head, torso, and tail of the distribution of the number of users ratings.
+        """
+        # Count history length per user
+        user_counts = ratings_df.group_by("user_id").agg(
+            pl.len().alias("history_length")
+        )
         
+        # Find the exact cutoff lengths based on quantiles
+        tail_cutoff_val = user_counts["history_length"].quantile(0.20,
+            interpolation="nearest")
+        head_cutoff_val = user_counts["history_length"].quantile(0.80,
+            interpolation="nearest")
+        
+        # Map to tiers based on the cutoffs
+        user_tiers_df = user_counts.with_columns(
+            pl.when(pl.col("history_length") <= tail_cutoff_val)
+            .then(2)  # Tail
+            .when(pl.col("history_length") >= head_cutoff_val)
+            .then(0)  # Head
+            .otherwise(1)  # Torso
+            .alias("user_tier")
+        ).select(["user_id", "user_tier"])
+        
+        return user_tiers_df
+    
     if __name__ == '__main__':
         unittest.main()
