@@ -85,7 +85,8 @@ class ExploreMovieTiers(unittest.TestCase):
         
         # trying psotive partition size: 539444, 10000, 10000  for ths positives
         total_pos_len = (df.filter(pl.col("rating") > 3))['user_id'].count()
-        train_pos_len = total_pos_len - 2 * 10_000  #to use existing split, use 50_000 here
+        #NOTE: change this to total_pos_len - 2 * 50_000 to print current split stats
+        train_pos_len = total_pos_len - 2 * 10_000
         
         #train partition
         last_p = None
@@ -205,6 +206,8 @@ class ExploreMovieTiers(unittest.TestCase):
             count_unique = tmp['user_id'].unique().count()
             print(
                 f"test intersect by users, user_tier={tier} #ratings={count_ratings}, #unique_users={count_unique}")
+        
+        print(f'ratings in train where user_tier=2={(df_train.filter(pl.col("user_tier")==2))['user_id'].count()}')
     
     def test_tail_users_across_all_datasets(self):
         df_train_ratings = self.read_ratings_into_df(

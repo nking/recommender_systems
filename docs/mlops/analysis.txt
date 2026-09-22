@@ -200,12 +200,28 @@ Pre-Processing:
 
    - after have designed model, can examine whether the train, val, and test sizes are enough to well
      determine the trainable parameters.  The estimate here use the positives ratings of the dataset only in estimates.
-     the TwoTowerDNN model number of trainable parameters = 86_394
-         (1)) the layers in the model which process a single interaation are :
-            dense_query: 4_992 parameters
-            dense_candidate: 3_200 parameters
-         - if [train, val, test] =
-         - [train, val_hpo, val_irred, test] / 8_192 =
+     the TwoTowerDNN model number of trainable parameters = 86_394.
+     (1) the layers in the model which process a single interacation are :
+        dense_query: 4_992 parameters
+        dense_candidate: 3_200 parameters
+        There are more than 8192 ratings in the train dataset, even for the user_tier and movie_tier stratifications
+          #positive train ratings / parameter = 459_148 / 8_192 = 56 observations per parameter which is great
+          then do the same for the smallest stratification, the number of user_tier=2 ratings in train:
+                = 41405 / 8192 = 5 which is decent
+          so these are strongly over-determined which is good
+      (2) Sparse embedding parameters
+           these are the majority of the model weights, 31_216 + 54_388 = 85_604.
+           let k_i = per entity sample counts
+           we calc k_i / embedding dimension
+           recommender interaction counts follow a power-law (Zipfian) distribution:
+               head entities with many ratings have k_i/emb_dim >> 1
+               tail counts have k_i/emb_dim ~ 1 and a little higher
+               cold start entities entites with 0 to few ratings (e.g. < 30) have k_i/emb_dim < 1
+                   so these tail/cold star entities are at risk of being severely underdetermined
+                   leading to high variance (over-fitting) and the model might just memorize them.
+               all except the cold entities are well determined
+          ***===> NOTE here we can see that increasing the embedding length to be larger than 32 would
+                  make more than the cold start entities underdetermined, and presumably would lead to more over-fitting.
 
 ==================================================================================
 Exploratory Data Analysis of feasibility of learning the tail distribution
