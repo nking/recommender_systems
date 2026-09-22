@@ -33,6 +33,7 @@ MIN_EVAL_SIZE = 50  # make this larger for production pipeline
 BATCH_SIZE = 2048
 NUM_EPOCHS = 20
 
+#total number of positives in ratings=559444, num_train=459586, num_val=51573, num_test=48285
 num_examples = 463548
 
 PIPELINE_NAME = 'rs_pipeline'

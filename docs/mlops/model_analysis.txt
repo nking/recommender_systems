@@ -1,22 +1,25 @@
-Training the TwoTowerDNN with an inbatch softmax loss
+Training the TwoTowerDNN with an in-batch softmax loss, lr-scheduler and Adamw optimizer,
 and using the metric composite_ndcg@20 on the validation set for early stopping,
 minimum threshold, and model selection by the keras tuner BayesianOptimization.
 
+see the analysis in docs/mlops/best_fitting_model_stats/twotowderdnn_softmax/
+
 The model learning looks healthy.
   - The train vs validation curves for loss and metrics can be seen
-    in the sub-directory best_fitting_model_stats.  
+    in the sub-directory best_fitting_model_stats.
+  - low variability, somewhat low bias,
 The best fitting hyperparameters are also in that subdirectory.
 The model is saved to src/test/resources/serving_model
 
 Best fitting model used a batch size of 2056:
-   composite ndcg@20 = 0.0234
-   head ndcg@20 = 0.0238
-   torso ndcg@20 = 0.0236
-   tail ndcg@20 = 0.0222
-   ndcg@20 = 0.0237
-   mrr@20 = 0.0196
-   recall@20 = 0.0395
-   hit rate = 0.026
+   composite ndcg@20 = 0.022
+   head ndcg@20 = 0.022
+   torso ndcg@20 = 0.022
+   tail ndcg@20 = 0.021
+   ndcg@20 = 0.023
+   mrr@20 = 0.018
+   recall@20 = 0.038
+   hit rate = 0.015
 
 The ndcg@20 metrics are ~ 5 times random performance.
 The mrr@20 is ~ 6 times random performance.
