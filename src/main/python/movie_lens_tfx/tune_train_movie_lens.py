@@ -1,5 +1,6 @@
 # from
 import base64
+import logging
 import pickle
 import numpy as np
 import abc
@@ -2012,8 +2013,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   logging.info("run_fn")
   for attr_name in dir(fn_args):
     # Filter out built-in methods and private attributes
-    if not attr_name.startswith('__') and not callable(
-      getattr(fn_args, attr_name)):
+    if not attr_name.startswith('__') and not callable(getattr(fn_args, attr_name)):
       attr_value = getattr(fn_args, attr_name)
       logging.debug(f"{attr_name}: {attr_value}")
   
@@ -2025,6 +2025,12 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       hp = get_default_hyperparameters(fn_args.custom_config)
   else:
       raise ValueError('hyperparameters must be provided')
+  
+  calc_irreducible_err = (fn_args.custom_config
+      and "calc_irreducible_err" in fn_args.custom_config
+      and fn_args.custom_config["calc_irreducible_err"])
+
+  print(f'calc_irreducible_err={calc_irreducible_err}')
   
   print('HyperParameters for training: %s' % hp.get_config())
   
@@ -2075,6 +2081,24 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
     tf_transform_output,
     GLOBAL_BATCH_SIZE, is_train=False)
   
+  eval_dir = fn_args.eval_files
+  print(f"eval_dir={eval_dir}, type={type(eval_dir)}")
+  if isinstance(eval_dir, list):
+      eval_dir = eval_dir[0]
+  if eval_dir.endswith('/*'):
+      eval_dir = eval_dir[:-2]
+  parent_dir = os.path.dirname(eval_dir)  # e,g, pipeline_root/Transform/transformed_examples/7/
+  print(f"parent_dir={parent_dir}")
+  test_dir = os.path.join(parent_dir, 'Split-test')
+  print(f"test_dir={test_dir}")
+  test_files = [f"{test_dir}/*"]
+  print(f"test_files={test_files}", flush=True)
+  test_dataset = input_fn(
+    test_files,
+    fn_args.data_accessor,
+    tf_transform_output,
+    GLOBAL_BATCH_SIZE, is_train=False)
+
   #the model is built and compiled in strategy scope:
   logging.info("create 2Tower from run_fn")
   model = _make_2tower_keras_model(hp)
@@ -2111,6 +2135,24 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   print(f"total_epochs_run={total_epochs_run}", flush=True)
   logging.info(f"total_epochs_run={total_epochs_run}")
   
+  # run evaluation on test dataset and store results alongside the tensorboard train and validation results
+  
+  #assuming test dataset is same size as eval which is assumed to be 1/10 the size of num_examples which is all examples
+  test_results = model.evaluate(test_dataset,
+      steps=EVAL_STEPS_PER_EPOCH,
+      verbose="2",
+      return_dict=True
+  )
+  print(f'test_results={test_results}', flush=True)
+  ## write the test metrics next to the train and validation metrics written by tensorboard
+  ## to Trainer/model_run/a_version_number/
+  test_log_dir = os.path.join(fn_args.model_run_dir, 'test')
+  # 3. Create the writer and log the metrics
+  summary_writer = tf.summary.create_file_writer(test_log_dir)
+  with summary_writer.as_default():
+      for metric_name, metric_value in test_results.items():
+          tf.summary.scalar(metric_name, metric_value, step=total_epochs_run)
+
   #TODO: consider adding the vocabularies as assets:
   #    see https://www.tensorflow.org/api_docs/python/tf/saved_model/Asset
   
