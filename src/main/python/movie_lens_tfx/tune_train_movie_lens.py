@@ -2597,6 +2597,7 @@ def calc_bayes_error(ns:list, observed_errors:list, confidence_level=0.95) -> Tu
         logging.info(f"*** Estimated Irreducible Error (c): {c_opt:.6f} ***")
         
         c_variance = pcov[2, 2]
+        logging.info(f"c_variance={c_variance}")
         if np.isfinite(c_variance) and c_variance >= 0:
             c_standard_error = np.sqrt(c_variance)
             actual_moe = 1.96 * c_standard_error
