@@ -2540,7 +2540,10 @@ def run_evals_and_calc_irred(train_dataset : tf.data.Dataset, eval_dataset :tf.d
               verbose="2",
               return_dict=True
           )
-          observed_errors.append(test_results['mean_loss'])
+          loss = test_results['mean_loss']
+          if isinstance(loss, tf.Tensor):
+              loss = loss.numpy().item()
+          observed_errors.append(loss)
           n_train = math.ceil(frac * hp.get("num_train"))
           ns.append(n_train)
           print(f'N=={n_train}, test_err={test_results["mean_loss"]}')
