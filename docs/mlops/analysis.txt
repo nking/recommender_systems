@@ -130,29 +130,37 @@ Pre-Processing:
         N >= 1_000 ratings
         * caveat is that user and movie stratification may require more than 1_000
 
-     - val_irred: validation partition to estimate the irreducible error on the model
-       algorithm after best params determined.  Estimation involves run the model
+     - test_irred: test partition to estimate the irreducible error on the model
+       algorithm after best params determined.  Estimation involves
        training through datasets of size N=10%, 25%, 50%, 75%, 100% of training data
-       separately and fitting the losses and N to a power-law in order to estimate the
+       separately for a fresh model with best params
+       and fitting the losses and N to a power-law in order to estimate the
        irreducible error as the projection to a very large N.
+       To estimate the test size to calc irreducible error:
           - choose desired Margin of Error (MoE) at confidence level Z_{alpha/2} for the confidence
-            N_val_irred = ( ((Z_{alpha/2} * gamma * stdev_loss)/MoE)*^2)
-               where MoE is the max acceptable margin of error on irred error estimate c.
-                     e.g. MoE=0.002 for x accurate withi +00.002 loss units
-                     stdev_loss is stdev of indev loss values (or metric idicators) across indev val samples.
+            N_test_irred = ((Z_{alpha/2} * gamma * stdev_loss)/MoE)^2
+               where MoE is the max acceptable margin of error on irred error estimate c which is the irred error.
+                     e.g.
+                     MoE=0.002 for x accurate within +0.002 loss units.
+                     stdev_loss is stdev of indev loss values (or metric idicators) across indev test samples.
                      Z_alpha/2 is critical z-score for desired conidence, e.g. Z=1.96 for 95% confidence;
-                     gamma is extrapolaion inflation factor (gamma > 1) measures how much parameter
-                     variance is magnfied when project c = lim_{N_train->inf}( E(N_train) )
+                     gamma is extrapolaion inflation factor (gamma > 1) measures how much parameter variance
+                     is magnfied when projecting c = lim_{N_train->inf}( E(N_train) )
                      in NonLinear least squares regression, we have
-                        covar matrix Va(theta) = stdev_C^2 * (J^T * J)^-1 where J is the mx3 jacobian of
-                        partial deivs evaluated on train sizes and stdev_E is stderr per point = stdev_loss/sqrt(N_val_irred)
-               e.g. N_val_irred = ( (1.96 * 3.0 * 0.50) / (0.003) )^2
-                  = 960_400 eval instances
+                        covar matrix of fitted params is Var(theta) = stdev_c^2 * (J^T * J)^-1 where J is the mx3 jacobian of
+                        partial derivs evaluated on train sizes and stdev_E is stderr per point = stdev_loss/sqrt(N_val_irred)
+               e.g. for continuous loss:
+                   N_val_irred = ( (1.96 * 3.0 * 0.50) / (0.003) )^2
+                               = 960_400 example instances
               NOTE: if measure the irred_error using a binary metric like hitrate or recall@k,
                     the stdev_loss is lower.  e.g. sqrt(p*(1-p) ~ 0.3-0.4
-                    which can be nearly 3 times smaller N as a result
-              ==> not feasible for this dataset
-
+                    which can be nearly 3 times smaller N as a result, ~ 300_000 samples needed
+              If my test dataset size is 50_000 samples, the wider margin of error (MoE) can be calculated:
+                  MoE = (Z_{alpha/2} * gamma * stdev_loss) / sqrt(N_test)
+                      e.g. if we use a 96% confidence, hence Z=1.96 and an inflation factor gamma=3.0
+                      then for a continuous loss metric and an assumption of stdec_loss=0.5
+                         MoE = (1.96 * 3.0 * 0.5)/sqrt(50_000) = 2.95 / 223.6 ~ 0.013
+                         so we'd expect the estimated irred loss to be accurate within += 0.01
      - test parition size determined by
        N = ( Z_{alpha/2} * stdev / E)^2
        N >= 5_000.

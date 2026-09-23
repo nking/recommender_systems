@@ -9,7 +9,7 @@ import time
 # and related files
 # they have co Copyright 2020 Google LLC. All Rights Reserved.
 # Licensed under the Apache License, Version 2.0 (the "License");
-from typing import List, Tuple, Dict, Text, Any
+from typing import List, Tuple, Dict, Text, Any, Callable
 import tensorflow as tf
 import tensorflow.keras as keras
 #import tf_keras as keras ## this fails
@@ -1055,11 +1055,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         # Run diagnostic hook at the end of the fit call
         if self.calc_table_B_diagnostic:
             self.inspect_table_B_distribution(self.table_B)
-
-        try:
-            tf.print("num_epochs=", len(history.history['mean_loss']))
-        except Exception:
-            pass
         
         return history
     
@@ -2026,11 +2021,9 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   else:
       raise ValueError('hyperparameters must be provided')
   
-  calc_irreducible_err = (fn_args.custom_config
-      and "calc_irreducible_err" in fn_args.custom_config
-      and fn_args.custom_config["calc_irreducible_err"])
-
-  print(f'calc_irreducible_err={calc_irreducible_err}')
+  invoked_by_trainer = (fn_args.custom_config
+      and "invoked_by_trainer" in fn_args.custom_config
+      and fn_args.custom_config["invoked_by_trainer"])
   
   print('HyperParameters for training: %s' % hp.get_config())
   
@@ -2069,36 +2062,18 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
           (base64.b64encode(
               pickle.dumps(input_signature_trans))).decode('utf-8'))
   
-  train_dataset = input_fn(
+  train_dataset : tf.data.Dataset = input_fn(
     fn_args.train_files,
     fn_args.data_accessor,
     tf_transform_output,
     GLOBAL_BATCH_SIZE, is_train=True)
   
-  eval_dataset = input_fn(
+  eval_dataset : tf.data.Dataset = input_fn(
     fn_args.eval_files,
     fn_args.data_accessor,
     tf_transform_output,
     GLOBAL_BATCH_SIZE, is_train=False)
   
-  eval_dir = fn_args.eval_files
-  print(f"eval_dir={eval_dir}, type={type(eval_dir)}")
-  if isinstance(eval_dir, list):
-      eval_dir = eval_dir[0]
-  if eval_dir.endswith('/*'):
-      eval_dir = eval_dir[:-2]
-  parent_dir = os.path.dirname(eval_dir)  # e,g, pipeline_root/Transform/transformed_examples/7/
-  print(f"parent_dir={parent_dir}")
-  test_dir = os.path.join(parent_dir, 'Split-test')
-  print(f"test_dir={test_dir}")
-  test_files = [f"{test_dir}/*"]
-  print(f"test_files={test_files}", flush=True)
-  test_dataset = input_fn(
-    test_files,
-    fn_args.data_accessor,
-    tf_transform_output,
-    GLOBAL_BATCH_SIZE, is_train=False)
-
   #the model is built and compiled in strategy scope:
   logging.info("create 2Tower from run_fn")
   model = _make_2tower_keras_model(hp)
@@ -2135,24 +2110,14 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   print(f"total_epochs_run={total_epochs_run}", flush=True)
   logging.info(f"total_epochs_run={total_epochs_run}")
   
-  # run evaluation on test dataset and store results alongside the tensorboard train and validation results
+  irred_error_dict = None
+  if invoked_by_trainer:
+      test_dataset : tf.data.Dataset = run_test_eval(model, fn_args, tf_transform_output,
+          GLOBAL_BATCH_SIZE, total_epochs_run, EVAL_STEPS_PER_EPOCH)
+      irred_error_dict = run_evals_and_calc_irred(train_dataset, eval_dataset, test_dataset,
+          hp, TRAIN_STEPS_PER_EPOCH, EVAL_STEPS_PER_EPOCH, NUM_EPOCHS, GLOBAL_BATCH_SIZE)
+      print(f"irred_error_dict={irred_error_dict}")
   
-  #assuming test dataset is same size as eval which is assumed to be 1/10 the size of num_examples which is all examples
-  test_results = model.evaluate(test_dataset,
-      steps=EVAL_STEPS_PER_EPOCH,
-      verbose="2",
-      return_dict=True
-  )
-  print(f'test_results={test_results}', flush=True)
-  ## write the test metrics next to the train and validation metrics written by tensorboard
-  ## to Trainer/model_run/a_version_number/
-  test_log_dir = os.path.join(fn_args.model_run_dir, 'test')
-  # 3. Create the writer and log the metrics
-  summary_writer = tf.summary.create_file_writer(test_log_dir)
-  with summary_writer.as_default():
-      for metric_name, metric_value in test_results.items():
-          tf.summary.scalar(metric_name, metric_value, step=total_epochs_run)
-
   #TODO: consider adding the vocabularies as assets:
   #    see https://www.tensorflow.org/api_docs/python/tf/saved_model/Asset
   
@@ -2462,13 +2427,190 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   tf.io.gfile.makedirs(f"{fn_args.serving_model_dir}/assets.extra")
   with tf.io.gfile.GFile(json_file_path, "w") as f:
       json.dump(hp_config_dict, f, indent=4)
+
+  if irred_error_dict is not None:
+      json_file_path = f"{fn_args.serving_model_dir}/assets.extra/irreducible_error.json"
+      with tf.io.gfile.GFile(json_file_path, "w") as f:
+          json.dump(irred_error_dict, f, indent=4)
   
   json_file_path = f"{serving_candidate_dir}/assets.extra/hyperparameters.json"
   tf.io.gfile.makedirs(f"{serving_candidate_dir}/assets.extra")
   with tf.io.gfile.GFile(json_file_path, "w") as f:
       json.dump(hp_config_dict, f, indent=4)
-  
+     
   return model
+  
+def run_test_eval(model, fn_args, tf_transform_output,
+          GLOBAL_BATCH_SIZE, total_epochs_run, EVAL_STEPS_PER_EPOCH) -> tf.data.Dataset:
+      
+      # run evaluation on test dataset and store results alongside the tensorboard train and validation results
+      eval_dir = fn_args.eval_files
+      print(f"eval_dir={eval_dir}, type={type(eval_dir)}")
+      if isinstance(eval_dir, list):
+          eval_dir = eval_dir[0]
+      if eval_dir.endswith('/*'):
+          eval_dir = eval_dir[:-2]
+      parent_dir = os.path.dirname(
+          eval_dir)  # e,g, pipeline_root/Transform/transformed_examples/7/
+      print(f"parent_dir={parent_dir}")
+      test_dir = os.path.join(parent_dir, 'Split-test')
+      print(f"test_dir={test_dir}")
+      test_files = [f"{test_dir}/*"]
+      print(f"test_files={test_files}", flush=True)
+      test_dataset = input_fn(
+          test_files,
+          fn_args.data_accessor,
+          tf_transform_output,
+          GLOBAL_BATCH_SIZE, is_train=False)
+      
+      # assuming test dataset is same size as eval which is assumed to be 1/10 the size of num_examples which is all examples
+      test_results = model.evaluate(test_dataset,
+          steps=EVAL_STEPS_PER_EPOCH,
+          verbose="2",
+          return_dict=True
+      )
+      print(f'test_results={test_results}', flush=True)
+      ## write the test metrics next to the train and validation metrics written by tensorboard
+      ## to Trainer/model_run/a_version_number/
+      test_log_dir = os.path.join(fn_args.model_run_dir, 'test')
+      # 3. Create the writer and log the metrics
+      summary_writer = tf.summary.create_file_writer(test_log_dir)
+      with summary_writer.as_default():
+          for metric_name, metric_value in test_results.items():
+              tf.summary.scalar(metric_name, metric_value,
+                  step=total_epochs_run)
+      return test_dataset
+
+def get_deterministic_hash_filter(frac) -> Callable[[Any, Any], tf.Tensor]:
+    # We map the hash to a large number of buckets to support fine fraction percentages
+    num_buckets = 10000
+    threshold = int(frac * num_buckets)
+    
+    def filter_fn(x, y):
+        user_str = tf.strings.as_string(x['user_id'])
+        movie_str = tf.strings.as_string(x['movie_id'])
+        # Concatenate with a separator to prevent collisions
+        combined_key = tf.strings.join([user_str, movie_str], separator='_')
+        # to_hash_bucket_fast provides a uniform distribution across the buckets
+        bucket_id = tf.strings.to_hash_bucket_fast(combined_key, num_buckets)
+        return tf.squeeze(bucket_id < threshold)
+    
+    return filter_fn
+
+def run_evals_and_calc_irred(train_dataset : tf.data.Dataset, eval_dataset :tf.data.Dataset,
+        test_dataset : tf.data.Dataset, hp,
+        TRAIN_STEPS_PER_EPOCH, EVAL_STEPS_PER_EPOCH, NUM_EPOCHS, BATCH_SIZE) -> Dict[str, Any]:
+    
+      # ====== calc irreducible error =======
+      fractions = [0.10, 0.25, 0.50, 0.75, 1.00]
+      ns = []
+      observed_errors = []
+      for frac in fractions:
+          print(f"--- Training Model on {frac * 100}% of Data for irred err calcs---")
+          if frac < 1.0:
+              # Note: A deterministic way to slice tf.data is using a filter + hash,
+              # or simply applying a global shard/filter rule.
+              # Example using a simple random filter based on a uniform distribution:
+              hash_filter = get_deterministic_hash_filter(frac)
+              subset_dataset = (train_dataset.unbatch()
+                  .filter(hash_filter)
+                  .batch(BATCH_SIZE))
+          else:
+              subset_dataset = train_dataset
+          
+          TRAIN_STEPS_PER_EPOCH_2 = math.ceil(frac*TRAIN_STEPS_PER_EPOCH)
+        
+          model = _make_2tower_keras_model(hp)
+          
+          stop_early = get_stop_early_callback()
+          
+          logging.info("fit model")
+          history = model.fit(
+              subset_dataset,
+              steps_per_epoch=TRAIN_STEPS_PER_EPOCH_2,
+              validation_data=eval_dataset,
+              validation_steps=EVAL_STEPS_PER_EPOCH,
+              epochs=NUM_EPOCHS,
+              shuffle=False,  # this is handled by tfxio pipeline already
+              callbacks=[stop_early], verbose=1)
+          print(f'fit history.history fraction={frac}={history.history}')
+          total_epochs_run = len(history.history['val_mean_loss'])
+          test_results = model.evaluate(test_dataset,
+              steps=EVAL_STEPS_PER_EPOCH,
+              verbose="2",
+              return_dict=True
+          )
+          observed_errors.append(test_results['mean_loss'])
+          n_train = math.ceil(frac * hp.get("num_train"))
+          ns.append(n_train)
+          print(f'N=={n_train}, test_err={test_results["mean_loss"]}')
+          
+      irred_error, irred_moe = calc_bayes_error(ns, observed_errors)
+
+      irred_dict = {
+          'irreducible_error' : irred_error,
+          'irred_error_margin_of_error' : irred_moe,
+          "n_train" : ns,
+          "test_errors" : observed_errors
+      }
+      return irred_dict
+
+def calc_bayes_error(ns:list, observed_errors:list, confidence_level=0.95) -> Tuple[float, float]:
+    import numpy as np
+    from scipy.optimize import curve_fit
+    # Define the empirical learning curve (Power-Law)
+    # y = a * x^(-b) + c
+    # c is the irreducible error (as x -> infinity, a*x^(-b) -> 0)
+    def power_law_learning_curve(x, a, b, c):
+        return a * np.power(x, -b) + c
+    
+    x_data = np.array(ns, dtype=np.float64)
+    y_data = np.array(observed_errors, dtype=np.float64)
+    
+    # Intelligent Initial Guesses (Crucial for 5 data points)
+    c_guess = 0.9 * np.min(y_data)  # Guess irreducible error is slightly below best observed
+    b_guess = 0.5  # Standard learning curve decay exponent is ~0.5
+    a_guess = (y_data[0] - c_guess) * (x_data[0] ** b_guess)  # Solve for 'a' using first point
+    
+    p0 = [a_guess, b_guess, c_guess]
+    
+    # Apply bounds to constrain the optimizer
+    # a > 0 (scale)
+    # b > 0 (error must decrease as data increases)
+    # 0 <= c <= min(observed) (irreducible error can't be negative or higher than what we achieved)
+    lower_bounds = [0.0, 0.0, 0.0]
+    upper_bounds = [np.inf, 5.0, np.min(y_data)]
+    
+    try:
+        # curve_fit defaults to 'trf' (Trust Region Reflective) when bounds are provided
+        popt, pcov = curve_fit(
+            power_law_learning_curve,
+            x_data,
+            y_data,
+            p0=p0,
+            bounds=(lower_bounds, upper_bounds)
+        )
+        
+        a_opt, b_opt, c_opt = popt
+        logging.info(f"Curve Fit Parameters - Scale (a): {a_opt:.4f}, Decay (b): {b_opt:.4f}")
+        print(f"Curve Fit Parameters - Scale (a): {a_opt:.4f}, Decay (b): {b_opt:.4f}")
+        logging.info(f"*** Estimated Irreducible Error (c): {c_opt:.6f} ***")
+        
+        c_variance = pcov[2, 2]
+        if np.isfinite(c_variance) and c_variance >= 0:
+            c_standard_error = np.sqrt(c_variance)
+            actual_moe = 1.96 * c_standard_error
+            logging.info( f"Estimated Irreducible Error (c): {c_opt:.6f} (MoE: ±{actual_moe:.6f})")
+        else:
+            logging.warning(
+                f"Covariance matrix yielded an invalid variance for c ({c_variance}). "
+                "The fit may be poorly constrained. Returning curve estimate without MoE.")
+            actual_moe = None
+        
+        return c_opt, actual_moe
+    except RuntimeError as e:
+        logging.error(f"Could not fit power law curve: {e}")
+        return None
 
 # TFX Tuner will call this function.
 def tuner_fn(fn_args) -> tfx.components.TunerFnResult:

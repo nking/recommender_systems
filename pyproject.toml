@@ -27,6 +27,7 @@ dependencies = [
     "tensorboard==2.21.0",
     "build==1.4.0",
     "tomli-2.2.1",
+    "scipy==1.18.0",
 ]
 #tomli-2.2.1 is compatible with tfx 2.16.1
 readme = "README.md"

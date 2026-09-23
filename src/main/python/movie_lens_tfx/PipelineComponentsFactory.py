@@ -236,7 +236,8 @@ class PipelineComponentsFactory():
             "num_examples": self.num_examples,
             "version": self.version,
             "model_name": MODEL_NAME.USER_MOVIE.value,
-            "movie_tiers_uri" : self.movie_tiers_uri
+            "movie_tiers_uri" : self.movie_tiers_uri,
+            "invoked_by_trainer" : True,
         }
         trainer = tfx.components.Trainer(
             module_file=os.path.join(self.transform_dir,'tune_train_movie_lens.py'),
@@ -298,12 +299,15 @@ class PipelineComponentsFactory():
     
     # see https://github.com/tensorflow/tfx/blob/master/tfx/examples/penguin/penguin_pipeline_local.py
     # trainer = trainer_movie_lens.MovieLensTrainer(
+    trainer_custom_config = {
+        **tuner_custom_config,
+        'invoked_by_trainer' : True}
     trainer = tfx.components.Trainer(
       module_file=os.path.join(self.transform_dir, 'tune_train_movie_lens.py'),
       examples=ratings_transform.outputs['transformed_examples'],
       transform_graph=ratings_transform.outputs['transform_graph'],
       hyperparameters=(tuner.outputs['best_hyperparameters']),
-      custom_config=tuner_custom_config,
+      custom_config=trainer_custom_config,
     )
   
     # for the current trained model to be blessed,

@@ -22,7 +22,7 @@ class WriteTensorboardToPng(unittest.TestCase):
         
         #temporarily point to recently trained model:
         logdir = os.path.join(get_project_dir(), "../TMP3/bin", p)
-    
+        
         train_dir = os.path.join(logdir, "train")
         val_dir = os.path.join(logdir, "validation")
         metrics = list_tfevents_metrics(train_dir)

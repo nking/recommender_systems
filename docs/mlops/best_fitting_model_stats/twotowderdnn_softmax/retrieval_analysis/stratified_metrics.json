@@ -1,0 +1,17 @@
+{
+    "mean_recall_at_100": 0.10975522717498044,
+    "mean_ndcg_at_100": 0.04119084133095854,
+    "mean_random_recall_at_100": 0.025753283543651816,
+    "mean_random_ndcg_at_100": 0.010543459203529948,
+    "user_tier_0_mean_recall_at_100": 0.05367121879201382,
+    "user_tier_0_mean_ndcg_at_100": 0.03196707669149034,
+    "user_tier_1_mean_recall_at_100": 0.11550804272548003,
+    "user_tier_1_mean_ndcg_at_100": 0.043015826288919985,
+    "user_tier_2_mean_recall_at_100": 0.1524905054046158,
+    "user_tier_2_mean_ndcg_at_100": 0.045470327800071736,
+    "automated_conclusions": [
+        "STRONG BASELINE LIFT: Global Recall@100 (11.0%) heavily outperforms the random expected baseline (2.6%). The candidate generator is extracting meaningful semantic signal.",
+        "EXCELLENT HISTORY UTILIZATION: Power users (Tier 2 Recall: 15.2%) perform massively better than light users (Tier 0 Recall: 5.4%). The model successfully translates rich interaction histories into highly relevant slates.",
+        "HEALTHY RANKING STRATIFICATION: NDCG scales positively with user tier (Tier 2: 4.55% vs Tier 0: 3.20%). The model not only retrieves the right items for power users but places them higher in the slate."
+    ]
+}
