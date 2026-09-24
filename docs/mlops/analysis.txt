@@ -9,7 +9,7 @@ libraries which need specific versions for compatibility:
   - tfx_bsl
 
 need to use a conda virtual environment due to python 3.10 requirement
-for TFX.
+for TFX and Kaggle environment.
 pip -q install pyarrow==10.0.1
 pip -q install apache-beam==2.59.0
 pip -q install tensorflow==2.16.1
@@ -29,6 +29,10 @@ That makes cannot use tensorflow ranking because
 TFR 0.6.0 is needed for tf 2.16 and then the
 versions of keras would conflict.
 So any ranking metrics and losses used here are implemented.
+
+NOTE that as of Sep 2026 there is TFX 1.21.0 so this project could be updated.
+Note that the Kaggle platform ubuntu distribution for GPU has some conflicting dependencies
+possibly when upgrade to TFX 1.21.0, but this project uses CPU as it gains nothing from GPU.
 
 ==================================================================================
 Pre-processing: Renumerbing user and movie ids

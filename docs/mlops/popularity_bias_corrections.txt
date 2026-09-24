@@ -1,0 +1,21 @@
+Yi et al. paper:
+    "Sampling-Bias-Corrected Neural Modeling for Large-Scale Item Recommendations" (Yi et al., Google RecSys 2019)
+    (implemented in this project's TwoTowerDNN)
+    - the in-batch softmax is the computationally feasible replacement
+      for a full softmax over all candidate items:  in a mini-batch,
+      the items which are not the item of consideration act as negatives.
+      - without a correction: popular items appear much
+        more often in the negatives which inflates their loss and
+        penalizes their embeddings.
+      - the log-Q correction of Yi et al. tracks the items sampling frequency
+        and calculates an item probability from it, takes the log of that
+        (called logQ) and subtracts it from the logits:
+            logits = matmul(user_embedding, movie_embedding) / temperature
+            log_q = log( p_movie )
+            logits -= (beta_correction * log_q
+        then softmax on these corrected logits leads to unbiased gradients
+        and a true multinomial full-softmax distribution.
+           s_corrected(user_i, movie_j) = s(user_i, movie_j) - logQ(movie_j)
+
+Time decayed log-Q correction:
+   (not implemented)

@@ -52,10 +52,10 @@ libraries, can use conda or virtualenv.
 
   conda activate tfx_py313
 
-  NOTE: that because kaggle OS os ubuntu, the python version and libraries
+  NOTE: that because kaggle OS ubuntu, the python version and libraries
   are compatible with earlier versions.  for kaggle, use git checkout kaggle in
   this branch to use the kaggle branch.  I'll try to keep it in sync with
-  the main branch, bu having different pyproject.toml, setup.py files.
+  the main branch, but having different pyproject.toml, setup.py files.
 
 (2) for virtualenv
 

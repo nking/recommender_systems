@@ -14,7 +14,7 @@ goal of the recommender systems notebook:
   - for monitoring, provide the details and how to, espec
     with code where possible.  include triggers for retraining
     and alerts.
-  - save the model withe signatures that are usable for efficient single and
+  - save the model with signatures that are usable for efficient single and
      bulk inference.
 
 metrics:
@@ -35,9 +35,11 @@ metrics:
     model for calculations needed to compare results in the
     increasingly more relevant recommendations and ranking from 
     projects:  retriever, ranker, and re-ranker.
-    The metrics are NHR, NDCG@K, recall_tail@K, and 
+    The metrics are NHR, NDCG@K, recall@K, movie_tier stratified subsets
+    of the metrics, a composite_ndcg@k, and
     intra-list diversity.  the NDCG metrics are paritioned into head, torso and tail and combined
     into a composite metric used for HPO to find best model, and early-stopping of training.
+    The post-training metrics are calculated in the retrieval project.
 
 ---------------------------------------
 
