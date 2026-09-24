@@ -1689,7 +1689,7 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   #layers_sizes is a list of ints, so encode each list as a string, choices can only be int,float,bool,str
   #the last layer in layer_sizes is the query and candidate embedding models' output dimensions-1
   #hp.Choice("layer_sizes", values=[json.dumps([32]), json.dumps([64, 32])], default=json.dumps([32]))
-  hp.Choice("layer_sizes", values=[json.dumps([16]), json.dumps([32, 16])], default=json.dumps([32]))
+  hp.Choice("layer_sizes", values=[json.dumps([16]), json.dumps([32, 16])], default=json.dumps([16]))
   #hp.Fixed("layer_sizes", value=json.dumps([32]))
   #hp.Fixed("layer_sizes", value=json.dumps([24])) # 16 too low, 24 too low, 64 too high.   32 good.
   # ahmos for "age", "hr_wk", "month", "occupation", "gender"
