@@ -117,14 +117,12 @@ def generate_tensorboard_chart(train_dir, val_dir, test_dir, irred_err_dict,
     if irred_err_dict is not None:
         if is_loss:
             # Safely check both potential keys just in case
-            bound_val = irred_err_dict.get('irreducible_error',
-                irred_err_dict.get('irred_error'))
+            bound_val = irred_err_dict.get('irred_error')
         else:
             bound_val = irred_err_dict.get('ceiling')
         
         # Support both margin-of-error naming conventions
-        bound_moe = irred_err_dict.get('margin_of_error_on_irred_err',
-            irred_err_dict.get('irred_error_margin_of_error'))
+        bound_moe = irred_err_dict.get('margin_of_error_on_irred_err')
     
     # Extract latest test stats to plot as a point
     latest_test_step = test_steps[-1]
@@ -192,9 +190,9 @@ def generate_tensorboard_chart(train_dir, val_dir, test_dir, irred_err_dict,
         latest_test_value]
     if bound_val is not None:
         all_values.append(bound_val)
-        if bound_moe is not None:
-            # Add bounds of the margin of error so they don't get clipped off the chart
-            all_values.extend([bound_val - bound_moe, bound_val + bound_moe])
+        #if bound_moe is not None:
+        #    # Add bounds of the margin of error so they don't get clipped off the chart
+        #    all_values.extend([bound_val - bound_moe, bound_val + bound_moe])
     
     if all_values:
         y_min, y_max = min(all_values), max(all_values)

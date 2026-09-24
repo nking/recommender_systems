@@ -2590,24 +2590,24 @@ def run_evals_and_calc_irred(train_dataset: tf.data.Dataset,
             else:
                 observed_errors.append(1 - v)
         print(f'{metric_key}: calc_bayes_error for observed errors: {observed_errors}', flush=True)
-        try:
-            irred_error, irred_moe = calc_bayes_error(ns, observed_errors)
-            if is_loss:
-                irred_dict[metric_key] = {
-                    'values' : observed_errors,
-                    'irred_error' : irred_error,
-                    'margin_of_error_on_irred_err' : irred_moe
-                }
-            else:
+        irred_error, irred_moe = calc_bayes_error(ns, observed_errors)
+        if is_loss:
+            irred_dict[metric_key] = {
+                'values' : observed_errors,
+                'irred_error' : irred_error,
+                'margin_of_error_on_irred_err' : irred_moe
+            }
+        else:
+            if irred_error is not None:
                 theoretical_ceiling = 1.0 - irred_error
                 theoretical_ceiling = min(1.0, theoretical_ceiling)
-                irred_dict[metric_key] = {
-                    'values': observed_errors,
-                    'ceiling': theoretical_ceiling,
-                    'margin_of_error_on_irred_err': irred_moe
-                }
-        except Exception as e:
-            print(f'error: {e}')
+            else:
+                theoretical_ceiling = None
+            irred_dict[metric_key] = {
+                'values': observed_errors,
+                'ceiling': theoretical_ceiling,
+                'margin_of_error_on_irred_err': irred_moe
+            }
             
     return irred_dict
 
@@ -2665,9 +2665,9 @@ def calc_bayes_error(ns:list, observed_errors:list, confidence_level=0.95) -> Tu
             actual_moe = None
         
         return c_opt, actual_moe
-    except RuntimeError as e:
+    except Exception as e:
         logging.error(f"Could not fit power law curve: {e}")
-        return None
+        return None, None
 
 # TFX Tuner will call this function.
 def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
