@@ -1685,10 +1685,11 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   #let AdamW weight decay handle the regularization, so set regl2 to 0:
   #hp.Float('regl2', 1e-5, 1e-2, sampling="log")
   hp.Fixed('regl2', 0.0)
-
+ 
   #layers_sizes is a list of ints, so encode each list as a string, choices can only be int,float,bool,str
   #the last layer in layer_sizes is the query and candidate embedding models' output dimensions-1
-  hp.Choice("layer_sizes", values=[json.dumps([32]), json.dumps([64, 32])], default=json.dumps([32]))
+  #hp.Choice("layer_sizes", values=[json.dumps([32]), json.dumps([64, 32])], default=json.dumps([32]))
+  hp.Choice("layer_sizes", values=[json.dumps([16]), json.dumps([32, 16])], default=json.dumps([32]))
   #hp.Fixed("layer_sizes", value=json.dumps([32]))
   #hp.Fixed("layer_sizes", value=json.dumps([24])) # 16 too low, 24 too low, 64 too high.   32 good.
   # ahmos for "age", "hr_wk", "month", "occupation", "gender"
@@ -1876,7 +1877,7 @@ def get_stop_early_callback():
     # note that the val_composite_ndcg_20 peaks well before ndcg_20 and the other metrics,
     #  because those are maximized by popularity.
     return keras.callbacks.EarlyStopping(
-        monitor=f'val_composite_ndcg_20', min_delta=0.0002, patience=2, mode="max",
+        monitor=f'val_composite_ndcg_20', min_delta=0.0005, patience=2, mode="max",
         start_from_epoch=1,
         restore_best_weights=True)
 
