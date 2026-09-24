@@ -28,8 +28,6 @@ MIN_EVAL_SIZE = 50  # make this larger for production pipeline
 BATCH_SIZE = 64
 NUM_EPOCHS = 20
 
-num_examples = 805139
-
 PIPELINE_NAME = 'metadata_pipeline'
 PIPELINE_ROOT = os.path.join(get_bin_dir(), PIPELINE_NAME)
 
@@ -49,8 +47,7 @@ metadata_connection_config = metadata.sqlite_metadata_connection_config(
 
 store = metadata_store.MetadataStore(metadata_connection_config)
 
-tr_dir = os.path.join(get_project_dir(),
-                      "src/main/python/movie_lens_tfx")
+tr_dir = os.path.join(get_project_dir(), "src/main/python/movie_lens_tfx")
 
 serving_model_dir = os.path.join(PIPELINE_ROOT, 'serving_model')
 query_model_dir = os.path.join(PIPELINE_ROOT, 'serving_query_model')
@@ -78,9 +75,11 @@ beam_pipeline_args = [
   f'--setup_file={SETUP_FILE_PATH}',
   # f'--extra_package={ingest_tar_file}'
 ]
-
 pipeline_factory = PipelineComponentsFactory(
-  num_examples=num_examples, infiles_dict_ser=infiles_dict_ser,
+  num_train_examples=1000209,
+  num_val_examples=math.ceil(0.1*1000209),
+  num_test_examples=math.ceil(0.1*1000209),
+  infiles_dict_ser=infiles_dict_ser,
   output_config_ser=output_config_ser, transform_dir=tr_dir,
   n_users=n_users, n_movies=n_movies,
   n_genres=n_genres,

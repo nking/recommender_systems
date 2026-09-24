@@ -25,7 +25,9 @@ class MODEL_NAME(enum.Enum):
   MOVIE_METADATA = "movie_metadata"
 
 class PipelineComponentsFactory():
-  def __init__(self, num_examples:int, infiles_dict_ser:Union[str, Dict[str, str]],
+  def __init__(self,
+    num_train_examples:int, num_val_examples:int, num_test_examples:int,
+    infiles_dict_ser:Union[str, Dict[str, str]],
     output_config_ser:Union[str, None], transform_dir:str,
     n_users: int, n_movies:int, n_genres:int,
     min_eval_size:int=100, batch_size:int=64, num_epochs:int=20,
@@ -39,7 +41,9 @@ class PipelineComponentsFactory():
     to help distinguish between model artifact properties, branches etc.
     
     Args:
-      num_examples: int, number of examples to use
+      num_train_examples: int,
+      num_val_Examples: int,
+      num_test_examples: int,
       infiles_dict_ser: if given as a single string, this is a serialized infiles dictionary holding information of the input
          files and is used for the regression model a.k.a. MetadataDNN, else if argument is given as a dictionary of strings,
          the input is a dictionary of serialized infile dictionaries to be used for the contrastive loss model a.k.a.
@@ -63,7 +67,9 @@ class PipelineComponentsFactory():
       git_hash: str, git commit hash
       team_lead: str, team lead
     """
-    self.num_examples = num_examples
+    self.num_train_examples = num_train_examples
+    self.num_val_examples = num_val_examples
+    self.num_test_examples = num_test_examples
     self.infiles_dict_ser = infiles_dict_ser
     self.output_config_ser = output_config_ser
     self.transform_dir = transform_dir
@@ -132,7 +138,9 @@ class PipelineComponentsFactory():
       'incl_genres': True,
       'BATCH_SIZE':self.batch_size,
       "NUM_EPOCHS":self.num_epochs,
-      "num_examples":self.num_examples,
+      "num_train_examples" : self.num_train_examples,
+      "num_val_examples" : self.num_val_examples,
+      "num_test_examples" : self.num_test_examples,
       "version" : self.version,
       "model_name" : MODEL_NAME.USER_MOVIE.value,
       "movie_tiers_uri" : self.movie_tiers_uri
@@ -233,7 +241,9 @@ class PipelineComponentsFactory():
             'incl_genres': True,
             'BATCH_SIZE': self.batch_size,
             "NUM_EPOCHS": self.num_epochs,
-            "num_examples": self.num_examples,
+            "num_train_examples" : self.num_train_examples,
+            "num_val_examples" : self.num_val_examples,
+            "num_test_examples" : self.num_test_examples,
             "version": self.version,
             "model_name": MODEL_NAME.USER_MOVIE.value,
             "movie_tiers_uri" : self.movie_tiers_uri,
@@ -496,7 +506,9 @@ class PipelineComponentsFactory():
       'run_eagerly': False,
       'BATCH_SIZE': self.batch_size,
       "NUM_EPOCHS": self.num_epochs,
-      "num_examples": self.num_examples,
+      "num_train_examples" : self.num_train_examples,
+      "num_val_examples" : self.num_val_examples,
+      "num_test_examples" : self.num_test_examples,
       "version": self.version,
       "model_name": MODEL_NAME.MOVIE_METADATA.value,
     }

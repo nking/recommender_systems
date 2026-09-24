@@ -20,7 +20,7 @@ logging.set_verbosity(logging.INFO)
 logging.set_stderrthreshold(logging.INFO)
 
 # for the in-batch softmax, sampled softmax approach, use only positives:
-infiles_dict_of_dicts_ser = get_contrastive_split_infiles_set(ds = DataSize.FULL)
+infiles_dict_of_dicts_ser, split_sizes = get_contrastive_split_infiles_set(ds = DataSize.FULL)
 # for HueristicLambdaLoss, use the ratings that include pos and neg, e.g. 1-5:
 #infiles_dict_of_dicts_ser = get_pos_and_neg_split_infiles_set(use_small=False)
 
@@ -32,9 +32,6 @@ MIN_EVAL_SIZE = 50  # make this larger for production pipeline
 
 BATCH_SIZE = 2048
 NUM_EPOCHS = 20
-
-#total number of positives in ratings=559444, num_train=459586, num_val=51573, num_test=48285
-num_examples = 463548
 
 PIPELINE_NAME = 'rs_pipeline'
 PIPELINE_ROOT = os.path.join(get_bin_dir(), PIPELINE_NAME)
@@ -97,7 +94,10 @@ except Exception as ex:
     pass
 
 pipeline_factory = PipelineComponentsFactory(
-  num_examples=num_examples, infiles_dict_ser=infiles_dict_of_dicts_ser,
+  num_train_examples=split_sizes['train'],
+  num_val_examples=split_sizes['val'],
+  num_test_examples=split_sizes['test'],
+  infiles_dict_ser=infiles_dict_of_dicts_ser,
   output_config_ser=None, transform_dir=tr_dir,
   n_users=n_users, n_movies=n_movies,
   n_genres=n_genres,

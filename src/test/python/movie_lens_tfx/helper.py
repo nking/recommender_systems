@@ -2,7 +2,24 @@
 from enum import Enum
 
 from movie_lens_tfx.utils.movie_lens_utils import *
+import subprocess
 
+def count_lines_wc(filepath):
+    try:
+        result = subprocess.run(
+            ['wc', '-l', filepath],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        
+        line_count = int(result.stdout.strip().split()[0])
+        return line_count
+    
+    except (subprocess.SubprocessError, FileNotFoundError) as e:
+        print(f"Error running wc: {e}")
+        return None
+    
 def get_kaggle() -> bool:
   cwd = os.getcwd()
   if "kaggle" in cwd:
@@ -69,6 +86,7 @@ def get_contrastive_split_infiles_set(ds : DataSize = DataSize.SMALL) -> Dict[st
         col_types=users_col_types,
         headers_present=False, delim="::")
     
+    ratings_sizes = {}
     dicts_ser = {}
     for split_name in ["train", "val", "test"]:
         ratings_uri = os.path.join(ratings_prefix, f"ratings_{split_name}_liked.dat")
@@ -81,8 +99,9 @@ def get_contrastive_split_infiles_set(ds : DataSize = DataSize.SMALL) -> Dict[st
             movies_dict=movies_dict.copy(),
             users_dict=users_dict.copy(),
             version=1)
+        ratings_sizes[split_name] = count_lines_wc(ratings_uri)
         dicts_ser[split_name] = serialize_to_string(infiles_dict)
-    return dicts_ser
+    return dicts_ser, ratings_sizes
 
 def get_pos_and_neg_split_infiles_set(use_small: bool = True) -> Dict[
     str, str]:

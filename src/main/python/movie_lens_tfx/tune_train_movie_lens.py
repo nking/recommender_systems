@@ -4,29 +4,23 @@ import logging
 import pickle
 import numpy as np
 import abc
-import time
 # some code is adapted from https://github.com/tensorflow/tfx/blob/master/tfx/examples/penguin/penguin_utils_base.py
 # and related files
 # they have co Copyright 2020 Google LLC. All Rights Reserved.
 # Licensed under the Apache License, Version 2.0 (the "License");
-from typing import List, Tuple, Dict, Text, Any, Callable
+from typing import List, Tuple, Dict, Any, Callable
 import tensorflow as tf
 import tensorflow.keras as keras
 #import tf_keras as keras ## this fails
-import enum
 import os
 import math
 import json
 import keras_tuner
 import tensorflow_transform as tft
 from tensorflow_transform import common_types
-from tensorflow_transform.tf_metadata import schema_utils
-from tfx.types.standard_artifacts import Model
-from tensorflow_metadata.proto.v0 import statistics_pb2
 #tuner needs this:
-from tfx.components.trainer.fn_args_utils import FnArgs
+#from tfx.components.trainer.fn_args_utils import FnArgs
 
-from tensorboard.plugins.hparams.api import hparams
 # from tensorflow.python.ops.gen_experimental_dataset_ops import save_dataset
 from tfx import v1 as tfx
 
@@ -1720,11 +1714,14 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   hp.Fixed('n_movies', custom_config["n_movies"])
   hp.Fixed('n_genres', custom_config["n_genres"])
   hp.Fixed('run_eagerly', custom_config.get("run_eagerly", False))
-  num_examples = custom_config.get("num_examples", DEFAULT_NUM_EXAMPLES)
-  num_train = int(num_examples * 0.8)
-  num_eval = int(num_examples * 0.1)
-  hp.Fixed("num_train", num_train)
-  hp.Fixed("num_eval", num_eval)
+  
+  num_train_examples = custom_config.get("num_train_examples", DEFAULT_NUM_EXAMPLES)
+  num_val_examples = custom_config.get("num_val_examples", math.ceil(0.1*DEFAULT_NUM_EXAMPLES))
+  num_test_examples = custom_config.get("num_test_examples", math.ceil(0.1*DEFAULT_NUM_EXAMPLES))
+  hp.Fixed("num_train", num_train_examples)
+  hp.Fixed("num_eval", num_val_examples)
+  hp.Fixed("num_test", num_test_examples)
+  
   hp.Fixed('version', custom_config.get("version", "1.0.0"))
   if "model_name" in custom_config:
     hp.Fixed('model_name', custom_config["model_name"])
@@ -1924,15 +1921,12 @@ class MinimumThresholdCallback(tf.keras.callbacks.Callback):
                 #   raise kt.errors.FailedTrialError("score is too low by epoch {epoch}...")
     
     def get_config(self):
-        config = super().get_config()
-        config.update({
+        return {
             "monitor": self.monitor,
             "min_threshold": self.min_threshold,
             "start_epoch": self.start_epoch,
             "patience" : self.patience,
-        })
-        return config
-
+        }
 
 # tfx.components.FnArgs
 def run_fn(fn_args):
@@ -2043,7 +2037,8 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   # virtual epochs:
   TRAIN_STEPS_PER_EPOCH = math.ceil(hp.get("num_train") / GLOBAL_BATCH_SIZE)
   EVAL_STEPS_PER_EPOCH = math.ceil(hp.get("num_eval") / GLOBAL_BATCH_SIZE)
-  
+  TEST_STEPS_PER_EPOCH = math.ceil(hp.get("num_test") / GLOBAL_BATCH_SIZE)
+
   # for run_fn, fn_args.transform_output is not None
   tf_transform_output = tft.TFTransformOutput(fn_args.transform_output)
   input_signature_raw = convert_feature_spec_to_tensor_spec(tf_transform_output.raw_feature_spec())
@@ -2106,16 +2101,17 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
     callbacks=[tensorboard_callback, stop_early], verbose=1)
   
   print(f'fit history.history={history.history}')
-  total_epochs_run = len(history.history['val_mean_loss'])
+  total_epochs_run = len(history.epoch)
   print(f"total_epochs_run={total_epochs_run}", flush=True)
   logging.info(f"total_epochs_run={total_epochs_run}")
   
+  print(f'invoked_by_trainer={invoked_by_trainer}')
   irred_error_dict = None
   if invoked_by_trainer:
       test_dataset : tf.data.Dataset = run_test_eval(model, fn_args, tf_transform_output,
-          GLOBAL_BATCH_SIZE, total_epochs_run, EVAL_STEPS_PER_EPOCH)
+          GLOBAL_BATCH_SIZE, total_epochs_run, TEST_STEPS_PER_EPOCH)
       irred_error_dict = run_evals_and_calc_irred(train_dataset, eval_dataset, test_dataset,
-          hp, TRAIN_STEPS_PER_EPOCH, EVAL_STEPS_PER_EPOCH, NUM_EPOCHS, GLOBAL_BATCH_SIZE)
+          hp, TRAIN_STEPS_PER_EPOCH, EVAL_STEPS_PER_EPOCH, TEST_STEPS_PER_EPOCH, NUM_EPOCHS, GLOBAL_BATCH_SIZE)
       print(f"irred_error_dict={irred_error_dict}")
   
   #TODO: consider adding the vocabularies as assets:
@@ -2441,7 +2437,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   return model
   
 def run_test_eval(model, fn_args, tf_transform_output,
-          GLOBAL_BATCH_SIZE, total_epochs_run, EVAL_STEPS_PER_EPOCH) -> tf.data.Dataset:
+          GLOBAL_BATCH_SIZE, total_epochs_run, TEST_STEPS_PER_EPOCH) -> tf.data.Dataset:
       
       # run evaluation on test dataset and store results alongside the tensorboard train and validation results
       eval_dir = fn_args.eval_files
@@ -2465,7 +2461,7 @@ def run_test_eval(model, fn_args, tf_transform_output,
       
       # assuming test dataset is same size as eval which is assumed to be 1/10 the size of num_examples which is all examples
       test_results = model.evaluate(test_dataset,
-          steps=EVAL_STEPS_PER_EPOCH,
+          steps=TEST_STEPS_PER_EPOCH,
           verbose="2",
           return_dict=True
       )
@@ -2497,66 +2493,121 @@ def get_deterministic_hash_filter(frac) -> Callable[[Any, Any], tf.Tensor]:
     
     return filter_fn
 
-def run_evals_and_calc_irred(train_dataset : tf.data.Dataset, eval_dataset :tf.data.Dataset,
-        test_dataset : tf.data.Dataset, hp,
-        TRAIN_STEPS_PER_EPOCH, EVAL_STEPS_PER_EPOCH, NUM_EPOCHS, BATCH_SIZE) -> Dict[str, Any]:
-    
-      # ====== calc irreducible error =======
-      fractions = [0.10, 0.25, 0.50, 0.75, 1.00]
-      ns = []
-      observed_errors = []
-      for frac in fractions:
-          print(f"--- Training Model on {frac * 100}% of Data for irred err calcs---")
-          if frac < 1.0:
-              # Note: A deterministic way to slice tf.data is using a filter + hash,
-              # or simply applying a global shard/filter rule.
-              # Example using a simple random filter based on a uniform distribution:
-              hash_filter = get_deterministic_hash_filter(frac)
-              subset_dataset = (train_dataset.unbatch()
-                  .filter(hash_filter)
-                  .batch(BATCH_SIZE))
-          else:
-              subset_dataset = train_dataset
-          
-          TRAIN_STEPS_PER_EPOCH_2 = math.ceil(frac*TRAIN_STEPS_PER_EPOCH)
-        
-          model = _make_2tower_keras_model(hp)
-          
-          stop_early = get_stop_early_callback()
-          
-          logging.info("fit model")
-          history = model.fit(
-              subset_dataset,
-              steps_per_epoch=TRAIN_STEPS_PER_EPOCH_2,
-              validation_data=eval_dataset,
-              validation_steps=EVAL_STEPS_PER_EPOCH,
-              epochs=NUM_EPOCHS,
-              shuffle=False,  # this is handled by tfxio pipeline already
-              callbacks=[stop_early], verbose=1)
-          print(f'fit history.history fraction={frac}={history.history}')
-          total_epochs_run = len(history.history['val_mean_loss'])
-          test_results = model.evaluate(test_dataset,
-              steps=EVAL_STEPS_PER_EPOCH,
-              verbose="2",
-              return_dict=True
-          )
-          loss = test_results['mean_loss']
-          if isinstance(loss, tf.Tensor):
-              loss = loss.numpy().item()
-          observed_errors.append(loss)
-          n_train = math.ceil(frac * hp.get("num_train"))
-          ns.append(n_train)
-          print(f'N=={n_train}, test_err={test_results["mean_loss"]}')
-          
-      irred_error, irred_moe = calc_bayes_error(ns, observed_errors)
 
-      irred_dict = {
-          'irreducible_error' : irred_error,
-          'irred_error_margin_of_error' : irred_moe,
-          "n_train" : ns,
-          "test_errors" : observed_errors
-      }
-      return irred_dict
+def run_evals_and_calc_irred(train_dataset: tf.data.Dataset,
+        eval_dataset: tf.data.Dataset,
+        test_dataset: tf.data.Dataset, hp,
+        TRAIN_STEPS_PER_EPOCH, EVAL_STEPS_PER_EPOCH, TEST_STEPS_PER_EPOCH, NUM_EPOCHS, BATCH_SIZE) -> Dict[str, Any]:
+    
+    """
+    the method applies the principle of neural scaling laws / empirical learning curves which says that
+    the error (in this case the cross-entropy loss) scales by a power-law that is a function of the
+    size N of the training dataset. error = alpha * N^{-beta} +  irred_error.
+    
+    It solves for the power-law parameters for the mean loss as the error where the parameters include the irreducible error and it'smargin of error.
+    Ir also solves for the irreducible errors on the ndcg and recall metrics, but as 1 - their metrics.
+    
+    :param train_dataset:
+    :param eval_dataset:
+    :param test_dataset:
+    :param hp:
+    :param TRAIN_STEPS_PER_EPOCH:
+    :param EVAL_STEPS_PER_EPOCH:
+    :param NUM_EPOCHS:
+    :param BATCH_SIZE:
+    :return: dictionary with keys:
+        'n_train',
+        'mean_loss', 'composite_ndcg_20', 'hit_rate', 'mrr_20', 'ndcg_20', 'ndcg_head_20', 'ndcg_tail_20', 'ndcg_torso_20', 'recall_20'}
+         here the metrics key values are dictionaries of
+         {'values' : observed_errors,
+          'irred_error' : irred_error,
+          'margin_of_error_on_irred_err' : irred_error
+            OR instead of 'irred_error' there is 'ceiling' for the metrics which are not losses
+           }
+    """
+    # ====== calc irreducible error =======
+    fractions = [0.10, 0.25, 0.50, 0.75, 1.00]
+    ns = []
+    all_test_results = []
+    for frac in fractions:
+        n_train = math.ceil(frac * hp.get("num_train"))
+        print(f"--- Training Model on {frac * 100}% of Data for irred err calcs (N={n_train}, BATCH_SIZE={BATCH_SIZE})---")
+        if frac < 1.0:
+            ## A deterministic way to slice tf.data is using a filter + hash,
+            hash_filter = get_deterministic_hash_filter(frac)
+            subset_dataset = (train_dataset.unbatch().filter(hash_filter).batch(BATCH_SIZE).prefetch(tf.data.AUTOTUNE))
+            
+        else:
+            subset_dataset = train_dataset
+        
+        TRAIN_STEPS_PER_EPOCH_2 = math.ceil(frac * TRAIN_STEPS_PER_EPOCH)
+        
+        model = _make_2tower_keras_model(hp)
+        
+        stop_early = get_stop_early_callback()
+        
+        logging.info("fit model")
+        history = model.fit(
+            subset_dataset,
+            steps_per_epoch=TRAIN_STEPS_PER_EPOCH_2,
+            validation_data=eval_dataset,
+            validation_steps=EVAL_STEPS_PER_EPOCH,
+            epochs=NUM_EPOCHS,
+            shuffle=False,  # this is handled by tfxio pipeline already
+            callbacks=[stop_early], verbose=1)
+        print(f'fit history.history fraction={frac}={history.history}')
+        total_epochs_run = len(history.epoch)
+        test_results = model.evaluate(test_dataset,
+            steps=TEST_STEPS_PER_EPOCH,
+            verbose="2",
+            return_dict=True
+        )
+        ns.append(n_train)
+        all_test_results.append(test_results)
+        logging.info(f"irred_error:  n_train={n_train}, test results={test_results}")
+        print(f"irred_error:  n_train={n_train}, test results={test_results}")
+        
+    #extract metric keys:
+    if len(all_test_results) == 0:
+        return None
+    
+    irred_dict = {'n_train' : ns}
+    target_metrics = ["loss", "ndcg", "recall"]
+    metric_keys = all_test_results[0].keys()
+    metric_keys = [k for k in metric_keys if any(t in k for t in target_metrics)]
+    print(f'calculating irreducible error for metrics: {metric_keys}')
+    for metric_key in metric_keys:
+        is_loss = metric_key.find('loss') > -1
+        observed_errors = []
+        for res in all_test_results:
+            v = res[metric_key]
+            if isinstance(v, tf.Tensor):
+                v = v.numpy().item()
+            if is_loss:
+                observed_errors.append(v)
+            else:
+                observed_errors.append(1 - v)
+        print(f'{metric_key}: calc_bayes_error for observed errors: {observed_errors}', flush=True)
+        try:
+            irred_error, irred_moe = calc_bayes_error(ns, observed_errors)
+            if is_loss:
+                irred_dict[metric_key] = {
+                    'values' : observed_errors,
+                    'irred_error' : irred_error,
+                    'margin_of_error_on_irred_err' : irred_moe
+                }
+            else:
+                theoretical_ceiling = 1.0 - irred_error
+                theoretical_ceiling = min(1.0, theoretical_ceiling)
+                irred_dict[metric_key] = {
+                    'values': observed_errors,
+                    'ceiling': theoretical_ceiling,
+                    'margin_of_error_on_irred_err': irred_moe
+                }
+        except Exception as e:
+            print(f'error: {e}')
+            
+    return irred_dict
 
 def calc_bayes_error(ns:list, observed_errors:list, confidence_level=0.95) -> Tuple[float, float]:
     import numpy as np
@@ -2801,4 +2852,3 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
       'shuffle' : False,  # this is handled by tfxio pipeline already
       'callbacks' : [stop_early, stop_threshold],
     })
-  

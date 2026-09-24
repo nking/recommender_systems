@@ -116,14 +116,15 @@ class TableBTest(tf.test.TestCase):
       os.makedirs(query_model_dir, exist_ok=True)
       os.makedirs(candidate_model_dir, exist_ok=True)
       
-      infiles_dict_of_dicts_ser = get_contrastive_split_infiles_set(ds=DataSize.FULL)
-      num_examples = 800167
+      infiles_dict_of_dicts_ser, split_sizes = get_contrastive_split_infiles_set(ds=DataSize.FULL)
       
       movie_tiers_uri = os.path.join(get_project_dir(),
           "src/test/resources/movie_tiers.json")
       
       pipeline_factory = PipelineComponentsFactory(
-          num_examples=num_examples,
+          num_train_examples=split_sizes['train'],
+          num_val_examples=split_sizes['val'],
+          num_test_examples=split_sizes['test'],
           infiles_dict_ser=infiles_dict_of_dicts_ser,
           output_config_ser=None,
           transform_dir=tr_dir, n_users=self.n_users,

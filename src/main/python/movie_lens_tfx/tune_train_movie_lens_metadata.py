@@ -484,11 +484,17 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   hp.Fixed('run_eagerly', custom_config["run_eagerly"])
   hp.Fixed('device', custom_config.get("device", 'CPU'))
   hp.Fixed('MAX_TUNE_TRIALS', custom_config.get("MAX_TUNE_TRIALS", MAX_TUNE_TRIALS_DEFAULT))
-  num_examples = custom_config.get("num_examples", DEFAULT_NUM_EXAMPLES)
-  num_train = int(num_examples * 0.8)
-  num_eval = int(num_examples * 0.1)
-  hp.Fixed("num_train", num_train)
-  hp.Fixed("num_eval", num_eval)
+  
+  num_train_examples = custom_config.get("num_train_examples",
+      DEFAULT_NUM_EXAMPLES)
+  num_val_examples = custom_config.get("num_val_examples",
+      math.ceil(0.1 * DEFAULT_NUM_EXAMPLES))
+  num_test_examples = custom_config.get("num_test_examples",
+      math.ceil(0.1 * DEFAULT_NUM_EXAMPLES))
+  hp.Fixed("num_train", num_train_examples)
+  hp.Fixed("num_eval", num_val_examples)
+  hp.Fixed("num_test", num_test_examples)
+  
   hp.Fixed('version', custom_config.get("version", "1.0.0"))
   if "model_name" in custom_config:
     hp.Fixed('model_name', custom_config["model_name"])

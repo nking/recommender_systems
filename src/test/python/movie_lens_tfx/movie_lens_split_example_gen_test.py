@@ -41,7 +41,7 @@ class MovieLensSplitExampleGenTest(tf.test.TestCase):
   def setUp(self):
     super().setUp()
     
-    self.infiles_dict_dict_ser = get_contrastive_split_infiles_set()
+    self.infiles_dict_dict_ser, self.split_sizes = get_contrastive_split_infiles_set()
 
     self.split_names = ["train", "eval", "test"]
     self.name = 'test run of split ratings ingestion w/ python custom comp func'

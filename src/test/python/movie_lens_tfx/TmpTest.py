@@ -26,13 +26,12 @@ class TuneTrainTest(tf.test.TestCase):
 
   def setUp(self):
     super().setUp()
-    self.infiles_dict_of_dicts_ser = get_contrastive_split_infiles_set(ds=DataSize.FULL)
+    self.infiles_dict_of_dicts_ser, self.split_sizes = get_contrastive_split_infiles_set(ds=DataSize.FULL)
     self.n_users = 6040
     self.n_movies = 3952
     self.n_genres = N_GENRES
     self.n_occupations = 21
     self.name = 'test run of ratings transform'
-    self.num_examples = 80_000
     self.MIN_EVAL_SIZE = 50
     
   def test_signature(self):
@@ -78,7 +77,9 @@ class TuneTrainTest(tf.test.TestCase):
         "src/test/resources/movie_tiers.json")
     
     pipeline_factory = PipelineComponentsFactory(
-      num_examples=self.num_examples,
+      num_train_examples=self.split_sizes['train'],
+      num_val_examples=self.split_sizes['val'],
+      num_test_examples=self.split_sizes['test'],
       infiles_dict_ser=self.infiles_dict_of_dicts_ser,
       output_config_ser=None,
       transform_dir=tr_dir, n_users=self.n_users, n_movies=self.n_movies,

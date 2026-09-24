@@ -29,7 +29,7 @@ class TuneTrainTest(tf.test.TestCase):
 
   def setUp(self):
     super().setUp()
-    self.infiles_dict_dict_ser = get_contrastive_split_infiles_set()
+    self.infiles_dict_dict_ser, self.split_sizes = get_contrastive_split_infiles_set()
     self.n_users = 6040
     self.n_movies = 3952
     self.n_genres = N_GENRES
@@ -74,7 +74,9 @@ class TuneTrainTest(tf.test.TestCase):
       "NUM_EPOCHS" : 2,
       "BATCH_SIZE" : 10,
       "MAX_TUNE_TRIALS" : 1,
-      "num_examples": 1000
+      "num_train_examples" :self.split_sizes['train'],
+      "num_val_examples" : self.split_sizes['val'],
+      "num_test_examples" : self.split_sizes['test'],
     }
     
     tuner = tfx.components.Tuner(

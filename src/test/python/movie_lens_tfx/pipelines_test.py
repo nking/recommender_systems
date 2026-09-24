@@ -1,6 +1,7 @@
 import os
 import shutil
 from pathlib import Path
+from typing import Text
 
 from tfx.orchestration import metadata
 
@@ -65,7 +66,7 @@ class PipelinesTest(tf.test.TestCase):
         self.n_occupations = 21
         self.MIN_EVAL_SIZE = 50  # make this larger for production pipeline
         self.name = 'test run of pipelines'
-        self.BATCH_SIZE = 32
+        self.BATCH_SIZE = 10 #0.1*100
     
     def test_main_models(self):
         print(f'run main user_model model WITH bias corretions')
@@ -115,8 +116,7 @@ class PipelinesTest(tf.test.TestCase):
         os.makedirs(query_model_dir, exist_ok=True)
         os.makedirs(candidate_model_dir, exist_ok=True)
         
-        infiles_dict_of_dicts_ser = get_contrastive_split_infiles_set(ds = DataSize.TINY3)
-        num_examples = 100
+        infiles_dict_of_dicts_ser, split_sizes = get_contrastive_split_infiles_set(ds = DataSize.TINY3)
         
         git_hash = None
         try:
@@ -132,7 +132,9 @@ class PipelinesTest(tf.test.TestCase):
             "src/test/resources/movie_tiers.json")
         
         pipeline_factory = PipelineComponentsFactory(
-            num_examples=num_examples,
+            num_train_examples=split_sizes['train'],
+            num_val_examples=split_sizes['val'],
+            num_test_examples=split_sizes['test'],
             infiles_dict_ser=infiles_dict_of_dicts_ser,
             output_config_ser=None,
             transform_dir=tr_dir, n_users=self.n_users,
@@ -422,9 +424,8 @@ class PipelinesTest(tf.test.TestCase):
             # then write to bin directory
             # and create new infiles_dict_ser for those files
             
-            infiles_dict_of_dicts_ser = get_contrastive_split_infiles_set(
+            infiles_dict_of_dicts_ser, split_sizes = get_contrastive_split_infiles_set(
                 ds=DataSize.TINY3)
-            num_examples = 100
             
             print(f'serving_model_dir={serving_model_dir}')
             
@@ -439,7 +440,9 @@ class PipelinesTest(tf.test.TestCase):
             print(f'model_uri={model_uri}')
             
             pipeline_factory = PipelineComponentsFactory(
-                num_examples=num_examples,
+                num_train_examples=split_sizes['train'],
+                num_val_examples=split_sizes['val'],
+                num_test_examples=split_sizes['test'],
                 infiles_dict_ser=infiles_dict_of_dicts_ser,
                 output_config_ser=None,
                 transform_dir=tr_dir, n_users=self.n_users,
@@ -477,8 +480,7 @@ class PipelinesTest(tf.test.TestCase):
             print(f'inference_result_uri={inference_result_uri}')
             self.assertTrue(os.path.exists(inference_result_uri))
             
-            def read_prediction_logs_from_directory(
-                    directory_path: Text):
+            def read_prediction_logs_from_directory(directory_path: Text):
                 """
                 Reads and parses PredictionLog records from all gzipped TFRecord files
                 in the specified directory.
@@ -526,9 +528,9 @@ class PipelinesTest(tf.test.TestCase):
                         f"  Finished file. Processed {file_records_processed} records.")
                 
                 print(f"\n--- DONE ---")
-                print(
-                    f"Total inspected records across all files: {total_records_processed}")
-                self.assertEqual(3 * num_examples, total_records_processed)
+                print(f"Total inspected records across all files: {total_records_processed}")
+                num_examples = split_sizes['train'] + split_sizes['val'] + split_sizes['test']
+                self.assertEqual(num_examples, total_records_processed)
             
             read_prediction_logs_from_directory(inference_result_uri)
     
@@ -582,7 +584,9 @@ class PipelinesTest(tf.test.TestCase):
             get_test_data()
         
         pipeline_factory = PipelineComponentsFactory(
-            num_examples=self.num_examples,
+            num_train_examples=self.num_examples,
+            num_val_examples=self.num_examples,
+            num_test_examples=self.num_examples,
             infiles_dict_ser=infiles_dict_ser,
             output_config_ser=output_config_ser,
             transform_dir=tr_dir, n_users=self.n_users,

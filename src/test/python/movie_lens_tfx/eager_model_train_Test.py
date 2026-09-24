@@ -38,7 +38,9 @@ class EagerModelTrainTest(unittest.TestCase):
       self.n_movies = 3952
       self.n_genres = 18
       self.n_occupations = 21
-      self.num_examples = 100
+      self.num_train_examples = 100
+      self.num_val_examples = 100
+      self.num_test_examples = 100
       self.MIN_EVAL_SIZE = 50
       self.name = 'test run for table_b'
       self.BATCH_SIZE = 50
@@ -57,7 +59,9 @@ class EagerModelTrainTest(unittest.TestCase):
             'incl_genres': True,
             'BATCH_SIZE': self.BATCH_SIZE,
             "NUM_EPOCHS": self.num_epochs,
-            "num_examples": self.num_examples,
+            "num_train_examples": self.num_train_examples,
+            "num_val_examples" : self.num_val_examples,
+            "num_test_examples" : self.num_test_examples,
             "version": "0.001",
             "model_name": MODEL_NAME.USER_MOVIE.value,
             "input_dataset_element_spec_trans_ser" : "gASV/gIAAAAAAAB9lCiMA2FnZZSMInRlbnNvcmZsb3cucHl0aG9uLmZy"
@@ -90,8 +94,8 @@ class EagerModelTrainTest(unittest.TestCase):
       GLOBAL_BATCH_SIZE = BATCH_SIZE_PER_REPLICA * n_replicas
       
       # virtual epochs:
-      TRAIN_STEPS_PER_EPOCH = math.ceil(self.num_examples / GLOBAL_BATCH_SIZE)
-      EVAL_STEPS_PER_EPOCH = math.ceil(self.num_examples / GLOBAL_BATCH_SIZE)
+      TRAIN_STEPS_PER_EPOCH = math.ceil(self.num_train_examples / GLOBAL_BATCH_SIZE)
+      EVAL_STEPS_PER_EPOCH = math.ceil(self.num_val_examples / GLOBAL_BATCH_SIZE)
       
       train_path = os.path.join(get_project_dir(), 'src/test/resources/ml-1m/transformed_features_train.parquet')
       eval_path = os.path.join(get_project_dir(),
