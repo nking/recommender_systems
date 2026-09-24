@@ -29,8 +29,8 @@ class WriteTensorboardToPng(unittest.TestCase):
         saved_model_dir = os.path.join(get_bin_dir(), "rs_pipeline/Pusher/pushed_model/21")
         
         #temporarily point to recently trained model:
-        #logdir = os.path.join(get_project_dir(), "../TMP5/bin", p)
-        #saved_model_dir = os.path.join(get_project_dir(), "../TMP5/bin/rs_pipeline/Pusher/pushed_model/21")
+        #logdir = os.path.join(get_project_dir(), "../TMP6/bin", p)
+        #saved_model_dir = os.path.join(get_project_dir(), "../TMP6/bin/rs_pipeline/Pusher/pushed_model/21")
         
         #logdir = os.path.join(get_bin_dir(), "TestPipelines_baseline/MAIN_USER_MOVIE/Trainer/model_run/17/")
         #saved_model_dir = os.path.join(get_bin_dir(), "TestPipelines_baseline/MAIN_USER_MOVIE/Pusher/pushed_model/19")
@@ -45,6 +45,8 @@ class WriteTensorboardToPng(unittest.TestCase):
         for metric in metrics:
             outfile = os.path.join(outdir, f"{metric}.png")
             irr_dict = self.find_irred_dict(irred_err_dict, metric)
+            if metric.find("recall") > -1:
+                irr_dict = None
             generate_tensorboard_chart(train_dir, val_dir, test_dir, irr_dict,
                 scalar_name=metric, output_path=outfile)
         

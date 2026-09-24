@@ -1876,8 +1876,9 @@ def get_stop_early_callback():
     # by including them in the NDCG score.
     # note that the val_composite_ndcg_20 peaks well before ndcg_20 and the other metrics,
     #  because those are maximized by popularity.
+    # for ndcg, min_delta=0.0005 is what was used before.  increasing it now to stop earlier at level similar to test data
     return keras.callbacks.EarlyStopping(
-        monitor=f'val_composite_ndcg_20', min_delta=0.0005, patience=2, mode="max",
+        monitor=f'val_composite_ndcg_20', min_delta=0.002, patience=2, mode="max",
         start_from_epoch=1,
         restore_best_weights=True)
 
