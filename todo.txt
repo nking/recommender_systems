@@ -98,3 +98,63 @@
   - consider tindying up the use of pre-processsing scripts including eda,
     running the pipeline, running script to analyze trained model,
     and copying approved trained model outputs to other locations.
+
+- consider a more advanced model that uses a lightweight transformer and
+  DCN netowrk layer to make richer, time aware embeddings:
+
+(Sequence-Aware & Cross-Feature Two-Tower)
+│
+├── Hyperparameters & State
+│   ├── temperature (τ)                          # Softmax scaling factor
+│   ├── log_q_correction_factor (β)              # Log-Q bias correction multiplier
+│   ├── table_A & table_B                        # State tracking physical time gaps between appearances
+│   └── max_seq_len                              # Length of user watch history sequence (e.g., last 50 movies)
+│
+├── QueryModel (User / Context Tower with Sequence Transformer & DCN-v2)
+│   ├── UserModel (Feature Extractor)
+│   │   ├── Categorical & Dense Embeddings       # Static features: age, hr, weekday, hr_wk, month, yr
+│   │   │
+│   │   ├── DCN-v2 Stack (Cross Network)         # Explicit Bounded Feature Interactions
+│   │   │   ├── Cross Layer 1 (x₀ · xᵀ · W₁ + b₁ + x₁)
+│   │   │   └── Cross Layer 2 (x₁ · xᵀ · W₂ + b₂ + x₂)
+│   │   │
+│   │   └── Sequence Transformer (e.g., SASRec / BERT4Rec)
+│   │       ├── Item Embedding Table             # Shares weights with Candidate Model item embeddings
+│   │       ├── Positional Embeddings            # Encodes relative recency of past watched movies
+│   │       ├── Multi-Head Self-Attention        # Learns dynamic temporal intent across watch history
+│   │       └── LayerNorm & Feed-Forward (FFN)   # Outputs fixed-size sequence representation
+│   │
+│   ├── Concatenation & Fusion Layer             # Concat: [DCN-v2 Output | Transformer Seq Vector | Static Embeddings]
+│   │
+│   ├── MLP Stack (Deep Layer)
+│   │   ├── Dense Layer 1 (e.g., 128 units + GELU)
+│   │   └── Dense Layer 2 (e.g., 64 units)
+│   │
+│   └── call(inputs)                             # Fusion Vector ➔ MLP ➔ L2 Normalization ➔ u(x) ∈ ℝ⁶⁴
+│
+├── CandidateModel (Movie / Item Tower with Text Transformer & DCN-v2)
+│   ├── MovieModel (Feature Extractor)
+│   │   ├── Categorical Embeddings               # movie_id, genres, release_year, director_id
+│   │   │
+│   │   ├── DCN-v2 Stack (Cross Network)         # Explicit Item Attribute Crosses (e.g., genre × director)
+│   │   │   ├── Cross Layer 1 (y₀ · yᵀ · W₁ + b₁ + y₁)
+│   │   │   └── Cross Layer 2 (y₁ · yᵀ · W₂ + b₂ + y₂)
+│   │   │
+│   │   └── Text Transformer (Text Encoder)     # Processes unstructured titles, tags, and descriptions
+│   │       ├── Token Embeddings                 # Title/description token IDs
+│   │       ├── Multi-Head Self-Attention        # Captures semantic text representations
+│   │       └── Mean Pooling / [CLS] Extraction # Aggregates text sequence to a single vector
+│   │
+│   ├── Concatenation & Fusion Layer             # Concat: [DCN-v2 Output | Text Transformer Vector | Static Embeddings]
+│   │
+│   ├── MLP Stack (Deep Layer)
+│   │   ├── Dense Layer 1 (e.g., 128 units + GELU)
+│   │   └── Dense Layer 2 (e.g., 64 units)
+│   │
+│   └── call(inputs)                             # Fusion Vector ➔ MLP ➔ L2 Normalization ➔ v(y) ∈ ℝ⁶⁴
+│
+└── Execution & Optimization Flow (train_step)
+    ├── Forward Tower Passes                    # Compute u(x) and v(y) for mini-batch of size B
+    ├── Dot-Product Similarity Matrix           # S = u(x) · v(y)ᵀ  [Shape: B x B]
+    ├── Temperature Scaling & Log-Q Correction  # Logits = (S / τ) - (β * log_q)
+    └── Cross-Entropy Loss                      # In-Batch Softmax Cross-Entropy Loss

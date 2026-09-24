@@ -638,6 +638,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
          feature_acronym: str = "",
          incl_genres: bool = True,
          use_bias_corr: bool = True,
+         use_log_q_corr_decay : bool = False,
          bias_corr_alpha: float=0.1,
          log_q_correction_factor: float=1.0,
          temperature:float=1.0, name='twotowerdnn',
@@ -700,24 +701,41 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       self.bias_corr_alpha = bias_corr_alpha #for batch_size>=512 alpha ~ 0.01 else 0.1
       self.temperature = temperature
       
-      if self.use_bias_corr:
-          # Persistent state for item frequency estimation
-          # A stores the last 't' (global step) the movie was seen
-          self.table_A = tf.lookup.experimental.MutableHashTable(
-              key_dtype=tf.int32, value_dtype=tf.float32, default_value=0.)
-          # B stores the estimated probability (p_i)
-          # B holds the exponential moving average of the delta t step gap, that is,
-          # the average time in steps for a movie to be seen again.
-          # a low value means the movie is seen frequently (i.e. a popular movie),
-          # while a high value means the movie is not seen very often.
-          self.table_B = tf.lookup.experimental.MutableHashTable(
-              key_dtype=tf.int32, value_dtype=tf.float32, default_value=1.0)
-          self.global_step = tf.Variable(0., trainable=False,
-              dtype=tf.float32)
-      else:
-          self.table_B = None
+      self.use_log_q_corr_decay = use_log_q_corr_decay
+      
+      self._init_frequency_tables()
+      
       self.ndcg_k_composite_metric = NDCGAtKComposite(k=20, use_composite=self.use_bias_corr)
     
+    def _init_frequency_tables(self):
+        if self.use_bias_corr:
+            # Persistent state for item frequency estimation
+            # A stores the last 't' (global step) the movie was seen
+            self.table_A = tf.lookup.experimental.MutableHashTable(
+                key_dtype=tf.int32, value_dtype=tf.float32, default_value=0.)
+            # B stores the estimated probability (p_i)
+            # B holds the exponential moving average of the delta t step gap, that is,
+            # the average time in steps for a movie to be seen again.
+            # a low value means the movie is seen frequently (i.e. a popular movie),
+            # while a high value means the movie is not seen very often.
+            self.table_B = tf.lookup.experimental.MutableHashTable(
+                key_dtype=tf.int32, value_dtype=tf.float32, default_value=1.0)
+            self.global_step = tf.Variable(0., trainable=False,
+                dtype=tf.float32)
+        else:
+            self.table_B = None
+    
+    def reset_frequency_tables(self):
+        """Public method to clear table state across epochs."""
+        if self.use_bias_corr and self.use_log_q_corr_decay:
+            #computation graph needs to keep table_A and tableB references, so clear instead of recreate:
+            keys_A = self.table_A.export()[0]
+            if tf.size(keys_A) > 0:
+                self.table_A.remove(keys_A)
+            keys_B = self.table_B.export()[0]
+            if tf.size(keys_B) > 0:
+                self.table_B.remove(keys_B)
+        
     @property
     def metrics(self):
         # OVERRIDE to workaround tf.keras handling of validation metrics
@@ -787,6 +805,50 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       return _shape_3
       # return (None,)
     
+    def _compute_batch_time_log_q_corr_decay(self, x):
+        """for the decayed log-Q corection"""
+        """Converts yr and sec_into_yr into fractional days from base year 1990."""
+        yr = tf.cast(x['yr'], tf.float32)
+        sec = tf.cast(x['sec_into_yr'], tf.float32)
+        
+        # Continuous time in days
+        time_in_days = (yr - 1990.0) * 365.25 + (sec / 86400.0)
+        # Use average interaction time of the batch as current step time
+        return tf.reduce_mean(time_in_days)
+    
+    def _update_frequencies_log_Q_corr_decay(self, movie_ids, batch_t):
+        """Time-decayed streaming frequency estimation."""
+        movie_ids_int = tf.cast(movie_ids, tf.int32)
+        movie_ids_flat = tf.reshape(movie_ids_int, [-1])
+        
+        # Deduplicate IDs in current batch to avoid race conditions in MutableHashTable
+        unique_ids, _ = tf.unique(movie_ids_flat)
+        
+        #Lookup last physical time seen and old time gap B
+        last_t = self.table_A.lookup(unique_ids)
+        B_old = self.table_B.lookup(unique_ids)
+        
+        # Calculate physical time gap (delta_t) in days
+        # Ensure delta_t is strictly positive (at least ~8 seconds = 1e-4 days)
+        delta_t = tf.maximum(batch_t - last_t, 1e-4)
+        
+        # Exponential Moving Average update
+        is_first_seen = tf.equal(last_t, 0.0)
+        B_updated = (1.0 - self.bias_corr_alpha) * B_old + self.bias_corr_alpha * delta_t
+        # If first time seen, initialize B directly with delta_t
+        B_new = tf.where(is_first_seen, delta_t, B_updated)
+        
+        #Insert updated state for unique items
+        self.table_A.insert(unique_ids, tf.fill(tf.shape(unique_ids), batch_t))
+        self.table_B.insert(unique_ids, B_new)
+        
+        # Lookup updated B for ALL items in the batch (including duplicates)
+        batch_B = self.table_B.lookup(movie_ids_flat)
+        
+        # Frequency p_i is inverse of average time gap between appearances
+        p_i = 1.0 / tf.maximum(batch_B, 1e-6)
+        return p_i
+    
     def _update_frequencies(self, movie_ids):
         """frequency estimation logic from Yi et al."""
         self.global_step.assign_add(1.0)
@@ -846,7 +908,11 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
                 # for the item at index i.  because popular items appear more often, the item at index i
                 # is many popular items in its negative item list.  The log q correction attempts to adjust for this.
                 # Get frequency corrections
-                p_i = self._update_frequencies(movie_ids)
+                if self.use_log_q_corr_decay:
+                    batch_t = self._compute_batch_time_log_q_corr_decay(x)
+                    p_i = self._update_frequencies_log_Q_corr_decay(movie_ids, batch_t)
+                else:
+                    p_i = self._update_frequencies(movie_ids)
                 # Allow p_i to act as expected count, which can be > 1.0 for blockbusters
                 # Do not clip the upper bound to 1.0, only protect against log(0)
                 log_q = tf.math.log(tf.maximum(p_i, 1e-6))
@@ -1060,6 +1126,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         "drop_rate": self.drop_rate,
         "layer_sizes": self.layer_sizes,
         "use_bias_corr": self.use_bias_corr,
+        "use_log_q_corr_decay": self.use_log_q_corr_decay,
         "feature_acronym": self.feature_acronym,
          "incl_genres": self.incl_genres,
         "regl2": self.regl2,
@@ -1451,6 +1518,16 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
             k (int): top k to use in NDCG metrics
             use_composite (bool): if False, the standard NDCG metrics is used, else the composite is used.
             The composite is w_head * NDCG_head + w_torso * NDCG_torso + w_tail * NDCG_tail.
+            
+        NOTE:
+        (1) if business goal is to maximize inventory movement across the full tail of catalog,
+        then the w_head, w_torso_w_tail should resemble the movie_tier distribution of the
+        catalog, i.e. (0.15 / 0.44 / 0.41)
+        (2) if business goal is balanced personalization, then use 0.33, 0.33, 0.33.
+        A user's interest in a niche cult classic (Tail) as equally important as
+         their interest in a blockbuster (Head).  The pipeline HPO uses composit_ndcg_20 as its
+         selector and so the result is user's mainsteam and personal preferences.
+        
         """
         name = f"{name}_{k}"
         super(NDCGAtKComposite, self).__init__(name=name, **kwargs)
@@ -1685,11 +1762,11 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   #let AdamW weight decay handle the regularization, so set regl2 to 0:
   #hp.Float('regl2', 1e-5, 1e-2, sampling="log")
   hp.Fixed('regl2', 0.0)
- 
+  
   #layers_sizes is a list of ints, so encode each list as a string, choices can only be int,float,bool,str
   #the last layer in layer_sizes is the query and candidate embedding models' output dimensions-1
-  #hp.Choice("layer_sizes", values=[json.dumps([32]), json.dumps([64, 32])], default=json.dumps([32]))
-  hp.Choice("layer_sizes", values=[json.dumps([16]), json.dumps([32, 16])], default=json.dumps([16]))
+  hp.Choice("layer_sizes", values=[json.dumps([32]), json.dumps([64, 32])], default=json.dumps([32]))
+  #hp.Choice("layer_sizes", values=[json.dumps([16]), json.dumps([32, 16])], default=json.dumps([16]))
   #hp.Fixed("layer_sizes", value=json.dumps([32]))
   #hp.Fixed("layer_sizes", value=json.dumps([24])) # 16 too low, 24 too low, 64 too high.   32 good.
   # ahmos for "age", "hr_wk", "month", "occupation", "gender"
@@ -1699,11 +1776,12 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   hp.Fixed('NUM_EPOCHS', custom_config.get("NUM_EPOCHS", DEFAULT_NUM_EPOCHS))
   #use_bias_corr = hp.Choice("use_bias_corr", values=[True, False], default=True)
   use_bias_corr = hp.Fixed("use_bias_corr", value=True)
+  use_log_q_corr_decay = hp.Fixed("use_log_q_corr_decay", value=False)
   #if batch_size=1024, max temp should be about 0.2;  if batch_size is 2048, temp max ~ 0.4
   if use_bias_corr:
       if not use_best_as_fixed:
           hp.Choice("bias_corr_alpha", values=[0.01, 0.05, 0.1], default=0.05)
-          hp.Float('temperature', 0.05, 0.1, step=0.01)
+          hp.Float('temperature', 0.05, 0.25, step=0.025)
       else:
           hp.Fixed("bias_corr_alpha", 0.01)
           hp.Fixed('temperature', 0.1)
@@ -1867,6 +1945,16 @@ def create_input_shapes_from_spec(transformed_feature_spec : Dict[str, common_ty
     
     return input_shapes
 
+class ResetFrequencyTablesCallback(tf.keras.callbacks.Callback):
+    def on_epoch_begin(self, epoch, logs=None):
+        # Epoch 0 is the first epoch; reset at start of epoch 1+ (or every epoch)
+        if epoch > 0:
+            if hasattr(self.model, 'reset_frequency_tables'):
+                self.model.reset_frequency_tables()
+                print(f"\n[Epoch {epoch + 1}] Reset log-Q frequency tables for new temporal pass.")
+            else:
+                print("\nWarning: Model does not have 'reset_frequency_tables' method.")
+                
 def get_stop_early_callback():
     # use patience=3 or so with batch_size 1024, and patience=5 with batch_size 2048
     # for val_ndcg_20 and batch_size=2056, min_delta should be 0.005 (random)
@@ -2082,6 +2170,13 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   
   stop_early = get_stop_early_callback()
   
+  callbacks = [tensorboard_callback, stop_early]
+  
+  #TODO: if use log q correction decay, then use this
+  if hp.get("use_log_q_corr_decay"):
+    log_q_decay_callback = ResetFrequencyTablesCallback()
+    callbacks.append(log_q_decay_callback)
+  
   """
   checkpoint_dir = os.path.join(fn_args.serving_model_dir, 'checkpoint')
   filepath = os.path.join(
@@ -2100,7 +2195,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
     validation_steps=EVAL_STEPS_PER_EPOCH,
     epochs=NUM_EPOCHS,
     shuffle=False, #this is handled by tfxio pipeline already
-    callbacks=[tensorboard_callback, stop_early], verbose=1)
+    callbacks=callbacks, verbose=1)
   
   print(f'fit history.history={history.history}')
   total_epochs_run = len(history.epoch)

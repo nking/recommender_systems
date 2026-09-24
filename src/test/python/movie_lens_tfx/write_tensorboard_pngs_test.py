@@ -29,11 +29,11 @@ class WriteTensorboardToPng(unittest.TestCase):
         #saved_model_dir = os.path.join(get_bin_dir(), "rs_pipeline/Pusher/pushed_model/21")
         
         #temporarily point to recently trained model:
-        #logdir = os.path.join(get_project_dir(), "../TMP6/bin", p)
-        #saved_model_dir = os.path.join(get_project_dir(), "../TMP6/bin/rs_pipeline/Pusher/pushed_model/21")
+        logdir = os.path.join(get_project_dir(), "../TMP7/bin", p)
+        saved_model_dir = os.path.join(get_project_dir(), "../TMP7/bin/rs_pipeline/Pusher/pushed_model/21")
         
-        logdir = os.path.join(get_bin_dir(), "TestPipelines_baseline/MAIN_USER_MOVIE/Trainer/model_run/17/")
-        saved_model_dir = os.path.join(get_bin_dir(), "TestPipelines_baseline/MAIN_USER_MOVIE/Pusher/pushed_model/19")
+        #logdir = os.path.join(get_bin_dir(), "TestPipelines_baseline/MAIN_USER_MOVIE/Trainer/model_run/17/")
+        #saved_model_dir = os.path.join(get_bin_dir(), "TestPipelines_baseline/MAIN_USER_MOVIE/Pusher/pushed_model/19")
         
         train_dir = os.path.join(logdir, "train")
         val_dir = os.path.join(logdir, "validation")
