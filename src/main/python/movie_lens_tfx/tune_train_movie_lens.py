@@ -682,6 +682,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       self.mrr_k_metric = MeanReciprocalRankAtK(k=self.k)
       self.ndcg_k_metric = NDCGAtKForInBatchNegatives(k=self.k)
       self.recall_k_metric = RecallAtKForInBatchNegatives(k=self.k)
+      self.precision_k_metric = PrecisionAtKForInBatchNegatives(k=self.k)
       self.in_batch_hit_rate_metric = InBatchHitRate()
       
       self.regl2 = regl2
@@ -747,14 +748,16 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         # OVERRIDE to workaround tf.keras handling of validation metrics
         # It tells the model: "When you finish an epoch, pull results from these two."
         if self.use_bias_corr:
-            return [self.mean_loss_metric, self.in_batch_hit_rate_metric, self.mrr_k_metric, self.recall_k_metric,
+            return [self.mean_loss_metric, self.in_batch_hit_rate_metric, self.mrr_k_metric,
+                self.recall_k_metric, self.precision_k_metric,
                 self.ndcg_k_metric, self.ndcg_k_composite_metric,
                 self.ndcg_k_composite_metric.ndcg_head,
                 self.ndcg_k_composite_metric.ndcg_torso,
                 self.ndcg_k_composite_metric.ndcg_tail,
                 ]
         else:
-            return [self.mean_loss_metric, self.in_batch_hit_rate_metric, self.mrr_k_metric, self.recall_k_metric,
+            return [self.mean_loss_metric, self.in_batch_hit_rate_metric,
+                self.mrr_k_metric, self.recall_k_metric, self.precision_k_metric,
                 self.ndcg_k_metric, self.ndcg_k_composite_metric]
         
     def call(self, inputs):
@@ -893,6 +896,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     
     def train_step(self, batch):
         x, y = batch  # y is typically not used in pure In-Batch Softmax (identity matrix is the target)
+        #y is rating normalized to [0.,1.] and since training is on positives,
+        #  expect it to be [0.75,1.0] inclusive
         movie_ids = x['movie_id'] #/TensorShape([batch_size, 1]),
         beta_correction = self.log_q_correction_factor
         with tf.GradientTape() as tape:
@@ -901,7 +906,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
             
             # Compute ALL-TO-ALL Similarity (In-Batch Softmax)
             # scores[i, j] is similarity between user i and movie j
-            # this is [batch_size X batch_size] and the diagonal is the dot product
+            # this is [batch_size X batch_size] and the diagonal is the dot product.
+            #  they're unit normalized so raw_logits values are [-1., +1.]
             raw_logits = tf.matmul(user_embeddings, movie_embeddings, transpose_b=True)
             logits = raw_logits / self.temperature
             
@@ -938,11 +944,11 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
             movie_mask = tf.equal(tf.expand_dims(movie_ids, 0), tf.expand_dims(movie_ids, 1))
             user_mask = tf.squeeze(user_mask, axis=-1)
             movie_mask = tf.squeeze(movie_mask, axis=-1)
-            mask = tf.logical_or(user_mask, movie_mask)
+            mask = tf.logical_or(user_mask, movie_mask)  #true where i,j==j,i entries
             # if diagonal got masked, unmask it
             batch_size = tf.shape(logits)[0]
             identity_mask = tf.eye(batch_size, dtype=tf.bool)
-            mask = tf.logical_and(mask, tf.logical_not(identity_mask))
+            mask = tf.logical_and(mask, tf.logical_not(identity_mask)) #true where i,j==j,i entries, including diagonal
             masked_logits = tf.where(mask, tf.constant(-1e9, dtype=logits.dtype), logits)
             masked_raw_logits = tf.where(mask, tf.constant(-1e9, dtype=logits.dtype), raw_logits)
             
@@ -958,6 +964,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         self.mrr_k_metric.update_state(labels, masked_raw_logits, sample_weight=y)
         self.ndcg_k_metric.update_state(labels, masked_raw_logits, sample_weight=y)
         self.recall_k_metric.update_state(labels, masked_raw_logits, sample_weight=y)
+        self.precision_k_metric.update_state(labels, masked_raw_logits, sample_weight=y)
         self.in_batch_hit_rate_metric(y_true=labels, y_pred=masked_raw_logits, sample_weight=y)
         
         #form the batch of movie_tiers for the ndc metrics
@@ -1019,6 +1026,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         self.mrr_k_metric.update_state(labels, masked_raw_logits, sample_weight=y)
         self.ndcg_k_metric.update_state(labels, masked_raw_logits, sample_weight=y)
         self.recall_k_metric.update_state(labels, masked_raw_logits, sample_weight=y)
+        self.precision_k_metric.update_state(labels, masked_raw_logits, sample_weight=y)
         self.in_batch_hit_rate_metric.update_state(y_true=labels, y_pred=masked_raw_logits, sample_weight=y)
         
         # form the batch of movie_tiers for the ndc metrics
@@ -1328,7 +1336,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
           y_true: Ignored here (internally generated as tf.range), or used for weights.  use an identity
                   matrix with same shape as y_pred
           y_pred: The [Batch, Batch] logits matrix result of matmul Q_embedd * C_embed^T
-          sample_wieght: use the ground truth labels here, i.e. y
+          sample_weight: use the ground truth labels here, i.e. y
           """
           pos_scores = tf.linalg.diag_part(y_pred)[:, tf.newaxis]
           is_greater_equal = tf.cast(y_pred >= (pos_scores - 1e-6), tf.float32)
@@ -1640,6 +1648,65 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
           })
           return config
   
+  @keras.utils.register_keras_serializable(package=package)  # Ensure 'package' matches your environment
+  class PrecisionAtKForInBatchNegatives(keras.metrics.Metric):
+      """
+      Precision@K for in-batch negatives.
+      Since there is exactly 1 true positive per row (the diagonal element),
+      Precision@K is (1 / K) if the true item is in the top K, else 0.
+      """
+      def __init__(self, name="precision", k: int = 100, **kwargs):
+          name = f"{name}_{k}"
+          super(PrecisionAtKForInBatchNegatives, self).__init__(name=name,**kwargs)
+          self.k = k
+          self.precision_sum = self.add_weight(name="precision_sum", initializer="zeros")
+          self.count = self.add_weight(name="count", initializer="zeros")
+      
+      def update_state(self, y_true, y_pred, sample_weight=None):
+          """
+          y_true: Ignored or used for weights.
+          y_pred: The [Batch, Batch] logits matrix result of matmul Q_embed * C_embed^T
+          """
+          # Calculate ranks of the true positives (the diagonal)
+          pos_scores = tf.linalg.diag_part(y_pred)[:, tf.newaxis]
+          is_greater_equal = tf.cast(y_pred >= (pos_scores - 1e-6), tf.float32)
+          ranks = tf.reduce_sum(is_greater_equal, axis=1)
+          
+          # Determine actual K (safeguard if batch_size < K)
+          actual_k = tf.cast(tf.minimum(self.k, tf.shape(y_pred)[1]), tf.float32)
+          is_hit = tf.cast(ranks <= actual_k, tf.float32)
+          
+          # Calculate Precision for each row: 1/K if hit, 0 if miss
+          row_precision = tf.math.divide_no_nan(is_hit, actual_k)
+          
+          #pply sample weights
+          if sample_weight is not None:
+              w = tf.cast(tf.reshape(sample_weight, [-1]), tf.float32)
+          elif y_true is not None and tf.rank(y_true) == 1:
+              # Likely a vector of ratings
+              w = tf.cast(y_true, tf.float32)
+          else:
+              # Unweighted: every row in the batch counts as 1
+              w = tf.ones_like(is_hit)
+        
+          # Accumulate weighted precision and total weight
+          self.precision_sum.assign_add(tf.reduce_sum(tf.multiply(row_precision, w)))
+          self.count.assign_add(tf.reduce_sum(w))
+          
+      def result(self):
+          return tf.math.divide_no_nan(self.precision_sum, self.count)
+      
+      def reset_state(self):
+          self.precision_sum.assign(0.0)
+          self.count.assign(0.0)
+      
+      def get_config(self):
+          config = super(PrecisionAtKForInBatchNegatives, self).get_config()
+          config.update({
+              "k": self.k
+          })
+          return config
+      
   def load_movie_tiers_as_tensor(movie_tiers_ndjson_uri: str,
           n_movies: int = 3883, movies_offset: int = 6041) -> tf.Tensor:
       # Initialize a numpy array with a default tier. 0=head, 1=torso, 2=tail

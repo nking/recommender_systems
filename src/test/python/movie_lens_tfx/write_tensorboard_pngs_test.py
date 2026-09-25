@@ -36,8 +36,8 @@ class WriteTensorboardToPng(unittest.TestCase):
         saved_model_dir = os.path.join(get_bin_dir(), "rs_pipeline/Pusher/pushed_model/21")
         
         #temporarily point to recently trained model:
-        logdir = os.path.join(get_project_dir(), "../TMP8/bin", p)
-        saved_model_dir = os.path.join(get_project_dir(), "../TMP8/bin/rs_pipeline/Pusher/pushed_model/21")
+        logdir = os.path.join(get_project_dir(), "../TMP9/bin", p)
+        saved_model_dir = os.path.join(get_project_dir(), "../TMP9/bin/rs_pipeline/Pusher/pushed_model/21")
         
         #logdir = os.path.join(get_bin_dir(), "TestPipelines_baseline/MAIN_USER_MOVIE/Trainer/model_run/17/")
         #saved_model_dir = os.path.join(get_bin_dir(), "TestPipelines_baseline/MAIN_USER_MOVIE/Pusher/pushed_model/19")
@@ -45,6 +45,8 @@ class WriteTensorboardToPng(unittest.TestCase):
         hyperparams_dict = self.get_hyperparams_dict(saved_model_dir)
         random_ndcg = self.calc_random_ndcg(k=hyperparams_dict['k'], movie_catalog_size=hyperparams_dict['n_movies'])
         random_recall = self.calc_random_recall(k=hyperparams_dict['k'], movie_catalog_size=hyperparams_dict['n_movies'])
+        random_precision = self.calc_random_precision(k=hyperparams_dict['k'],
+            movie_catalog_size=hyperparams_dict['n_movies'])
         random_mrr = self.calc_random_mrr(k=hyperparams_dict['k'],
             movie_catalog_size=hyperparams_dict['n_movies'])
 
@@ -70,6 +72,9 @@ class WriteTensorboardToPng(unittest.TestCase):
             elif metric.find("mrr") > -1:
                 #for 1 relevant ground_truth item:
                 random_metric = random_mrr
+            elif metric.find("precision") > -1:
+                #for 1 relevant ground_truth item:
+                random_metric = random_precision
             generate_tensorboard_chart(train_dir, val_dir, test_dir, irr_dict, random_metric,
                 scalar_name=metric, output_path=outfile)
         
@@ -86,6 +91,9 @@ class WriteTensorboardToPng(unittest.TestCase):
     
     def calc_random_recall(self, k: int, movie_catalog_size: int) -> float:
         return k / movie_catalog_size
+    
+    def calc_random_precision(self, k: int, movie_catalog_size: int) -> float:
+        return 1 / movie_catalog_size
     
     def calc_random_mrr(self, k: int, movie_catalog_size: int) -> float:
         #assuming 1 relevant item

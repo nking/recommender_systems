@@ -27,12 +27,19 @@ random recall@k ~ k/movie_catalog_size
 random ndcg@k ~ (1/movie_catalog_size) * sum_{i=1,100}( 1/(log_2(i+1) )
 random mrr@k : single relevant item in catalog:
                = (1/movie_catalog_size) * sum_{i=1,100}( 1/i )
-------------------------
-random   k=20       k=20
-------------------------
-recall   0.005      0.026 
-ndcg     0.002      0.005
-mrr      0.001      0.001
+random precision@k : single relevant item in catalog:
+               = ((k/movie_catalog_size) * (1/k)) + ( ((movie_catalog_size-k)/movie_catalog_size) * 0  )
+               = 1 / movie_catalog_size
+
+Note that random precision and mrr are better calculated by using retrieval
+within the catalog for each user.
+-------------------------------
+random     k=20       k=20
+-------------------------------
+recall     0.005      0.026 
+ndcg       0.002      0.005
+mrr        0.001      0.001
+precision  0.00026    0.00026
 
 The metrics are above expectations for random selection.
 
