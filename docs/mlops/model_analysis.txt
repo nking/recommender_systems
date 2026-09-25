@@ -2,7 +2,8 @@ Training the TwoTowerDNN with an in-batch softmax loss, lr-scheduler and Adamw o
 and using the metric composite_ndcg@20 on the validation set for early stopping,
 minimum threshold, and model selection by the keras tuner BayesianOptimization.
 
-see the analysis in docs/mlops/best_fitting_model_stats/twotowderdnn_softmax/
+** see the analysis in docs/mlops/best_fitting_model_stats/twotowderdnn_softmax/
+   including the train, val, test curves
 
 The model learning looks healthy.
   - The train vs validation curves for loss and metrics can be seen
@@ -21,18 +22,28 @@ Best fitting model used a batch size of 2056:
    recall@20 = 0.038
    hit rate = 0.015
 
-The ndcg@20 metrics are ~ 5 times random performance.
-The mrr@20 is ~ 6 times random performance.
-The recall@20 ~ 3 times random performance.
+------------------------
+random recall@k ~ k/movie_catalog_size
+random ndcg@k ~ (1/movie_catalog_size) * sum_{i=1,100}( 1/(log_2(i+1) )
+random mrr@k : single relevant item in catalog:
+               = (1/movie_catalog_size) * sum_{i=1,100}( 1/i )
+------------------------
+random   k=20       k=20
+------------------------
+recall   0.005      0.026 
+ndcg     0.002      0.005
+mrr      0.001      0.001
+
+The metrics are above expectations for random selection.
 
 Compare to these expected ranges and values for random performance:
 for k=20, can expect these metric results
 Metric  Expected Range      Expected Range    random
         in SOTA production
         (batch size=2048)    (full catalog)   to beat
-NDCG@20      0.15 – 0.35     0.08 – 0.18      0.005
-MRR@20       0.10 – 0.25     0.06 – 0.12      0.0035
-Recall@20    0.30 – 0.55     0.25 – 0.40      0.01
+NDCG@20      0.15 – 0.35     0.08 – 0.18      0.002
+MRR@20       0.10 – 0.25     0.06 – 0.12      0.001
+Recall@20    0.30 – 0.55     0.25 – 0.40      0.005
 
 
 Metric  Expected Range      Expected Range 
@@ -48,7 +59,6 @@ Metric  Expected Range      Expected Range
 NDCG@20   0.15-0.35 
 MRR@20    0.05-0.12 
 Recall@20  0.15-0.35
-
 
 Embeddings:
    the user and candidate embeddings made from these trained models

@@ -35,7 +35,7 @@ embedding models.  The training is optimized using Contrastive Learning for a
 Listwise Discriminative Model.
 
 The run_fn defines the model, compile, fit and signatures.
-The tuner_fn specifies that the custom metric "val_composite_ndcg_20" should be used
+The tuner_fn specifies that the custom metric "val_composite_ndcg_{k}" should be used
 to decide which model is best.
 '''
 
@@ -630,7 +630,11 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     """
     
     # for init from a load, arguments are present for the compositional instance members too
-    def __init__(self, n_users: int, n_movies: int, movies_offset: int,
+    def __init__(self,
+         n_users: int,
+         n_movies: int,
+         movies_offset: int,
+         k: int,
          n_genres: int,
          layer_sizes: list,
          regl2: float = 0.0,
@@ -663,6 +667,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       
       if isinstance(layer_sizes, str):
           layer_sizes = json.loads(layer_sizes)
+          
+      self.k = k
       
       # only used while inspecting table_B for threshold for dataset
       self.calc_table_B_diagnostic = False
@@ -673,9 +679,9 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       #to use LambdaSoftmaxLoss, train with full dataset splits
       #self.loss_function = LambdaSoftmaxLoss(temperature = temperature)
       self.mean_loss_metric = keras.metrics.Mean(name="mean_loss")
-      self.mrr_k_metric = MeanReciprocalRankAtK(k=20)
-      self.ndcg_k_metric = NDCGAtKForInBatchNegatives(k=20)
-      self.recall_k_metric = RecallAtKForInBatchNegatives(k=20)
+      self.mrr_k_metric = MeanReciprocalRankAtK(k=self.k)
+      self.ndcg_k_metric = NDCGAtKForInBatchNegatives(k=self.k)
+      self.recall_k_metric = RecallAtKForInBatchNegatives(k=self.k)
       self.in_batch_hit_rate_metric = InBatchHitRate()
       
       self.regl2 = regl2
@@ -705,7 +711,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       
       self._init_frequency_tables()
       
-      self.ndcg_k_composite_metric = NDCGAtKComposite(k=20, use_composite=self.use_bias_corr)
+      self.ndcg_k_composite_metric = NDCGAtKComposite(k=self.k, use_composite=self.use_bias_corr)
     
     def _init_frequency_tables(self):
         if self.use_bias_corr:
@@ -1122,6 +1128,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       config = super(TwoTowerDNN, self).get_config()
       config.update({"n_users": self.n_users, "n_movies": self.n_movies,
         "movies_offset" : self.movies_offset,
+        "k" : self.k,
         "n_genres": self.n_genres,
         "drop_rate": self.drop_rate,
         "layer_sizes": self.layer_sizes,
@@ -1309,7 +1316,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   class MeanReciprocalRankAtK(keras.metrics.Metric):
       """
       """
-      def __init__(self, name="mrr", k:int=10,**kwargs):
+      def __init__(self, name="mrr", k:int=100,**kwargs):
           name = f"{name}_{k}"
           super(MeanReciprocalRankAtK, self).__init__(name=name, **kwargs)
           self.k = k
@@ -1354,7 +1361,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   class NDCGAtKForInBatchNegatives(keras.metrics.Metric):
       """
       """
-      def __init__(self, name="ndcg", k: int = 20, **kwargs):
+      def __init__(self, name="ndcg", k: int = 100, **kwargs):
           name = f"{name}_{k}"
           super(NDCGAtKForInBatchNegatives, self).__init__(name=name, **kwargs)
           self.k = k
@@ -1407,7 +1414,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     Computes NDCG@K restricted strictly to rows where the true positive
     candidate item is a tail item based on the streaming table_B state.
     """
-    def __init__(self, head_torso_tail_idx:int =2, name:str ="ndcg", k: int = 20, **kwargs):
+    def __init__(self, head_torso_tail_idx:int =2, name:str ="ndcg", k: int = 100, **kwargs):
         if head_torso_tail_idx < 0 or head_torso_tail_idx > 2:
             raise ValueError("head_torso_tail_idx must be >= 0 and <= 2")
         name = self.get_name(name, k)
@@ -1473,7 +1480,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       Computes NDCG@K restricted strictly to rows where the true positive
       candidate item is a head item based on the streaming table_B state.
       """
-      def __init__(self, name:str="ndcg", k: int = 20, **kwargs):
+      def __init__(self, name:str="ndcg", k: int = 100, **kwargs):
           super().__init__(head_torso_tail_idx=0, name=name, k=k, **kwargs)
       
       def get_name(self, name:str,  k:int):
@@ -1487,7 +1494,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       """
       
       def __init__(self, name: str = "ndcg",
-              k: int = 20, **kwargs):
+              k: int = 100, **kwargs):
           super().__init__(head_torso_tail_idx=1, name=name, k=k, **kwargs)
       
       def get_name(self, name: str, k: int):
@@ -1500,7 +1507,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       candidate item is a tail item based on the streaming table_B state.
       """
       
-      def __init__(self, name: str = "ndcg", k: int = 20, **kwargs):
+      def __init__(self, name: str = "ndcg", k: int = 100, **kwargs):
           super().__init__(head_torso_tail_idx=2, name=name, k=k, **kwargs)
       
       def get_name(self, name: str, k: int):
@@ -1509,7 +1516,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   @keras.utils.register_keras_serializable(package=package)
   class NDCGAtKComposite(keras.metrics.Metric):
     def __init__(self, name="composite_ndcg",
-            k: int = 20, use_composite:bool=True,
+            k: int = 100, use_composite:bool=True,
             w_head:float=0.33, w_torso:float=0.33, w_tail:float=0.33, **kwargs):
         """
         Args:
@@ -1525,7 +1532,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         catalog, i.e. (0.15 / 0.44 / 0.41)
         (2) if business goal is balanced personalization, then use 0.33, 0.33, 0.33.
         A user's interest in a niche cult classic (Tail) as equally important as
-         their interest in a blockbuster (Head).  The pipeline HPO uses composite_ndcg_20 as its
+         their interest in a blockbuster (Head).  The pipeline HPO uses composite_ndcg_k as its
          selector and so the result is user's mainsteam and personal preferences.
         
         """
@@ -1669,6 +1676,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       n_users=hp.get("n_users") + 1,
       n_movies=n_movies_arg,
       movies_offset = movies_offset,
+      k = hp.get("k"),
       n_genres=hp.get("n_genres"),
       layer_sizes=hp.get('layer_sizes'),
       regl2=hp.get('regl2'),
@@ -1744,6 +1752,8 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   
   hp = keras_tuner.HyperParameters()
   # Defines search space.
+  
+  hp.Fixed('k', custom_config.get("k", 100))
   
   if not use_best_as_fixed:
       hp.Float('learning_rate', 1e-4, 1e-3, sampling='log')
@@ -1955,25 +1965,33 @@ class ResetFrequencyTablesCallback(tf.keras.callbacks.Callback):
             else:
                 print("\nWarning: Model does not have 'reset_frequency_tables' method.")
                 
-def get_stop_early_callback():
+def get_stop_early_callback(k: int):
     # use patience=3 or so with batch_size 1024, and patience=5 with batch_size 2048
-    # for val_ndcg_20 and batch_size=2056, min_delta should be 0.005 (random)
+    # for val_ndcg_{k} and batch_size=2056, min_delta should be 0.005 (random)
     # for val_mean_loss, min_delta=0.015 and patience=3
-    # for cal_composite_ndcg_20
-    # we use val_composite_ndcg_20 in order to better recommend items to the tail users
+    # for cal_composite_ndcg_k
+    # we use val_composite_ndcg_k in order to better recommend items to the tail users
     # by including them in the NDCG score.
-    # note that the val_composite_ndcg_20 peaks well before ndcg_20 and the other metrics,
+    # note that the val_composite_ndcg_k peaks well before ndcg_k and the other metrics,
     #  because those are maximized by popularity.
     # for ndcg, min_delta=0.0005 is what was used before.  increasing it now to stop earlier at level similar to test data
     return keras.callbacks.EarlyStopping(
-        monitor=f'val_composite_ndcg_20', min_delta=0.002, patience=2, mode="max",
+        monitor=f'val_composite_ndcg_{k}', min_delta=0.002, patience=2, mode="max",
         start_from_epoch=1,
         restore_best_weights=True)
 
+def calc_random_ndcg(k: int, movie_catalog_size:int) -> float:
+    s = np.sum([1/np.log2(r + 1) for r in range(1, k+1)])
+    return (s/movie_catalog_size).item()
+    
+def calc_random_recall(k: int, movie_catalog_size:int) -> float:
+    return k/movie_catalog_size
+
 @keras.utils.register_keras_serializable(package=package)
 class MinimumThresholdCallback(tf.keras.callbacks.Callback):
-    def __init__(self, monitor='val_composite_ndcg_20',
-            min_threshold:float = 2*0.005,
+    def __init__(self, monitor='val_composite_ndcg_100',
+            k:int=100,
+            movie_catalog_size:int=3883,
             start_epoch=1, patience=3):
         """
         Args:
@@ -1983,6 +2001,15 @@ class MinimumThresholdCallback(tf.keras.callbacks.Callback):
         """
         super().__init__()
         self.monitor = monitor
+        sigma = 3
+        if monitor.find("ndcg") > -1:
+            min_threshold = sigma * calc_random_ndcg(k, movie_catalog_size)
+        elif monitor.find("recall") > -1:
+            min_threshold = sigma * calc_random_recall(k, movie_catalog_size)
+        else:
+            raise ValueError(f"Unknown monitor '{monitor}'.")
+        self.k = k
+        self.movie_catalog_size = movie_catalog_size
         self.min_threshold = min_threshold
         self.start_epoch = start_epoch
         self.patience = patience
@@ -2013,7 +2040,8 @@ class MinimumThresholdCallback(tf.keras.callbacks.Callback):
     def get_config(self):
         return {
             "monitor": self.monitor,
-            "min_threshold": self.min_threshold,
+            "k": self.k,
+            "movie_catalog_size" : self.movie_catalog_size,
             "start_epoch": self.start_epoch,
             "patience" : self.patience,
         }
@@ -2168,7 +2196,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   tensorboard_callback = keras.callbacks.TensorBoard(
     log_dir=fn_args.model_run_dir, update_freq='epoch')
   
-  stop_early = get_stop_early_callback()
+  stop_early = get_stop_early_callback(k=hp.get('k'))
   
   callbacks = [tensorboard_callback, stop_early]
   
@@ -2614,7 +2642,7 @@ def run_evals_and_calc_irred(train_dataset: tf.data.Dataset,
     :param BATCH_SIZE:
     :return: dictionary with keys:
         'n_train',
-        'mean_loss', 'composite_ndcg_20', 'hit_rate', 'mrr_20', 'ndcg_20', 'ndcg_head_20', 'ndcg_tail_20', 'ndcg_torso_20', 'recall_20'}
+        'mean_loss', 'composite_ndcg_k', 'hit_rate', 'mrr_k', 'ndcg_k', 'ndcg_head_k', 'ndcg_tail_k', 'ndcg_torso_k', 'recall_k'}
          here the metrics key values are dictionaries of
          {'values' : observed_errors,
           'irred_error' : irred_error,
@@ -2641,7 +2669,7 @@ def run_evals_and_calc_irred(train_dataset: tf.data.Dataset,
         
         model = _make_2tower_keras_model(hp)
         
-        stop_early = get_stop_early_callback()
+        stop_early = get_stop_early_callback(k=hp.get('k'))
         
         logging.info("fit model")
         history = model.fit(
@@ -2879,7 +2907,7 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
     overwrite=True,
     hyperparameters=hp,
     allow_new_entries=False,
-    objective=keras_tuner.Objective(f'val_composite_ndcg_20', 'max'),
+    objective=keras_tuner.Objective(f'val_composite_ndcg_k', 'max'),
     directory=fn_args.working_dir,
     project_name='movie_lens_2t_tuning_r')
   '''
@@ -2887,7 +2915,7 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
   '''
   tuner = keras_tuner.Hyperband(
     _make_2tower_keras_model,
-    objective=keras_tuner.Objective(f'val_composite_ndcg_20', 'max'),
+    objective=keras_tuner.Objective(f'val_composite_ndcg_k', 'max'),
     max_epochs=8,
     factor=4,
     hyperband_iterations=3,
@@ -2917,7 +2945,7 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
   print("construct tuner BayesianOptimization")
   tuner = keras_tuner.BayesianOptimization(
       _make_2tower_keras_model,
-      objective=keras_tuner.Objective('val_composite_ndcg_20', 'max'),
+      objective=keras_tuner.Objective(f'val_composite_ndcg_{hp.get("k")}', 'max'),
       hyperparameters=hp,
       alpha=1e-3,
       beta=3.3, #defaut 2.6;  4.0 for more exploration.
@@ -2932,10 +2960,12 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
   
   NUM_EPOCHS = hp.get("NUM_EPOCHS")
   
-  stop_early = get_stop_early_callback()
+  stop_early = get_stop_early_callback(k=hp.get('k'))
   
   stop_threshold = MinimumThresholdCallback(
-        monitor='val_composite_ndcg_20',
+        monitor=f'val_composite_ndcg_{hp.get("k")}',
+        k=hp.get("k"),
+        movie_catalog_size=hp.get("n_movies")
     )
   
   return tfx.components.TunerFnResult(

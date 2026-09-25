@@ -79,16 +79,19 @@ def exponential_smoothing(scalars, weight=0.6):
 
 
 def generate_tensorboard_chart(train_dir, val_dir, test_dir, irred_err_dict,
-        scalar_name, output_path, smoothing_weight=0.6):
+        random_metric, scalar_name, output_path, smoothing_weight=0.6):
+    """Generates a single PNG chart (~3.5x4 inches) with overplotted train/val curves,
+    
+    faded raw lines, smoothed lines, a random baseline line, and a data summary
+    table.
     """
-    Generates a single PNG chart (~3.5x4 inches) with overplotted train/val curves,
-    faded raw lines, smoothed lines, and a data summary table.
-    """
-    train_steps, train_values, train_times = get_latest_scalars(train_dir,
-        scalar_name)
+    train_steps, train_values, train_times = get_latest_scalars(
+        train_dir, scalar_name
+    )
     val_steps, val_values, val_times = get_latest_scalars(val_dir, scalar_name)
-    test_steps, test_values, test_times = get_latest_scalars(test_dir,
-        scalar_name.replace("epoch_", ""))
+    test_steps, test_values, test_times = get_latest_scalars(
+        test_dir, scalar_name.replace("epoch_", "")
+    )
     
     if train_steps is None or val_steps is None or test_steps is None:
         print("Could not load data for runs. Exiting.")
@@ -100,10 +103,13 @@ def generate_tensorboard_chart(train_dir, val_dir, test_dir, irred_err_dict,
     val_smoothed = exponential_smoothing(val_values, smoothing_weight)
     test_smoothed = exponential_smoothing(test_values, smoothing_weight)
     
+    
     def get_relative_times(times):
-        if not times: return []
+        if not times:
+            return []
         start_time = times[0]
         return [(t - start_time) / 60.0 for t in times]
+    
     
     train_relative = get_relative_times(train_times)
     val_relative = get_relative_times(val_times)
@@ -112,25 +118,22 @@ def generate_tensorboard_chart(train_dir, val_dir, test_dir, irred_err_dict,
     # --- Dynamic Bounds Logic ---
     bound_val = None
     bound_moe = None
-    bound_label = 'irred error' if is_loss else 'ceiling'
+    bound_label = "irred error" if is_loss else "ceiling"
     
     if irred_err_dict is not None:
         if is_loss:
-            # Safely check both potential keys just in case
-            bound_val = irred_err_dict.get('irred_error')
+            bound_val = irred_err_dict.get("irred_error")
         else:
-            bound_val = irred_err_dict.get('ceiling')
+            bound_val = irred_err_dict.get("ceiling")
         
-        # Support both margin-of-error naming conventions
-        bound_moe = irred_err_dict.get('margin_of_error_on_irred_err')
+        bound_moe = irred_err_dict.get("margin_of_error_on_irred_err")
     
-    # Extract latest test stats to plot as a point
+    # Extract latest test stats
     latest_test_step = test_steps[-1]
     latest_test_value = test_values[-1]
     latest_test_smoothed = test_smoothed[-1]
     latest_test_relative = test_relative[-1]
     
-    # Adjust height_ratios slightly to give more room for the newly added table rows
     fig = plt.figure(figsize=(2.5, 2.5), dpi=300)
     gs = fig.add_gridspec(2, 1, height_ratios=[2.0, 1.2], hspace=0.25)
     
@@ -138,61 +141,117 @@ def generate_tensorboard_chart(train_dir, val_dir, test_dir, irred_err_dict,
     ax = fig.add_subplot(gs[0])
     
     # High-contrast color scheme
-    train_color = '#1f77b4'  # Blue
-    train_color_faded = '#aec7e8'  # Faded Blue
-    val_color = '#ff7f0e'  # Orange
-    val_color_faded = '#ffbb78'  # Faded Orange
-    test_color = '#d62728'  # Red
-    bound_color = '#2ca02c'  # Green
+    train_color = "#1f77b4"  # Blue
+    train_color_faded = "#aec7e8"  # Faded Blue
+    val_color = "#ff7f0e"  # Orange
+    val_color_faded = "#ffbb78"  # Faded Orange
+    test_color = "#d62728"  # Red
+    bound_color = "#2ca02c"  # Green
+    random_color = "#000000"  # Black for random baseline
     
     # Plot raw (faded) and smoothed (solid) lines
-    ax.plot(train_steps, train_values, color=train_color_faded, alpha=0.7,
-        linewidth=0.6, linestyle='-')
-    ax.plot(val_steps, val_values, color=val_color_faded, alpha=0.7,
-        linewidth=0.6, linestyle='-')
-    ax.plot(train_steps, train_smoothed, color=train_color, linewidth=1.2,
-        linestyle='-')
-    ax.plot(val_steps, val_smoothed, color=val_color, linewidth=1.2,
-        linestyle='-')
+    ax.plot(
+        train_steps,
+        train_values,
+        color=train_color_faded,
+        alpha=0.7,
+        linewidth=0.6,
+        linestyle="-",
+    )
+    ax.plot(
+        val_steps,
+        val_values,
+        color=val_color_faded,
+        alpha=0.7,
+        linewidth=0.6,
+        linestyle="-",
+    )
+    ax.plot(
+        train_steps,
+        train_smoothed,
+        color=train_color,
+        linewidth=1.2,
+        linestyle="-",
+    )
+    ax.plot(
+        val_steps, val_smoothed, color=val_color, linewidth=1.2, linestyle="-"
+    )
     
-    # Plot Test Point on the right hand side
-    ax.plot(latest_test_step, latest_test_value, marker='o', markersize=4,
-        color=test_color, markeredgecolor='white', markeredgewidth=0.5,
-        zorder=5)
+    # Plot Test Point
+    ax.plot(
+        latest_test_step,
+        latest_test_value,
+        marker="o",
+        markersize=4,
+        color=test_color,
+        markeredgecolor="white",
+        markeredgewidth=0.5,
+        zorder=5,
+    )
     
-    # Plot Irreducible Error / Ceiling (Horizontal Line + Shaded Margin of Error)
+    # Plot Irreducible Error / Ceiling
     if bound_val is not None:
-        ax.axhline(y=bound_val, color=bound_color, linestyle='--',
-            linewidth=1.2, alpha=0.8, zorder=2)
-        
-        # Plot the shaded area for Margin of Error if it exists
+        ax.axhline(
+            y=bound_val,
+            color=bound_color,
+            linestyle="--",
+            linewidth=1.2,
+            alpha=0.8,
+            zorder=2,
+        )
         if bound_moe is not None:
-            ax.axhspan(bound_val - bound_moe,
+            ax.axhspan(
+                bound_val - bound_moe,
                 bound_val + bound_moe,
-                color=bound_color, alpha=0.15, zorder=1)
+                color=bound_color,
+                alpha=0.15,
+                zorder=1,
+            )
+    
+    # --- Plot Horizontal Black Dotted Line for Random Metric ---
+    if random_metric is not None:
+        ax.axhline(
+            y=random_metric,
+            color=random_color,
+            linestyle=":",
+            linewidth=1.2,
+            alpha=0.85,
+            zorder=2,
+        )
     
     # Typography & layout scaling
-    ax.set_title(scalar_name, loc='left', fontsize=7.5, fontweight='bold',
-        pad=4)
-    ax.tick_params(axis='x', labelsize=5.5, pad=1)
-    ax.tick_params(axis='y', labelsize=5.5, pad=1)
+    ax.set_title(
+        scalar_name, loc="left", fontsize=7.5, fontweight="bold", pad=4
+    )
+    ax.tick_params(axis="x", labelsize=5.5, pad=1)
+    ax.tick_params(axis="y", labelsize=5.5, pad=1)
     
-    # High-contrast grid guidelines
-    ax.grid(True, which='major', axis='both', linestyle='-', linewidth=1.0,
-        alpha=0.75, color='#cbd5e1')
+    # Grid guidelines
+    ax.grid(
+        True,
+        which="major",
+        axis="both",
+        linestyle="-",
+        linewidth=1.0,
+        alpha=0.75,
+        color="#cbd5e1",
+    )
     
-    # Remove bounding box spines for clean look
     for spine in ax.spines.values():
         spine.set_visible(False)
     
-    # Update ylim check to account for the new plotted values and shaded region
-    all_values = train_values + val_values + train_smoothed + val_smoothed + [
-        latest_test_value]
+    # Y-limits check (includes random_metric so line isn't clipped)
+    all_values = (
+            train_values
+            + val_values
+            + train_smoothed
+            + val_smoothed
+            + [latest_test_value]
+    )
     if bound_val is not None:
         all_values.append(bound_val)
-        #if bound_moe is not None:
-        #    # Add bounds of the margin of error so they don't get clipped off the chart
-        #    all_values.extend([bound_val - bound_moe, bound_val + bound_moe])
+    if random_metric is not None:
+        all_values.append(random_metric)
     
     if all_values:
         y_min, y_max = min(all_values), max(all_values)
@@ -201,7 +260,7 @@ def generate_tensorboard_chart(train_dir, val_dir, test_dir, irred_err_dict,
     
     # Table Axis
     ax_table = fig.add_subplot(gs[1])
-    ax_table.axis('off')
+    ax_table.axis("off")
     
     latest_train_step = train_steps[-1]
     latest_train_value = train_values[-1]
@@ -213,7 +272,7 @@ def generate_tensorboard_chart(train_dir, val_dir, test_dir, irred_err_dict,
     latest_val_smoothed = val_smoothed[-1]
     latest_val_relative = val_relative[-1]
     
-    # Safely format bounds for the table
+    # Format bounds for table
     if bound_val is not None:
         bound_val_str = f"{bound_val:.4f}"
         if bound_moe is not None:
@@ -221,65 +280,80 @@ def generate_tensorboard_chart(train_dir, val_dir, test_dir, irred_err_dict,
     else:
         bound_val_str = "-"
     
-    # Table Content
+    # Build Table Content & Labels dynamically
     cell_text = [
-        [f"{latest_train_smoothed:.4f}", f"{latest_train_value:.4f}",
-            f"{latest_train_step}", f"{latest_train_relative:.2f}m"],
-        [f"{latest_val_smoothed:.4f}", f"{latest_val_value:.4f}",
-            f"{latest_val_step}", f"{latest_val_relative:.2f}m"],
-        [f"{latest_test_smoothed:.4f}", f"{latest_test_value:.4f}",
-            f"{latest_test_step}", f"{latest_test_relative:.2f}m"],
-        ["-", bound_val_str, "-", "-"]
+        [
+            f"{latest_train_smoothed:.4f}",
+            f"{latest_train_value:.4f}",
+            f"{latest_train_step}",
+            f"{latest_train_relative:.2f}m",
+        ],
+        [
+            f"{latest_val_smoothed:.4f}",
+            f"{latest_val_value:.4f}",
+            f"{latest_val_step}",
+            f"{latest_val_relative:.2f}m",
+        ],
+        [
+            f"{latest_test_smoothed:.4f}",
+            f"{latest_test_value:.4f}",
+            f"{latest_test_step}",
+            f"{latest_test_relative:.2f}m",
+        ],
+        ["-", bound_val_str, "-", "-"],
     ]
+    row_labels = ["train", "validation", "test", bound_label]
     
-    # Dynamically label the last row based on metric type
-    row_labels = ['train', 'validation', 'test', bound_label]
-    col_labels = ['Smoothed', 'Value', 'Step', 'Relative']
+    # Append random row if estimate exists
+    if random_metric is not None:
+        cell_text.append(["-", f"{random_metric:.4f}", "-", "-"])
+        row_labels.append("random")
+    
+    col_labels = ["Smoothed", "Value", "Step", "Relative"]
     
     the_table = ax_table.table(
         cellText=cell_text,
         rowLabels=row_labels,
         colLabels=col_labels,
-        loc='center',
-        cellLoc='center',
-        bbox=[0, 0, 1, 1]
+        loc="center",
+        cellLoc="center",
+        bbox=[0, 0, 1, 1],
     )
     
     the_table.auto_set_font_size(False)
     the_table.set_fontsize(5.0)
     
-    # Custom Row Label Colors & Styling Map
     color_map = {
-        'train': train_color,
-        'validation': val_color,
-        'test': test_color,
-        bound_label: bound_color
-        # Color dynamically maps to either 'irred error' or 'ceiling'
+        "train": train_color,
+        "validation": val_color,
+        "test": test_color,
+        bound_label: bound_color,
+        "random": random_color,
     }
     
     for i, row_label in enumerate(row_labels):
         cell = the_table[i + 1, -1]
-        cell.set_text_props(ha='left', weight='medium')
-        color = color_map.get(row_label, '#000000')
-        cell.get_text().set_text(f'● {row_label}')
+        cell.set_text_props(ha="left", weight="medium")
+        color = color_map.get(row_label, "#000000")
+        cell.get_text().set_text(f"● {row_label}")
         cell.get_text().set_color(color)
     
     # Style Table Header and Cells
     for (i, j), cell in the_table.get_celld().items():
-        cell.set_edgecolor('#f3f4f6')
+        cell.set_edgecolor("#f3f4f6")
         if i == 0:
-            cell.set_text_props(weight='bold', color='#4b5563')
-            cell.set_facecolor('#f9fafb')
+            cell.set_text_props(weight="bold", color="#4b5563")
+            cell.set_facecolor("#f9fafb")
         else:
-            cell.set_facecolor('#ffffff')
+            cell.set_facecolor("#ffffff")
     
     # Save output chart
-    os.makedirs(os.path.dirname(output_path),
-        exist_ok=True) if os.path.dirname(output_path) else None
-    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    if os.path.dirname(output_path):
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    plt.savefig(output_path, dpi=300, bbox_inches="tight")
     plt.close()
     
-    # Update dictionary structure
+    # Output Dictionary
     out_dict = {
         "latest_train_step": latest_train_step,
         "latest_train_value": latest_train_value,
@@ -290,9 +364,9 @@ def generate_tensorboard_chart(train_dir, val_dir, test_dir, irred_err_dict,
         "latest_test_step": latest_test_step,
         "latest_test_value": latest_test_value,
         "latest_test_smoothed": latest_test_smoothed,
+        "random_metric": random_metric,
     }
     
-    # Dynamically inject the proper key for JSON
     if is_loss:
         out_dict["irreducible_error"] = bound_val
     else:
@@ -301,7 +375,7 @@ def generate_tensorboard_chart(train_dir, val_dir, test_dir, irred_err_dict,
     output_file_path = output_path.replace(".png", ".json")
     with open(output_file_path, "w") as f:
         json.dump(out_dict, f, indent=4)
-    #print(f"Successfully saved chart with high-contrast grids to {output_path}")
+        # print(f"Successfully saved chart with high-contrast grids to {output_path}")
 
 def export_scalars_to_png(log_dir, output_png_path, scalar_name='loss'):
     # OPTIMIZATION: Prevent memory bloat and truncation
