@@ -1,6 +1,9 @@
-- data items:
-  - parse the movie titles to make release year a feature.
-     - that also needs fourier encoding in the model
+- data items to consider:
+  - parse the movie titles
+     - to make release year a feature.
+        - that also needs fourier encoding in the model
+     - add a Text embedding layer to MovieModel that contains a text transformer or equivalent.
+       consider Google Gemma embedding model as it compresses well for mobile environments.
   - consider making the hour of day crossed with weekday feature more course than 24 hour bins
   - since time is important in the TwoTower Query model,
     for using data spanning years larger than the categorical bins

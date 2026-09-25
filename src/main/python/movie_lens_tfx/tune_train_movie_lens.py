@@ -133,7 +133,7 @@ def _make_query_model(n_users : int, layer_sizes : list,
                 keras.layers.Embedding(
                     max_user_id + 1,
                     user_embed_out_dim,
-                    embeddings_regularizer=keras.regularizers.l2(1e-5)
+                    embeddings_regularizer=keras.regularizers.l2(1e-3)
                 ),
                 keras.layers.Flatten(data_format='channels_last'),
             ], name="user_emb")
@@ -306,7 +306,7 @@ def _make_query_model(n_users : int, layer_sizes : list,
             
             self.user_model = UserModel(max_user_id=n_users, feature_acronym=feature_acronym)
             
-            self.feature_dropout = keras.layers.Dropout(drop_rate)
+            #self.feature_dropout = keras.layers.Dropout(drop_rate)
             
             if isinstance(layer_sizes, str):
                 layer_sizes = json.loads(layer_sizes)
@@ -364,9 +364,9 @@ def _make_query_model(n_users : int, layer_sizes : list,
             # inputs should contain columns:
             # print(f'call {self.name} type={type(inputs)}, inputs={inputs}\n')
             feature_embedding = self.user_model(inputs, **kwargs)
-            feature_embedding = self.feature_dropout(
-                feature_embedding, training=kwargs.get("training", False)
-            )
+            #feature_embedding = self.feature_dropout(
+            #    feature_embedding, training=kwargs.get("training", False)
+            #)
             res = self.dense_query(feature_embedding)
             res = self.norm(res)
             return res
@@ -419,7 +419,7 @@ def _make_candidate_model(n_movies : int, movies_offset : int,
                 keras.layers.Embedding(
                     self.n_movies,
                     movie_embed_out_dim,
-                    embeddings_regularizer=keras.regularizers.l2(1e-5)
+                    embeddings_regularizer=keras.regularizers.l2(1e-3)
                 ),
                 keras.layers.Flatten(data_format='channels_last'),
             ], name="movie_emb")
@@ -516,7 +516,7 @@ def _make_candidate_model(n_movies : int, movies_offset : int,
                 n_genres=n_genres,
                 incl_genres=incl_genres, name="movie_model")
             
-            self.feature_dropout = keras.layers.Dropout(drop_rate)
+            #self.feature_dropout = keras.layers.Dropout(drop_rate)
             
             self.dense_candidate = keras.Sequential(name="dense_candidate")
             if isinstance(layer_sizes, str):
@@ -574,9 +574,9 @@ def _make_candidate_model(n_movies : int, movies_offset : int,
             # inputs should contain columns "movie_id", "genres"
             # logging.debug(f'call {self.name} type ={type(inputs)}\ntype ={inputs}\n')
             feature_embedding = self.movie_model(inputs, **kwargs)
-            feature_embedding = self.feature_dropout(
-                feature_embedding, training=kwargs.get("training", False)
-            )
+            #feature_embedding = self.feature_dropout(
+            #    feature_embedding, training=kwargs.get("training", False)
+            #)
             # tf.print('invoked movie_emb.  shape=', feature_embedding.shape)
             res = self.dense_candidate(feature_embedding)
             res = self.norm(res)
@@ -1525,7 +1525,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         catalog, i.e. (0.15 / 0.44 / 0.41)
         (2) if business goal is balanced personalization, then use 0.33, 0.33, 0.33.
         A user's interest in a niche cult classic (Tail) as equally important as
-         their interest in a blockbuster (Head).  The pipeline HPO uses composit_ndcg_20 as its
+         their interest in a blockbuster (Head).  The pipeline HPO uses composite_ndcg_20 as its
          selector and so the result is user's mainsteam and personal preferences.
         
         """
