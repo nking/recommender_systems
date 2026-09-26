@@ -209,6 +209,15 @@ Pre-Processing:
    - consider splitting the data into 4 partitions to keep an untouched extra validation dataset for
      use in estimating the irreducible error.  The irreduclbe error can be calculated once a
      trained healthy model is made.
+   
+   - NOTE: for large applications, a more common approach to data splitting uses a rolling time
+     window to continuously keep training the model.
+     to avoid catastrophic forgetting of data older than the train time window and to keep
+     information about seasonality, one usually adds a random sample of history from past 1+ years
+     for each user.  the validation dataset is strictly greater in time that the train dataset,
+     and the test dataset is strictly greater in time than the validation dataset.
+     and occassionaly, the model has to be scrapped and trained from scratch on the latest
+     data.
 
    - after have designed model, can examine whether the train, val, and test sizes are enough to well
      determine the trainable parameters.  The estimate here use the positives ratings of the dataset only in estimates.
