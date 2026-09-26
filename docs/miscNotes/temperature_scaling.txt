@@ -3,24 +3,27 @@ scaled_logits = logits/temperature
 
 loss uses softwmax(scaled_logits)
 
-let x1 = 2
-let x2 = 1
+let logit1 = 1
+let logit2 = -1
 
-p1 = exp(t1)/(exp(t1) + exp(t2))
-p2 = exp(t2)/(exp(t1) + exp(t2)) 
+let x1 = logit1/temperature
+let x2 = logit2/temperature
+
+p1 = exp(x1)/(exp(x1) + exp(x2))
+p2 = exp(x2)/(exp(x1) + exp(x2)) 
    
-no scaling:
-p1 = 0.73
-p2 = 0.27
+no scaling, temperature=1:
+p1 = 0.88
+p2 = 0.12
 
-scaling: div by 0.1  makes distribution more peaked, pushes logits further apart
+scaling: temperature=0.1  makes distribution more peaked, pushes logits further apart
 helping to learn the tail and diversity for example.
 p1 = 0.9999546021312976
-p2 = 4.5397868702434395e-05
+p2 = 2.06e-9
 
-scaling by div 10 makes a flatter more uniform distribution
-p1 = 0.52497918747894
-p2 = 0.4750208125210601
+scaling temperature=10 makes a flatter more uniform distribution
+p1 = 0.55
+p2 = 0.45
 
 to learn the hard negatives, we want a more peaked dist so we divide
 by a number between roughly 0.05 and 0.15 or so.
