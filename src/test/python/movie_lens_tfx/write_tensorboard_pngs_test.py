@@ -36,8 +36,8 @@ class WriteTensorboardToPng(unittest.TestCase):
         saved_model_dir = os.path.join(get_bin_dir(), "rs_pipeline/Pusher/pushed_model/21")
         
         #temporarily point to recently trained model:
-        logdir = os.path.join(get_project_dir(), "../TMP9/bin", p)
-        saved_model_dir = os.path.join(get_project_dir(), "../TMP9/bin/rs_pipeline/Pusher/pushed_model/21")
+        logdir = os.path.join(get_project_dir(), "../TMP10/bin", p)
+        saved_model_dir = os.path.join(get_project_dir(), "../TMP10/bin/rs_pipeline/Pusher/pushed_model/21")
         
         #logdir = os.path.join(get_bin_dir(), "TestPipelines_baseline/MAIN_USER_MOVIE/Trainer/model_run/17/")
         #saved_model_dir = os.path.join(get_bin_dir(), "TestPipelines_baseline/MAIN_USER_MOVIE/Pusher/pushed_model/19")
@@ -49,6 +49,7 @@ class WriteTensorboardToPng(unittest.TestCase):
             movie_catalog_size=hyperparams_dict['n_movies'])
         random_mrr = self.calc_random_mrr(k=hyperparams_dict['k'],
             movie_catalog_size=hyperparams_dict['n_movies'])
+        random_loss = self.calc_random_inbatch_softmax_loss(hyperparams_dict['BATCH_SIZE'],)
 
         train_dir = os.path.join(logdir, "train")
         val_dir = os.path.join(logdir, "validation")
@@ -75,6 +76,8 @@ class WriteTensorboardToPng(unittest.TestCase):
             elif metric.find("precision") > -1:
                 #for 1 relevant ground_truth item:
                 random_metric = random_precision
+            elif metric.find("loss") > -1:
+                random_metric = random_loss
             generate_tensorboard_chart(train_dir, val_dir, test_dir, irr_dict, random_metric,
                 scalar_name=metric, output_path=outfile)
         
@@ -84,6 +87,9 @@ class WriteTensorboardToPng(unittest.TestCase):
             export_scalars_to_png(train_dir, outfile, metric)
             
         print(f'wrote pngs to {outdir}')
+    
+    def calc_random_inbatch_softmax_loss(self, batch_size:int):
+        return np.log(batch_size)
     
     def calc_random_ndcg(self, k: int, movie_catalog_size: int) -> float:
         s = np.sum([1 / np.log2(r + 1) for r in range(1, k + 1)])

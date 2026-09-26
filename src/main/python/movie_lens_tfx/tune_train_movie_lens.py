@@ -133,7 +133,7 @@ def _make_query_model(n_users : int, layer_sizes : list,
                 keras.layers.Embedding(
                     max_user_id + 1,
                     user_embed_out_dim,
-                    embeddings_regularizer=keras.regularizers.l2(1e-3)
+                    embeddings_regularizer=keras.regularizers.l2(5e-5)
                 ),
                 keras.layers.Flatten(data_format='channels_last'),
             ], name="user_emb")
@@ -419,7 +419,7 @@ def _make_candidate_model(n_movies : int, movies_offset : int,
                 keras.layers.Embedding(
                     self.n_movies,
                     movie_embed_out_dim,
-                    embeddings_regularizer=keras.regularizers.l2(1e-3)
+                    embeddings_regularizer=keras.regularizers.l2(5e-5)
                 ),
                 keras.layers.Flatten(data_format='channels_last'),
             ], name="movie_emb")
@@ -911,9 +911,9 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
             raw_logits = tf.matmul(user_embeddings, movie_embeddings, transpose_b=True)
             logits = raw_logits / self.temperature
             
-            pre_logit_max = tf.reduce_max(logits)
-            pre_logit_min = tf.reduce_min(logits)
-            pre_logit_mean = tf.reduce_mean(logits)
+            pre_logit_max = tf.reduce_max(raw_logits)
+            pre_logit_min = tf.reduce_min(raw_logits)
+            pre_logit_mean = tf.reduce_mean(raw_logits)
 
             if self.use_bias_corr:
                 # in a batch, all other user's positive items in the batch become the negatives
@@ -1858,7 +1858,7 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   if use_bias_corr:
       if not use_best_as_fixed:
           hp.Choice("bias_corr_alpha", values=[0.01, 0.05, 0.1], default=0.05)
-          hp.Float('temperature', 0.05, 0.25, step=0.025)
+          hp.Float('temperature', 0.05, 0.1, step=0.01)
       else:
           hp.Fixed("bias_corr_alpha", 0.01)
           hp.Fixed('temperature', 0.1)
