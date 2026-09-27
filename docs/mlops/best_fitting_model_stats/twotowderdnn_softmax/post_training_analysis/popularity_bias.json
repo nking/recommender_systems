@@ -1,0 +1,32 @@
+{
+    "user_tier_0_metrics": {
+        "mean_retrieved_log_pop": 5.4001,
+        "mean_ground_truth_log_pop": 7.6762,
+        "delta_log_pop": -2.2761,
+        "std_delta_log_pop": 1.5307,
+        "amplification_ratio": 0.7035
+    },
+    "user_tier_0_analysis": [
+        "[NICHE BIAS]: Model suppresses popularity by 0.70x. Retrieved slates are pushing much more obscure items than the user normally consumes."
+    ],
+    "user_tier_1_metrics": {
+        "mean_retrieved_log_pop": 5.1463,
+        "mean_ground_truth_log_pop": 8.1433,
+        "delta_log_pop": -2.9971,
+        "std_delta_log_pop": 1.7592,
+        "amplification_ratio": 0.632
+    },
+    "user_tier_1_analysis": [
+        "[NICHE BIAS]: Model suppresses popularity by 0.63x. Retrieved slates are pushing much more obscure items than the user normally consumes."
+    ],
+    "user_tier_2_metrics": {
+        "mean_retrieved_log_pop": 5.1938,
+        "mean_ground_truth_log_pop": 8.4242,
+        "delta_log_pop": -3.2304,
+        "std_delta_log_pop": 1.9846,
+        "amplification_ratio": 0.6165
+    },
+    "user_tier_2_analysis": [
+        "[NICHE BIAS]: Model suppresses popularity by 0.62x. Retrieved slates are pushing much more obscure items than the user normally consumes."
+    ]
+}

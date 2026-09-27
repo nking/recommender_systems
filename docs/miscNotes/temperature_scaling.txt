@@ -20,6 +20,18 @@ scaling: temperature=0.1  makes distribution more peaked, pushes logits further 
 helping to learn the tail and diversity for example.
 p1 = 0.9999546021312976
 p2 = 2.06e-9
+from: p=np.exp(1/T)/(np.exp(1/T) + 2047);
+This low temperature regieme can  also can akso lead to instability when 
+FalseNegatives are in the negatives.
+the False NEgative will have a high probabiliy like the positive does
+p=np.exp(1/T)/(np.exp(1/T) + np.exp(1/T) + 2046); p
+=0.4778085963226425
+   and gradient scales with that probability.
+the gradient of the positive is hence decreased by the false negative(s).
+and the next time that same positive is seen perhaps there are 0 false
+negatives.  that variance in the positive's gradient is larger for
+temperature 0.1 than it is for temperature 0.25, making the lower
+temperature less stable.
 
 scaling temperature=10 makes a flatter more uniform distribution
 p1 = 0.55

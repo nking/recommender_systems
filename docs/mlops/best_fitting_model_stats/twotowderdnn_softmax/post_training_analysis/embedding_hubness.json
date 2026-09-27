@@ -1,0 +1,20 @@
+{
+    "Global Item Uniformity": -2.5729031562805176,
+    "user_tier_0": {
+        "alignment": 1.6743055582046509,
+        "user_uniformity": -3.020603656768799
+    },
+    "user_tier_1": {
+        "alignment": 1.4335732460021973,
+        "user_uniformity": -2.9874656200408936
+    },
+    "user_tier_2": {
+        "alignment": 1.2819252014160156,
+        "user_uniformity": -2.8844075202941895
+    },
+    "automated_conclusions": [
+        "HEALTHY ITEM DISPERSION: Global Item Uniformity is excellent (-2.57). Movies are well-distributed across the hypersphere.",
+        "USER GEOMETRY HEALTHY: Power users maintain distinct spatial representations without collapsing into a dense cluster.",
+        "HEALTHY ALIGNMENT: Average positive pair distance is 1.46. Model balances proximity to positive items while maintaining generalization space."
+    ]
+}

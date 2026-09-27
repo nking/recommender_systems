@@ -1,0 +1,51 @@
+{
+    "expected_random_recall": 0.025753,
+    "comparison_metrics": {
+        "overall_recall@100": {
+            "test set": 0.097875,
+            "cold-start set": 0.075503,
+            "abs_change": -0.022371,
+            "rel_change_pct": "-22.86%"
+        },
+        "recall_movie_tier0@100": {
+            "test set": 0.045455,
+            "cold-start set": 0.030303,
+            "abs_change": -0.015152,
+            "rel_change_pct": "-33.33%"
+        },
+        "recall_movie_tier1@100": {
+            "test set": 0.094937,
+            "cold-start set": 0.06962,
+            "abs_change": -0.025316,
+            "rel_change_pct": "-26.67%"
+        },
+        "recall_movie_tier2@100": {
+            "test set": 0.158163,
+            "cold-start set": 0.130952,
+            "abs_change": -0.027211,
+            "rel_change_pct": "-17.20%"
+        },
+        "retrieved_share_tier0@100": {
+            "test set": 0.203132,
+            "cold-start set": 0.18962,
+            "abs_change": -0.013512,
+            "rel_change_pct": "-6.65%"
+        },
+        "retrieved_share_tier1@100": {
+            "test set": 0.482304,
+            "cold-start set": 0.493311,
+            "abs_change": 0.011007,
+            "rel_change_pct": "+2.28%"
+        },
+        "retrieved_share_tier2@100": {
+            "test set": 0.314564,
+            "cold-start set": 0.317069,
+            "abs_change": 0.002506,
+            "rel_change_pct": "+0.80%"
+        }
+    },
+    "automated_conclusions": [
+        "[PERFORMANCE DROP]: cold-start set overall recall dropped by 22.9% relative to test set. Metadata partially compensates for missing interactions, but performance still degrades.",
+        "[SLATE COMPOSITION - cold-start set]: Top-100 candidate slates consist of 19.0% Tier 0, 49.3% Tier 1, and 31.7% Tier 2 items."
+    ]
+}

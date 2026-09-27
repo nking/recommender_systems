@@ -1,0 +1,68 @@
+{
+    "coverage@20": [
+        "HEALTHY BIAS: Gini is 0.45. The model successfully balances mainstream relevance with catalog exploration.",
+        "STRONG TAIL: The bottom 80% captures 52.3% of traffic, indicating excellent long-tail surfacing capability.",
+        "DIVERSE HEAD: The top 10% consume 29.7% of slots, leaving plenty of room for the torso/tail.",
+        "UNIFORM COHORTS: Light and Power users experience roughly the same level of catalog concentration."
+    ],
+    "data_shifts": [
+        "HIGH MOVIE TIER DRIFT WARNING: Significant item popularity shift between Train and Test splits (Train-Test EMD: 0.0679). Evaluation may be biased.",
+        "USER TIER STABILITY EXCELLENT: Activity profile distribution remains consistent across splits (Train-Test EMD: 0.0113).",
+        "EXPECTED INTERACTION POPULARITY BIAS: Catalog vs. Train EMD is 0.4699. Training interactions heavily concentrate on high-tier items relative to catalog availability.",
+        "P_X MOVIE TIER HIGH DRIFT WARNING: Significant item popularity shift between Train and Test splits (Train-Test EMD: 0.0932).",
+        "P_Y|X MOVIE TIER STABILITY EXCELLENT: Activity profile distribution remains consistent across splits (Train-Test EMD: 0.0049).",
+        "P_Y MOVIE TIER STABILITY EXCELLENT: Activity profile distribution remains consistent across splits (Train-Test EMD: 0.0000).",
+        "P_X|Y MOVIE TIER HIGH DRIFT WARNING: Significant item popularity shift between Train and Test splits (Train-Test EMD: 0.0679).",
+        "Covariate shift between Train and Test splits."
+    ],
+    "embeding_hubness": [
+        "HEALTHY ITEM DISPERSION: Global Item Uniformity is excellent (-2.57). Movies are well-distributed across the hypersphere.",
+        "USER GEOMETRY HEALTHY: Power users maintain distinct spatial representations without collapsing into a dense cluster.",
+        "HEALTHY ALIGNMENT: Average positive pair distance is 1.46. Model balances proximity to positive items while maintaining generalization space."
+    ],
+    "all_users_inter_user_diversity_conclusions": [
+        "[HYPER-PERSONALIZED SLATES]: Mean Jaccard overlap (1.88%) aligns closely with random chance (1.30%). Candidate slates are highly individualized across users."
+    ],
+    "tier_0_inter_user_diversity_conclusions": [
+        "[HYPER-PERSONALIZED SLATES]: Mean Jaccard overlap (2.05%) aligns closely with random chance (1.30%). Candidate slates are highly individualized across users."
+    ],
+    "tier_1_inter_user_diversity_conclusions": [
+        "[HYPER-PERSONALIZED SLATES]: Mean Jaccard overlap (1.89%) aligns closely with random chance (1.30%). Candidate slates are highly individualized across users."
+    ],
+    "tier_2_inter_user_diversity_conclusions": [
+        "[HYPER-PERSONALIZED SLATES]: Mean Jaccard overlap (2.26%) aligns closely with random chance (1.30%). Candidate slates are highly individualized across users."
+    ],
+    "all_users_but_catalog_has_cold_start_movies_inter_user_diversity_conclusions": [
+        "[HYPER-PERSONALIZED SLATES]: Mean Jaccard overlap (1.78%) aligns closely with random chance (1.20%). Candidate slates are highly individualized across users."
+    ],
+    "intra-list divserity": [
+        "[FOCUSED CANDIDATE POOL]: Model ILD (0.3054) retains 32.3% of random catalog diversity. This indicates strong, coherent cluster targeting around user preferences."
+    ],
+    "user_tier_0_popularity_bias": [
+        "[NICHE BIAS]: Model suppresses popularity by 0.70x. Retrieved slates are pushing much more obscure items than the user normally consumes."
+    ],
+    "user_tier_1_popularity_bias": [
+        "[NICHE BIAS]: Model suppresses popularity by 0.63x. Retrieved slates are pushing much more obscure items than the user normally consumes."
+    ],
+    "user_tier_2_popularity_bias": [
+        "[NICHE BIAS]: Model suppresses popularity by 0.62x. Retrieved slates are pushing much more obscure items than the user normally consumes."
+    ],
+    "cold_start_embeddings": [
+        "[PERFORMANCE DROP]: cold-start set overall recall dropped by 22.9% relative to test set. Metadata partially compensates for missing interactions, but performance still degrades.",
+        "[SLATE COMPOSITION - cold-start set]: Top-100 candidate slates consist of 19.0% Tier 0, 49.3% Tier 1, and 31.7% Tier 2 items."
+    ],
+    "stratified_metrics@20": [
+        "STRONG RECALL LIFT: Global Recall@20 (2.7%) heavily outperforms the random expected baseline (0.5%). The candidate generator is extracting meaningful semantic signal.",
+        "STRONG PRECISION LIFT: Global Precision@20 (0.82%) heavily outperforms the random expected precision (0.24%), indicating high density of relevant items in the retrieved slates.",
+        "EXCELLENT HISTORY UTILIZATION: Power users (Tier 2 Recall: 5.0%) perform massively better than light users (Tier 0 Recall: 1.3%). The model successfully translates rich interaction histories into highly relevant slates.",
+        "HEALTHY RANKING STRATIFICATION: NDCG scales positively with user tier (Tier 2: 2.32% vs Tier 0: 1.46%). The model not only retrieves the right items for power users but places them higher in the slate.",
+        "STRONG LONG-TAIL PERFORMANCE: Model successfully surfaces and ranks niche/long-tail items (Tier 0 NDCG: 1.07%) effectively relative to popular items (Tier 2 NDCG: 1.00%)."
+    ],
+    "stratified_metrics@100": [
+        "STRONG RECALL LIFT: Global Recall@100 (10.9%) heavily outperforms the random expected baseline (2.6%). The candidate generator is extracting meaningful semantic signal.",
+        "MODERATE PRECISION LIFT: Global Precision@100 (0.71%) is better than random (0.24%), suggesting basic relevance filtering is functioning.",
+        "EXCELLENT HISTORY UTILIZATION: Power users (Tier 2 Recall: 16.7%) perform massively better than light users (Tier 0 Recall: 5.8%). The model successfully translates rich interaction histories into highly relevant slates.",
+        "HEALTHY RANKING STRATIFICATION: NDCG scales positively with user tier (Tier 2: 4.92% vs Tier 0: 3.41%). The model not only retrieves the right items for power users but places them higher in the slate.",
+        "STRONG LONG-TAIL PERFORMANCE: Model successfully surfaces and ranks niche/long-tail items (Tier 0 NDCG: 2.74%) effectively relative to popular items (Tier 2 NDCG: 2.62%)."
+    ]
+}

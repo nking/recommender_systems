@@ -334,7 +334,9 @@ def _make_query_model(n_users : int, layer_sizes : list,
                     
             # when L2 normalization for the last layer IS NOT present, the the ANN search is dot product and uses the direction and magnitude of the vector emeddings.
             # and when it IS, the ANN search between embeddings is cosine similarity and it is over a unit hypershpere,
-            #  so the distances between vectors are angles.  The range of embeddings lies withint [-1, 1]
+            #  so the distances between vectors are angles.  The range of embeddings lies withint [-1, 1].
+            # The unit noramlization forces the model to change angles on the hypershpere to represent
+            # the user to movie relationships because it cannot use magnitudes of the embeddings to express that (and that is unstable)
             self.norm = tf.keras.layers.UnitNormalization(axis=1)
             
             self.regl2 = regl2
@@ -419,7 +421,7 @@ def _make_candidate_model(n_movies : int, movies_offset : int,
                 keras.layers.Embedding(
                     self.n_movies,
                     movie_embed_out_dim,
-                    embeddings_regularizer=keras.regularizers.l2(5e-5)
+                    embeddings_regularizer=keras.regularizers.l2(1e-3)
                 ),
                 keras.layers.Flatten(data_format='channels_last'),
             ], name="movie_emb")
@@ -544,6 +546,8 @@ def _make_candidate_model(n_movies : int, movies_offset : int,
                     
             #when L2 normalization for the last layer IS NOT present, the the ANN search is dot product and uses the direction and magnitude of the vector emeddings.
             # and when it IS, the ANN search between embeddings is cosine similarity, hence only searches by direction.
+            # The unit noramlization forces the model to change angles on the hypershpere to represent
+            # the user to movie relationships because it cannot use magnitudes of the embeddings to express that (and that is unstable)
             self.norm = tf.keras.layers.UnitNormalization(axis=1)
             
             self.regl2 = regl2
@@ -1858,7 +1862,7 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   if use_bias_corr:
       if not use_best_as_fixed:
           hp.Choice("bias_corr_alpha", values=[0.01, 0.05, 0.1], default=0.05)
-          hp.Float('temperature', 0.05, 0.1, step=0.01)
+          hp.Float('temperature', 0.05, 0.25, step=0.025)
       else:
           hp.Fixed("bias_corr_alpha", 0.01)
           hp.Fixed('temperature', 0.1)

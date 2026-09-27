@@ -1,0 +1,8 @@
+{
+    "model_ild": 0.305376,
+    "random_ild": 0.944538,
+    "diversity_ratio": 0.3233,
+    "analysis": [
+        "[FOCUSED CANDIDATE POOL]: Model ILD (0.3054) retains 32.3% of random catalog diversity. This indicates strong, coherent cluster targeting around user preferences."
+    ]
+}

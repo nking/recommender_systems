@@ -1,0 +1,129 @@
+{
+    "movie_tier_0_catalog_counts": 565,
+    "movie_tier_1_catalog_counts": 1709,
+    "movie_tier_2_catalog_counts": 1609,
+    "movie_tier_catalog_distribution": [
+        0.14550605202163275,
+        0.4401236157610095,
+        0.4143703322173577
+    ],
+    "P_X_train": [
+        0.5810525344890093,
+        0.3851418952589702,
+        0.03380557025202053
+    ],
+    "P_Y|X_train": [
+        0.4172776994566269,
+        0.3580880476844589,
+        0.2246342528589141
+    ],
+    "P_Y_train": 0.00010784025188618339,
+    "movie_tier_0_train_counts": 313392,
+    "movie_tier_1_train_counts": 141150,
+    "movie_tier_2_train_counts": 5044,
+    "P_X|Y1_train": [
+        0.681900667122149,
+        0.30712423790106747,
+        0.010975094976783452
+    ],
+    "user_tier_0_train_counts": 239146,
+    "user_tier_1_train_counts": 201424,
+    "user_tier_2_train_counts": 19016,
+    "movie_tier_train_distribution": [
+        0.681900667122149,
+        0.30712423790106747,
+        0.010975094976783452
+    ],
+    "user_tier_train_distribution": [
+        0.5203509245277271,
+        0.43827270630523996,
+        0.04137636916703294
+    ],
+    "P_X_val": [
+        0.47651579846285225,
+        0.4713919726729291,
+        0.05209222886421862
+    ],
+    "P_Y|X_val": [
+        0.41622326703578666,
+        0.35504175277704897,
+        0.2287349801871644
+    ],
+    "P_Y_val": 0.00010315309889781007,
+    "movie_tier_0_val_counts": 30498,
+    "movie_tier_1_val_counts": 20018,
+    "movie_tier_2_val_counts": 1057,
+    "P_X|Y1_val": [
+        0.5913559420627073,
+        0.38814883757004637,
+        0.020495220367246426
+    ],
+    "user_tier_0_val_counts": 26053,
+    "user_tier_1_val_counts": 23113,
+    "user_tier_2_val_counts": 2407,
+    "movie_tier_val_distribution": [
+        0.5913559420627073,
+        0.38814883757004637,
+        0.020495220367246426
+    ],
+    "user_tier_val_distribution": [
+        0.5051674325713067,
+        0.4481608593643961,
+        0.04667170806429721
+    ],
+    "P_X_test": [
+        0.43345224444727565,
+        0.49400135898415937,
+        0.072546396568565
+    ],
+    "P_Y|X_test": [
+        0.42371969178409624,
+        0.35505250507544095,
+        0.2212278031404629
+    ],
+    "P_Y_test": 9.941239313450724e-05,
+    "movie_tier_0_test_counts": 27085,
+    "movie_tier_1_test_counts": 19958,
+    "movie_tier_2_test_counts": 1242,
+    "P_X|Y1_test": [
+        0.560940250595423,
+        0.41333747540644095,
+        0.025722273998136067
+    ],
+    "user_tier_0_test_counts": 24271,
+    "user_tier_1_test_counts": 21775,
+    "user_tier_2_test_counts": 2239,
+    "movie_tier_test_distribution": [
+        0.560940250595423,
+        0.41333747540644095,
+        0.025722273998136067
+    ],
+    "user_tier_test_distribution": [
+        0.5026612819716268,
+        0.45096820958889927,
+        0.046370508439473955
+    ],
+    "P_X_emd_train_to_val": 0.061411697319177644,
+    "P_Y|X_emd_train_to_val": 0.0025775798745452105,
+    "P_X_emd_val_to_test": 0.03175886085996149,
+    "P_Y|X_emd_val_to_test": 0.007501800897505517,
+    "P_X_emd_train_to_test": 0.09317055817913902,
+    "P_Y|X_emd_train_to_test": 0.004924221022960418,
+    "movie_tier_emd_train_to_val": 0.050032425224952326,
+    "movie_tier_emd_val_to_test": 0.017821372549087,
+    "movie_tier_emd_train_to_test": 0.06785379777403933,
+    "movie_tier_emd_catalog_to_train": 0.4698949261705453,
+    "user_tier_emd_train_to_val": 0.010239415426842369,
+    "user_tier_emd_val_to_test": 0.00140367511225159,
+    "user_tier_emd_train_to_test": 0.011341890914270625,
+    "automated_conclusions": [
+        "HIGH MOVIE TIER DRIFT WARNING: Significant item popularity shift between Train and Test splits (Train-Test EMD: 0.0679). Evaluation may be biased.",
+        "USER TIER STABILITY EXCELLENT: Activity profile distribution remains consistent across splits (Train-Test EMD: 0.0113).",
+        "EXPECTED INTERACTION POPULARITY BIAS: Catalog vs. Train EMD is 0.4699. Training interactions heavily concentrate on high-tier items relative to catalog availability.",
+        "P_X MOVIE TIER HIGH DRIFT WARNING: Significant item popularity shift between Train and Test splits (Train-Test EMD: 0.0932).",
+        "P_Y|X MOVIE TIER STABILITY EXCELLENT: Activity profile distribution remains consistent across splits (Train-Test EMD: 0.0049).",
+        "P_Y MOVIE TIER STABILITY EXCELLENT: Activity profile distribution remains consistent across splits (Train-Test EMD: 0.0000).",
+        "P_X|Y MOVIE TIER HIGH DRIFT WARNING: Significant item popularity shift between Train and Test splits (Train-Test EMD: 0.0679).",
+        "Covariate shift between Train and Test splits."
+    ]
+}

@@ -248,10 +248,10 @@ def generate_tensorboard_chart(train_dir, val_dir, test_dir, irred_err_dict,
             + val_smoothed
             + [latest_test_value]
     )
-    if bound_val is not None:
-        all_values.append(bound_val)
-    if random_metric is not None:
-        all_values.append(random_metric)
+    #if bound_val is not None:
+    #    all_values.append(bound_val)
+    #if random_metric is not None:
+    #    all_values.append(random_metric)
     
     if all_values:
         y_min, y_max = min(all_values), max(all_values)
