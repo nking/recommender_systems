@@ -32,6 +32,21 @@ data = {
       '4': [3000,  5,  1000,  20, 0, 0],
       '5': [8000, 40,  4000,  10, 0, 0]
     }
+    
+Some USAGEs:
+    cd to base of project
+    
+export TMP=../TMP11
+python src/test/python/movie_lens_tfx/WriteRetrievalInputs.py \
+    WriteRetrievalInputs.test_write_movie_embeddings \
+    --saved_model_path=$TMP/bin/rs_pipeline/Pusher/pushed_model/21/ \
+    --output_dir_path=$TMP/retrieval_files
+
+python src/test/python/movie_lens_tfx/WriteRetrievalInputs.py \
+    WriteRetrievalInputs.test_write_user_embeddings \
+    --saved_model_path=$TMP/bin/rs_pipeline/Pusher/pushed_model/21/ \
+    --output_dir_path=$TMP/retrieval_files
+
 """
 
 from apache_beam.options.pipeline_options import PipelineOptions
@@ -49,6 +64,19 @@ from absl import logging
 logging.set_verbosity(logging.DEBUG)
 logging.set_stderrthreshold(logging.DEBUG)
 
+from absl import flags
+
+FLAGS = flags.FLAGS
+flags.DEFINE_string(
+    name="saved_model_path",
+    default = os.path.join(get_project_dir(),'src/test/resources/serving_model/BEST'),
+    help="Path to saved_model directory"
+)
+flags.DEFINE_string(
+    name="output_dir_path",
+    default = get_bin_dir(),
+    help="Path to save output files to.  It will be created if it doesn't exist"
+)
 
 # TODO: write a component for making the user and movie tfrecords needed for inputs to
 # the embeddings in the Retrieval project.  for now, hard-wiring the columns instead of using
@@ -78,15 +106,17 @@ class WriteRetrievalInputs(tf.test.TestCase):
         self.train_full_uri = os.path.join(get_project_dir(),
             'src/main/resources/ml-1m/ratings_train.dat')
         
+        self.outdir_path = FLAGS.output_dir_path
+        os.makedirs(self.outdir_path, exist_ok=True)
+        
         self.input_path1 = os.path.join(get_project_dir(),
             'src/main/resources/ml-1m/movies.dat')
-        self.output_uri1 = os.path.join(get_bin_dir(), "movie_emb_inp")
+        self.output_uri1 = os.path.join(self.outdir_path, "movie_emb_inp")
         self.input_path2 = os.path.join(get_project_dir(),
             'src/main/resources/ml-1m/users.dat')
-        self.output_uri2 = os.path.join(get_bin_dir(), "user_emb_inp")
+        self.output_uri2 = os.path.join(self.outdir_path, "user_emb_inp")
 
-        self.saved_model_path = os.path.join(get_project_dir(),
-            'src/test/resources/serving_model/BEST')
+        self.saved_model_path = FLAGS.saved_model_path
         
         self.joined_ratings_feature_spec = {
             "user_id": tf.io.FixedLenFeature([], tf.int64),
@@ -480,6 +510,9 @@ class WriteRetrievalInputs(tf.test.TestCase):
         num_records = metadata['num_records']
         self.assertIsNotNone(embed_dim)
         self.assertIsNotNone(num_records)
+    
+    def test_write_user_recommendations_and_timestamps(self):
+        pass
     
     def create_example_movie_id_prediction(row):
         # each row is a tuple like:
