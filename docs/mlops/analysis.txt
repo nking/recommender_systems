@@ -218,6 +218,11 @@ Pre-Processing:
      and the test dataset is strictly greater in time than the validation dataset.
      and occassionaly, the model has to be scrapped and trained from scratch on the latest
      data.
+     The approach requires the user ids to be numbered starting from 1 and the movie_ids
+     also starting from 1 instead of movie_ids starting from max_user_id+1.  That offset
+     is in the renumbering sript and was initially part of designing a giant efficient
+     matricx for embeddings used in the GraphRanker model but that wasn't a scalable
+     design, so should be refatored one day in all projects.
 
    - after have designed model, can examine whether the train, val, and test sizes are enough to well
      determine the trainable parameters.  The estimate here use the positives ratings of the dataset only in estimates.

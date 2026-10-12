@@ -1,8 +1,9 @@
 #!/bin/bash
 
-export TMP=../TMP11
-
 conda activate tfx_py313
+
+export TMP=`pwd`/../TMP10
+
 
 export SAVED_MODEL_DIR="$TMP/bin/rs_pipeline/Pusher/pushed_model/21"
 export OUT_DIR="$TMP/retrieval_files"

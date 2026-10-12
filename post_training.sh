@@ -31,19 +31,20 @@
 #  recommender_systems/src/test/resources/serving_model/
 
 # **** EDIT THIS PATH AS NEEDED ******
-export trained_model_dir=../TMP3/bin/rs_pipeline/Trainer/model/19/
+export trained_model_dir=../TMP10/bin/rs_pipeline/Trainer/model/19/
 
 # output dirs in recommender_systems
 export dest_saved_model_dir=src/test/resources/serving_model/
 export docs_dir=docs/mlops/best_fitting_model_stats/twotowderdnn_softmax
 
-#copy the models to retrieval project
 rm -rf $dest_saved_model_dir/BEST/*
 rm -rf $dest_saved_model_dir/serving_candidate_model/*
 rm -rf $dest_saved_model_dir/serving_query_model/*
 cp -rf $trained_model_dir/Format-Serving/* $dest_saved_model_dir/BEST/
 cp -rf $trained_model_dir/serving_candidate_model/* $dest_saved_model_dir/serving_candidate_model/
 cp -rf $trained_model_dir/serving_query_model/* $dest_saved_model_dir/serving_query_model/
+rm -rf ../retrieval/src/main/resources/serving_models/user_movie_model/*
+cp -rf $trained_model_dir/Format-Serving/* ../retrieval/src/main/resources/serving_models/user_movie_model/
 
 #copy the query model to the ranker project
 export ranker_q_dir=../ranker/src/test/resources/model_repositories/saved_model_formats/bi-encoder/query/1

@@ -19,6 +19,9 @@
      - KGAT (by Xiang Wang) or KGCN (by Hongwei Wang) for director graph data.
   - consider changing partition size based on expectations regarding 
     data shifts from train to test and retraining on new data, etc
+  - remove the renumbering of movie_ids, that is the offset starting
+    at max_user_id +1.  it restricts scalability of user_ids.
+    make this change in all of the projects from this one to retieval and ranker etc.
 
 - change the bi-encoder to use pretrained LLM for
   the User and Movie properties that are not
