@@ -126,6 +126,11 @@ def _make_query_model(n_users : int, layer_sizes : list,
             
             # NOTE: it is up to the using component to filter for OOV values
             #      to avoid using this incorrectly
+            # TODO: future impl should design for additional space in input_dim
+            #  that would allow continued training over time with the sliding window
+            #  partitioning approach that would include new users.  Note that the
+            #  movie ids would need to be 1 based also and not use an offset from
+            # max_user_id
             # output dimension calculated following advice in
             # https://developers.googleblog.com/introducing-tensorflow-feature-columns/
             user_embed_out_dim = round(max_user_id ** 0.25)  # 9
@@ -133,7 +138,7 @@ def _make_query_model(n_users : int, layer_sizes : list,
                 keras.layers.Embedding(
                     max_user_id + 1,
                     user_embed_out_dim,
-                    embeddings_regularizer=keras.regularizers.l2(5e-5)
+                    embeddings_regularizer=keras.regularizers.l2(1e-3)
                 ),
                 keras.layers.Flatten(data_format='channels_last'),
             ], name="user_emb")
