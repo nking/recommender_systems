@@ -1824,34 +1824,42 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
 def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   """Returns hyperparameters for building Keras model."""
   #print(f'get_default_hyperparameters: custom_config={custom_config}')
-  use_best_as_fixed = False
+  use_best_as_fixed = True
   
   hp = keras_tuner.HyperParameters()
   # Defines search space.
   
   hp.Fixed('k', custom_config.get("k", 100))
   
+  # a restrictive weight decay like 0.05 keeps the trainable parameters clustered around 0, preventing those
+  #     trainable parameters from filling their embeddings, leading to memorization of the data and over-fitting.
+  # a small weight_decay like 0.0001 does not prevent the trainable parameters from filling their spaces
+  #    and hence, memorizing data.  in this model we see strong over-fitting when weight_decay is as low as 1e-4
+  
   if not use_best_as_fixed:
       hp.Float('learning_rate', 1e-4, 1e-3, sampling='log')
       #hp.Float('weight_decay', 1e-4, 1e-2, sampling='log')
-      hp.Float('weight_decay', 1e-4, 5e-2, sampling='log')
+      hp.Float('weight_decay', 1e-3, 5e-2, sampling='log')
       #hp.Float('drop_rate', min_value=0.1, max_value=0.4, default=0.3)
-      hp.Float('drop_rate', min_value=0.35, max_value=0.65, default=0.4)
+      hp.Float('drop_rate', min_value=0.25, max_value=0.4, default=0.35)
       #hp.Float('log_q_correction_factor', min_value=0.1, max_value=1.0, default=0.5)
       hp.Fixed('log_q_correction_factor', value=1.0)
+      # layers_sizes is a list of ints, so encode each list as a string, choices can only be int,float,bool,str
+      # the last layer in layer_sizes is the query and candidate embedding models' output dimensions-1
+      hp.Choice("layer_sizes", values=[json.dumps([32]), json.dumps([64, 32])],
+          default=json.dumps([32]))
   else:
-      hp.Fixed('learning_rate', 0.0001)
-      hp.Fixed('weight_decay', 0.0001)
+      hp.Fixed('learning_rate', 0.001)
+      hp.Fixed('weight_decay', 0.05)
       hp.Fixed('drop_rate', 0.35)
       hp.Fixed('log_q_correction_factor',value=1.0)
+      hp.Fixed("layer_sizes", value=json.dumps([64, 32]))
 
   #let AdamW weight decay handle the regularization, so set regl2 to 0:
   #hp.Float('regl2', 1e-5, 1e-2, sampling="log")
   hp.Fixed('regl2', 0.0)
   
-  #layers_sizes is a list of ints, so encode each list as a string, choices can only be int,float,bool,str
-  #the last layer in layer_sizes is the query and candidate embedding models' output dimensions-1
-  hp.Choice("layer_sizes", values=[json.dumps([32]), json.dumps([64, 32])], default=json.dumps([32]))
+  
   #hp.Choice("layer_sizes", values=[json.dumps([16]), json.dumps([32, 16])], default=json.dumps([16]))
   #hp.Fixed("layer_sizes", value=json.dumps([32]))
   #hp.Fixed("layer_sizes", value=json.dumps([24])) # 16 too low, 24 too low, 64 too high.   32 good.
@@ -1865,12 +1873,12 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   use_log_q_corr_decay = hp.Fixed("use_log_q_corr_decay", value=False)
   #if batch_size=1024, max temp should be about 0.2;  if batch_size is 2048, temp max ~ 0.4
   if use_bias_corr:
-      if not use_best_as_fixed:
+      if use_best_as_fixed:
+          hp.Fixed("bias_corr_alpha", 0.01)
+          hp.Fixed('temperature', 0.25)
+      else:
           hp.Choice("bias_corr_alpha", values=[0.01, 0.05, 0.1], default=0.05)
           hp.Float('temperature', 0.05, 0.25, step=0.025)
-      else:
-          hp.Fixed("bias_corr_alpha", 0.01)
-          hp.Fixed('temperature', 0.1)
   else:
       hp.Choice("bias_corr_alpha", values=[0.1], default=0.05)  # 0.01, 0.05, 0.1
       hp.Fixed("temperature", value=1.0)
@@ -3019,20 +3027,32 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
   #
   # alpha = 1e-3: Setting alpha = 1e-3 acts as a gentle noise-smoothing filter. Since validation metrics like ranking NDCG exhibit micro-variance between epochs, this prevents the GP from over-fitting to minor validation jitter.
   print("construct tuner BayesianOptimization")
-  tuner = keras_tuner.BayesianOptimization(
-      _make_2tower_keras_model,
-      objective=keras_tuner.Objective(f'val_composite_ndcg_{hp.get("k")}', 'max'),
-      hyperparameters=hp,
-      alpha=1e-3,
-      beta=3.3, #defaut 2.6;  4.0 for more exploration.
-      num_initial_points=13, #30
-      max_trials=40, #should be 2 to 3 times num_initial_points
-      #TEMPORARY when fixing params:
-      #num_initial_points=1, #30
-      #max_trials=1, #should be 2 to 3 times num_initial_points
-      allow_new_entries=False,
-      directory=fn_args.working_dir,
-      project_name='movie_lens_2t_tuning_bayesian')
+  if False:
+      #when get_default_hyperparameters variable use_best_as_fixed = False,
+      # this is used to find best hyperparatmers
+      tuner = keras_tuner.BayesianOptimization(
+          _make_2tower_keras_model,
+          objective=keras_tuner.Objective(f'val_composite_ndcg_{hp.get("k")}', 'max'),
+          hyperparameters=hp,
+          alpha=1e-3,
+          beta=3.3, #defaut 2.6;  4.0 for more exploration.
+          num_initial_points=13, #30
+          max_trials=40, #should be 2 to 3 times num_initial_points
+          allow_new_entries=False,
+          directory=fn_args.working_dir,
+          project_name='movie_lens_2t_tuning_bayesian')
+  else:
+      # when get_default_hyperparameters variable use_best_as_fixed = True,
+      # this is used for all Fixed parameters
+      tuner = keras_tuner.RandomSearch(
+          _make_2tower_keras_model,
+          objective=keras_tuner.Objective(f'val_composite_ndcg_{hp.get("k")}','max'),
+          hyperparameters=hp,
+          max_trials=1,  # Forces evaluation of the single fixed set and stop
+          allow_new_entries=False,
+          directory=fn_args.working_dir,
+          project_name='movie_lens_2t_fixed_repro'
+      )
   
   NUM_EPOCHS = hp.get("NUM_EPOCHS")
   
