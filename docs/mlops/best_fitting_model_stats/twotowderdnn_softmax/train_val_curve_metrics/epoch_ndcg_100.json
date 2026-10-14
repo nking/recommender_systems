@@ -1,0 +1,13 @@
+{
+    "latest_train_step": 7,
+    "latest_train_value": 0.11341347545385361,
+    "latest_train_smoothed": 0.11043634912176133,
+    "latest_val_step": 7,
+    "latest_val_value": 0.041354741901159286,
+    "latest_val_smoothed": 0.04080728493084908,
+    "latest_test_step": 8,
+    "latest_test_value": 0.03314627707004547,
+    "latest_test_smoothed": 0.03314627707004547,
+    "random_metric": 0.005392395280525607,
+    "ceiling": 0.03508107213491429
+}

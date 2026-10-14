@@ -1,0 +1,20 @@
+-- improve handling of timestamp==-1 in
+   the signatures of bi-encoder
+
+-- improve with branchless handling where possible
+   and decorate those methods with tf.function
+
+- change current hard-negative mining script name
+  to soft negative mining.
+  - copy it and modify to add to it hard negatives
+    derived from using retrieval of movies for a user
+    and from the list ordered by closest to user vec
+    choose first 3 that the user rated 1 or 2.
+
+- add retrieval metrics and testing with the 2nd 
+  time partitioned dataset
+
+  - the @K's for precision, recall, map, mrr, ndcg
+  - weighted averaged precision for performance metrics
+    and maximization of precision
+  - survival functions of hyper-geometric distr

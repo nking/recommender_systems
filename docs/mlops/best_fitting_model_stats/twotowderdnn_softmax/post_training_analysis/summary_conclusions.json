@@ -1,9 +1,15 @@
 {
+    "coverage@100": [
+        "SUSPICIOUSLY UNIFORM at_100: Gini is 0.30. The model may be overly random or popularity suppression (Log-Q/Temperature) is too aggressive.",
+        "STRONG TAIL at_100: The bottom 80% captures 62.8% of traffic, indicating excellent long-tail surfacing capability.",
+        "DIVERSE HEADat_100: The top 10% consume 21.8% of slots, leaving plenty of room for the torso/tail.",
+        "USER PERSONALIZATION at_{top_k}: Power users exhibit lower Gini (more diverse slates) than light users, successfully leveraging rich interaction histories."
+    ],
     "coverage@20": [
-        "HEALTHY BIAS: Gini is 0.45. The model successfully balances mainstream relevance with catalog exploration.",
-        "STRONG TAIL: The bottom 80% captures 52.3% of traffic, indicating excellent long-tail surfacing capability.",
-        "DIVERSE HEAD: The top 10% consume 29.7% of slots, leaving plenty of room for the torso/tail.",
-        "UNIFORM COHORTS: Light and Power users experience roughly the same level of catalog concentration."
+        "HEALTHY BIAS at_20: Gini is 0.45. The model successfully balances mainstream relevance with catalog exploration.",
+        "STRONG TAIL at_20: The bottom 80% captures 52.3% of traffic, indicating excellent long-tail surfacing capability.",
+        "DIVERSE HEADat_20: The top 10% consume 29.7% of slots, leaving plenty of room for the torso/tail.",
+        "USER PERSONALIZATION at_{top_k}: Power users exhibit lower Gini (more diverse slates) than light users, successfully leveraging rich interaction histories."
     ],
     "data_shifts": [
         "HIGH MOVIE TIER DRIFT WARNING: Significant item popularity shift between Train and Test splits (Train-Test EMD: 0.0679). Evaluation may be biased.",
@@ -21,19 +27,19 @@
         "HEALTHY ALIGNMENT: Average positive pair distance is 1.46. Model balances proximity to positive items while maintaining generalization space."
     ],
     "all_users_inter_user_diversity_conclusions": [
-        "[HYPER-PERSONALIZED SLATES]: Mean Jaccard overlap (1.88%) aligns closely with random chance (1.30%). Candidate slates are highly individualized across users."
+        "[HYPER-PERSONALIZED SLATES]: Mean Jaccard overlap (1.90%) aligns closely with random chance (1.30%). Candidate slates are highly individualized across users."
     ],
-    "tier_0_inter_user_diversity_conclusions": [
-        "[HYPER-PERSONALIZED SLATES]: Mean Jaccard overlap (2.05%) aligns closely with random chance (1.30%). Candidate slates are highly individualized across users."
+    "user_tier_0_inter_user_diversity_conclusions": [
+        "[HYPER-PERSONALIZED SLATES]: Mean Jaccard overlap (2.00%) aligns closely with random chance (1.30%). Candidate slates are highly individualized across users."
     ],
-    "tier_1_inter_user_diversity_conclusions": [
-        "[HYPER-PERSONALIZED SLATES]: Mean Jaccard overlap (1.89%) aligns closely with random chance (1.30%). Candidate slates are highly individualized across users."
+    "user_tier_1_inter_user_diversity_conclusions": [
+        "[HYPER-PERSONALIZED SLATES]: Mean Jaccard overlap (2.02%) aligns closely with random chance (1.30%). Candidate slates are highly individualized across users."
     ],
-    "tier_2_inter_user_diversity_conclusions": [
-        "[HYPER-PERSONALIZED SLATES]: Mean Jaccard overlap (2.26%) aligns closely with random chance (1.30%). Candidate slates are highly individualized across users."
+    "user_tier_2_inter_user_diversity_conclusions": [
+        "[HYPER-PERSONALIZED SLATES]: Mean Jaccard overlap (2.34%) aligns closely with random chance (1.30%). Candidate slates are highly individualized across users."
     ],
-    "all_users_but_catalog_has_cold_start_movies_inter_user_diversity_conclusions": [
-        "[HYPER-PERSONALIZED SLATES]: Mean Jaccard overlap (1.78%) aligns closely with random chance (1.20%). Candidate slates are highly individualized across users."
+    "all_users_and_catalog_has_cold_start_movies_inter_user_diversity_conclusions": [
+        "[HYPER-PERSONALIZED SLATES]: Mean Jaccard overlap (1.83%) aligns closely with random chance (1.20%). Candidate slates are highly individualized across users."
     ],
     "intra-list divserity": [
         "[FOCUSED CANDIDATE POOL]: Model ILD (0.3054) retains 32.3% of random catalog diversity. This indicates strong, coherent cluster targeting around user preferences."
@@ -48,8 +54,8 @@
         "[NICHE BIAS]: Model suppresses popularity by 0.62x. Retrieved slates are pushing much more obscure items than the user normally consumes."
     ],
     "cold_start_embeddings": [
-        "[PERFORMANCE DROP]: cold-start set overall recall dropped by 22.9% relative to test set. Metadata partially compensates for missing interactions, but performance still degrades.",
-        "[SLATE COMPOSITION - cold-start set]: Top-100 candidate slates consist of 19.0% Tier 0, 49.3% Tier 1, and 31.7% Tier 2 items."
+        "[PERFORMANCE DROP]: cold-start set overall recall dropped by 34.9% relative to test set. Metadata partially compensates for missing interactions, but performance still degrades.",
+        "[SLATE COMPOSITION - cold-start set]: Top-100 candidate slates consist of 19.6% Tier 0, 48.5% Tier 1, and 31.9% Tier 2 items."
     ],
     "stratified_metrics@20": [
         "STRONG RECALL LIFT: Global Recall@20 (2.7%) heavily outperforms the random expected baseline (0.5%). The candidate generator is extracting meaningful semantic signal.",
