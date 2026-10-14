@@ -31,50 +31,38 @@
 #  recommender_systems/src/test/resources/serving_model/
 
 # **** EDIT THIS PATH AS NEEDED ******
-export trained_model_dir=../TMP10/bin/rs_pipeline/Trainer/model/19/
 
-# output dirs in recommender_systems
-export dest_saved_model_dir=src/test/resources/serving_model/
-export docs_dir=docs/mlops/best_fitting_model_stats/twotowderdnn_softmax
+export PIPELINE_DATA_DIR=../TMP11/bin/rs_pipeline
+export OUTPUT_BASE_DIR="../TMP11"
+export TAG="low_temp"
 
-rm -rf $dest_saved_model_dir/BEST/*
-rm -rf $dest_saved_model_dir/serving_candidate_model/*
-rm -rf $dest_saved_model_dir/serving_query_model/*
-cp -rf $trained_model_dir/Format-Serving/* $dest_saved_model_dir/BEST/
-cp -rf $trained_model_dir/serving_candidate_model/* $dest_saved_model_dir/serving_candidate_model/
-cp -rf $trained_model_dir/serving_query_model/* $dest_saved_model_dir/serving_query_model/
-rm -rf ../retrieval/src/main/resources/serving_models/user_movie_model/*
-cp -rf $trained_model_dir/Format-Serving/* ../retrieval/src/main/resources/serving_models/user_movie_model/
+#if have a baseline model such as previous bes to compare PIPELINE_DATA_DIR to, set these
+#export PIPELINE_DATA_DIR_BASELINE=../TMP10/bin/rs_pipeline
+#export OUTPUT_BASE_DIR_BASELINE=../TMP10
+#export TAG_BASELINE="high_temp"
 
-#copy the query model to the ranker project
-export ranker_q_dir=../ranker/src/test/resources/model_repositories/saved_model_formats/bi-encoder/query/1
-rm -rf $ranker_q_dir/*
-cp -rf $trained_model_dir/serving_candidate_model/* $ranker_q_dir/
-saved_model_cli show --dir $ranker_q_dir --all >& $ranker_q_dir/../../query_model_signatures.txt
+#======= generate the train, val, test curves ====================
+# writes to ${OUTPUT_BASE_DIR}/pngs
+python3 -m unittest src.test.python.movie_lens_tfx.write_tensorboard_pngs_test.WriteTensorboardToPng
 
-#copy files to model_analysis
-cp $trained_model_dir/Format-Serving/assets.extra/hyperparameters.json $docs_dir/
-cp bin/pngs/*png $docs_dir/snapshots_tensorboard/
-cp bin/pngs/*json $docs_dir/train_val_curve_metrics/
+# ======== run post-training analysis
+conda activate py_311
+cd ../retrieval
 
-#copy to model_analysis retrieval_analysis
-cp -rf ../retrieval/bin/post_training_analysis/* $docs_dir/retrieval_analysis/
-
-# these write embeddings files (used by ranker)
-python src/test/python/movie_lens_tfx/WriteRetrievalInputs.py WriteRetrievalInputs.test_write_movie_embeddings
-python src/test/python/movie_lens_tfx/WriteRetrievalInputs.py WriteRetrievalInputs.test_write_user_embeddings
-
-#copy embeddings tfrecods and json files to retrieval
-cp -rf bin/movie_emb_inp/*gz ../retrieval/src/test/resources/data/movie_emb_inp/
-cp -rf bin/user_emb_inp/*gz ../retrieval/src/test/resources/data/user_emb_inp/
-cp -rf bin/movie_emb_inp/*.json ../retrieval/src/test/resources/data/movie_emb_inp/
-cp -rf bin/user_emb_inp/*.json ../retrieval/src/test/resources/data/user_emb_inp/
-
-#copy embeddings files to ranker except the gz files:
-find bin/movie_emb_inp/ -maxdepth 1 -type f ! -name "*.gz" -exec cp {} ../ranker/src/test/resources/data/ \;
-find bin/user_emb_inp/ -maxdepth 1 -type f ! -name "*.gz" -exec cp {} ../ranker/src/test/resources/data/ \;
-if [ -d "../ranker/tmp_mounts/fake-gcs-server/data" ]; then
-    find bin/movie_emb_inp/ -maxdepth 1 -type f ! -name "*.gz" -exec cp {} ../ranker/tmp_mounts/fake-gcs-server/data/ \;
-    find bin/user_emb_inp/ -maxdepth 1 -type f ! -name "*.gz" -exec cp {} ../ranker/tmp_mounts/fake-gcs-server/data/ \;
+# writes to ${OUTPUT_BASE_DIR}/post_training_analysis
+## to compare to previous best model use:
+if [ -n "PIPELINE_DATA_DIR_BASELINE" ]; then
+    python3 src/test/python/movie_lens_retrieval/post_training_compare_models.py \
+    --analyze_and_compare \
+    --PIPELINE_DATA_DIR_1=$PIPELINE_DATA_DIR_BASELINE \
+    --OUTPUT_BASE_DIR_1=$OUTPUT_BASE_DIR_BASELINE \
+    --PIPELINE_DATA_DIR_2=$PIPELINE_DATA_DIR \
+    --OUTPUT_BASE_DIR_2=$OUTPUT_BASE_DIR \
+    --TAG_1=$TAG \
+    --TAG_2=$TAG_BASELINE \
+    --OUTPUT_COMPARE_DIR="../$TAG1_$TAG2_Compare" \
+    --quiet
+else
+    python3 -m unittest src.test.python.movie_lens_retrieval.post_training_analysis.TestAnalysis
 fi
 
