@@ -32,26 +32,36 @@
 
 # **** EDIT THIS PATH AS NEEDED ******
 
-export PIPELINE_DATA_DIR=../TMP11/bin/rs_pipeline
-export OUTPUT_BASE_DIR="../TMP11"
+export PIPELINE_DATA_DIR=`realpath ../TMP11/bin/rs_pipeline`
+export OUTPUT_BASE_DIR=`realpath ../TMP11`
 export TAG="low_temp"
 
-#if have a baseline model such as previous bes to compare PIPELINE_DATA_DIR to, set these
+unset PIPELINE_DATA_DIR_BASELINE
+unset OUTPUT_BASE_DIR_BASELINE
+unset TAG_BASELINE
+#if have a baseline model such as previous bes to compare PIPELINE_DATA_DIR to, set these vars
 #export PIPELINE_DATA_DIR_BASELINE=../TMP10/bin/rs_pipeline
 #export OUTPUT_BASE_DIR_BASELINE=../TMP10
 #export TAG_BASELINE="high_temp"
 
 #======= generate the train, val, test curves ====================
 # writes to ${OUTPUT_BASE_DIR}/pngs
-python3 -m unittest src.test.python.movie_lens_tfx.write_tensorboard_pngs_test.WriteTensorboardToPng
+#python3 -m unittest src.test.python.movie_lens_tfx.write_tensorboard_pngs_test.WriteTensorboardToPng
 
 # ======== run post-training analysis
+eval "$(conda shell.bash hook)"
 conda activate py_311
+if [ "$CONDA_DEFAULT_ENV" != "py_311" ]; then
+    echo "Error: Failed to activate Conda environment."
+    exit 1
+fi
+
 cd ../retrieval
 
 # writes to ${OUTPUT_BASE_DIR}/post_training_analysis
 ## to compare to previous best model use:
-if [ -n "PIPELINE_DATA_DIR_BASELINE" ]; then
+if [ -n "$PIPELINE_DATA_DIR_BASELINE" ]; then
+    echo "compare models $TAG and $TAG_BASELINE"
     python3 src/test/python/movie_lens_retrieval/post_training_compare_models.py \
     --analyze_and_compare \
     --PIPELINE_DATA_DIR_1=$PIPELINE_DATA_DIR_BASELINE \
@@ -63,6 +73,6 @@ if [ -n "PIPELINE_DATA_DIR_BASELINE" ]; then
     --OUTPUT_COMPARE_DIR="../$TAG1_$TAG2_Compare" \
     --quiet
 else
+    echo "analyze model at $PIPELINE_DATA_DIR"
     python3 -m unittest src.test.python.movie_lens_retrieval.post_training_analysis.TestAnalysis
 fi
-

@@ -2,6 +2,8 @@ import os
 import shutil
 import unittest
 import sys
+from pathlib import Path
+from find_pushed_trainer_uri import get_pushed_trainer_uri
 
 """
 USAGE from cli:
@@ -10,6 +12,7 @@ export PIPELINE_DATA_DIR=../TMP10/bin/rs_pipeline
 export OUTPUT_BASE_DIR="../TMP10"
 python3 -m unittest src.test.python.movie_lens_tfx.write_tensorboard_pngs_test.WriteTensorboardToPng
 
+NOTE: can also set PUSHER_URI and TRAINER_URI, but they are automatically found if not given.
 """
 
 is_cli = __name__ == '__main__' or any('unittest' in arg for arg in sys.argv)
@@ -33,18 +36,20 @@ class WriteTensorboardToPng(unittest.TestCase):
         if not os.path.exists(pipeline_dir):
             raise ValueError(f"{pipeline_dir} does not exist")
         
-        cls.pushed_dir = os.path.join(pipeline_dir, "Pusher/pushed_model")
-        if not os.path.exists(cls.pushed_dir):
-            raise ValueError(f"{cls.pushed_dir} does not exist")
-        
-        push_version = cls.get_largest_subdir_version(cls.pushed_dir)
-        cls.saved_model_dir = os.path.join(cls.pushed_dir, push_version)
+        if not os.environ.get("PUSHER_URI", None):
+            pusher_uri, trainer_uri = get_pushed_trainer_uri()
+            cls.saved_model_dir = pusher_uri
+        else:
+            cls.saved_model_dir = os.environ.get("PUSHER_URI")
+            trainer_uri = os.environ.get("TRAINER_URI", None)
+            if not trainer_uri:
+                _, trainer_uri = get_pushed_trainer_uri()
         if not os.path.exists(cls.saved_model_dir):
             raise ValueError(f"{cls.saved_model_dir} does not exist")
+        if trainer_uri.find("model_run") == -1:
+            trainer_uri = trainer_uri.replace("model", 'model_run')
         
-        trainer_dir = os.path.join(pipeline_dir, "Trainer/model_run")
-        trainer_version = cls.get_largest_subdir_version(trainer_dir)
-        cls.log_dir = os.path.join(trainer_dir, trainer_version)
+        cls.log_dir = trainer_uri
         if not os.path.exists(cls.log_dir):
             raise ValueError(f"{cls.log_dir} does not exist")
         
