@@ -1824,10 +1824,12 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
 def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   """Returns hyperparameters for building Keras model."""
   #print(f'get_default_hyperparameters: custom_config={custom_config}')
-  use_best_as_fixed = True
+  use_fixed = False
   
   hp = keras_tuner.HyperParameters()
   # Defines search space.
+  
+  hp.Fixed('use_fixed', value=use_fixed)
   
   hp.Fixed('k', custom_config.get("k", 100))
   
@@ -1836,25 +1838,25 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   # a small weight_decay like 0.0001 does not prevent the trainable parameters from filling their spaces
   #    and hence, memorizing data.  in this model we see strong over-fitting when weight_decay is as low as 1e-4
   
-  if not use_best_as_fixed:
+  if not use_fixed:
       hp.Float('learning_rate', 1e-4, 1e-3, sampling='log')
       #hp.Float('weight_decay', 1e-4, 1e-2, sampling='log')
       hp.Float('weight_decay', 1e-3, 5e-2, sampling='log')
       #hp.Float('drop_rate', min_value=0.1, max_value=0.4, default=0.3)
-      hp.Float('drop_rate', min_value=0.25, max_value=0.4, default=0.35)
+      hp.Float('drop_rate', min_value=0.1, max_value=0.4, default=0.35)
       #hp.Float('log_q_correction_factor', min_value=0.1, max_value=1.0, default=0.5)
-      hp.Fixed('log_q_correction_factor', value=1.0)
       # layers_sizes is a list of ints, so encode each list as a string, choices can only be int,float,bool,str
       # the last layer in layer_sizes is the query and candidate embedding models' output dimensions-1
-      hp.Choice("layer_sizes", values=[json.dumps([32]), json.dumps([64, 32])],
-          default=json.dumps([32]))
+      #hp.Choice("layer_sizes", values=[json.dumps([32]), json.dumps([64, 32])], default=json.dumps([32]))
+      ## temporarily changing to small layer_sizes to have under-fit curves to compare to
+      hp.Choice("layer_sizes", values=[json.dumps([8]), json.dumps([16, 8])], default=json.dumps([16, 8]))
   else:
       hp.Fixed('learning_rate', 0.001)
       hp.Fixed('weight_decay', 0.05)
       hp.Fixed('drop_rate', 0.35)
-      hp.Fixed('log_q_correction_factor',value=1.0)
       hp.Fixed("layer_sizes", value=json.dumps([64, 32]))
-
+  
+  hp.Fixed('log_q_correction_factor', value=1.0)
   #let AdamW weight decay handle the regularization, so set regl2 to 0:
   #hp.Float('regl2', 1e-5, 1e-2, sampling="log")
   hp.Fixed('regl2', 0.0)
@@ -1873,7 +1875,7 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   use_log_q_corr_decay = hp.Fixed("use_log_q_corr_decay", value=False)
   #if batch_size=1024, max temp should be about 0.2;  if batch_size is 2048, temp max ~ 0.4
   if use_bias_corr:
-      if use_best_as_fixed:
+      if use_fixed:
           hp.Fixed("bias_corr_alpha", 0.01)
           hp.Fixed('temperature', 0.25)
       else:
@@ -3027,8 +3029,8 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
   #
   # alpha = 1e-3: Setting alpha = 1e-3 acts as a gentle noise-smoothing filter. Since validation metrics like ranking NDCG exhibit micro-variance between epochs, this prevents the GP from over-fitting to minor validation jitter.
   print("construct tuner BayesianOptimization")
-  if False:
-      #when get_default_hyperparameters variable use_best_as_fixed = False,
+  if not hp.get("use_fixed"):
+      #when get_default_hyperparameters variable use_fixed = False,
       # this is used to find best hyperparatmers
       tuner = keras_tuner.BayesianOptimization(
           _make_2tower_keras_model,
@@ -3042,7 +3044,7 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
           directory=fn_args.working_dir,
           project_name='movie_lens_2t_tuning_bayesian')
   else:
-      # when get_default_hyperparameters variable use_best_as_fixed = True,
+      # when get_default_hyperparameters variable use_fixed = True,
       # this is used for all Fixed parameters
       tuner = keras_tuner.RandomSearch(
           _make_2tower_keras_model,
