@@ -68,7 +68,7 @@ class PipelinesTest(tf.test.TestCase):
         self.name = 'test run of pipelines'
         self.BATCH_SIZE = 10 #0.1*100
     
-    def test_main_models(self):
+    def test_main_model_pipeline(self):
         print(f'run main user_model model WITH bias corretions')
         
         test_num = "MAIN_USER_MOVIE"
@@ -534,7 +534,7 @@ class PipelinesTest(tf.test.TestCase):
             
             read_prediction_logs_from_directory(inference_result_uri)
     
-    def test_metadata_model(self):
+    def test_metadata_model_pipeline(self):
         
         test_num = "1"
         

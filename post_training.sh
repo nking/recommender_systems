@@ -64,12 +64,12 @@ if [ -n "$PIPELINE_DATA_DIR_BASELINE" ]; then
     echo "compare models $TAG and $TAG_BASELINE"
     python3 src/test/python/movie_lens_retrieval/post_training_compare_models.py \
     --analyze_and_compare \
-    --PIPELINE_DATA_DIR_1=$PIPELINE_DATA_DIR_BASELINE \
-    --OUTPUT_BASE_DIR_1=$OUTPUT_BASE_DIR_BASELINE \
-    --PIPELINE_DATA_DIR_2=$PIPELINE_DATA_DIR \
-    --OUTPUT_BASE_DIR_2=$OUTPUT_BASE_DIR \
-    --TAG_1=$TAG_BASELINE \
-    --TAG_2=$TAG \
+    --PIPELINE_DATA_DIR_1=$PIPELINE_DATA_DIR \
+    --OUTPUT_BASE_DIR_1=$OUTPUT_BASE_DIR \
+    --TAG_1=$TAG \
+    --PIPELINE_DATA_DIR_2=$PIPELINE_DATA_DIR_BASELINE \
+    --OUTPUT_BASE_DIR_2=$OUTPUT_BASE_DIR_BASELINE \
+    --TAG_2=$TAG_BASELINE \
     --OUTPUT_COMPARE_DIR="../${TAG_BASELINE}_${TAG}_Compare" \
     --quiet
 else

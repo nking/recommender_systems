@@ -170,26 +170,26 @@ or using a bash shell.
 
     https://www.kaggle.com/code/nicholeasuniquename/recommender-systems    
 
-(2) retriever tinkers with how to use the embedding models and
+(2) The retrieval github project tinkers with how to use the embedding models and
 other algorithms that an be used for cold starts, etc.
 
     https://github.com/nking/retrieval
     
-(3) ranker trains a JAX AI stack  cross-encoder needed for more accurate
+(3) The ranker github project trains a JAX AI stack  cross-encoder needed for more accurate
 personalization after the fast retrieval stage.
 The ranker project trains a cross-encoder that uses
-a Graph Attention Transformer V2 layer followed by a dens score layer.  
-The project also creates a rust server for scalable end-to-end inference that makes
+a Graph Attention Transformer V2 layer followed by a dense score layer.  
+The ranker project also creates a rust server for scalable end-to-end inference that makes
 gRPC calls to the TFS deployed Query model trained in (1) 
 and the TFS deployed trained ranker cross-encoder.
-The project also stages scripts for how to use data-parallel training 
+The ranker project also stages scripts for how to use data-parallel training 
 over multiple-hosts in a K8s cluster to perform HPO (and train and test) of the model.
 
     https://github.com/nking/ranker
 
     https://www.kaggle.com/code/nicholeasuniquename/ranker-cross-encoder-w-gatv2/
 
-(4) re-ranker is a cross encoder to score candidate
+(4) The re-ranker github project is a cross encoder to score candidate
 inputs that can have originated from different recommendations.
 The project fine-tunes a pre-trained T5 distilled LLM from hugging
 face to build a pytorch  list-wise learning to rank, re-ranker.

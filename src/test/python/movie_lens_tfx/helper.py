@@ -105,6 +105,7 @@ def get_contrastive_split_infiles_set(ds : DataSize = DataSize.SMALL) -> Dict[st
 
 def get_pos_and_neg_split_infiles_set(use_small: bool = True) -> Dict[
     str, str]:
+    prefix_test = os.path.join(get_project_dir(), "src/test/resources/ml-1m/")
     prefix_main = os.path.join(get_project_dir(), "src/main/resources/ml-1m/")
     ratings_col_names = ["user_id", "movie_id", "rating", "timestamp"]
     ratings_col_types = [int, int, int,
@@ -114,10 +115,9 @@ def get_pos_and_neg_split_infiles_set(use_small: bool = True) -> Dict[
     users_col_names = ["user_id", "gender", "age", "occupation", "zipcode"]
     users_col_types = [int, str, int, int, str]
     if (use_small):
-        ratings_prefix = os.path.join(get_project_dir(),
-            "src/test/resources/ml-1m/small/")
+        ratings_prefix = os.path.join(prefix_test, "small/")
     else:
-        ratings_prefix = prefix_main
+        ratings_prefix = prefix_test
     movies_dict = create_infile_dict(for_file='movies',
         uri=os.path.join(prefix_main, "movies.dat"),
         col_names=movies_col_names,
@@ -155,12 +155,12 @@ def get_test_data(use_small=True) -> Tuple[str, str, list[str]]:
      output_config serialized to string, and list of split names
   """
   proj_dir = get_project_dir()
+  prefix_test = os.path.join(get_project_dir(), "src/test/resources/ml-1m/")
   prefix_main = os.path.join(proj_dir, "src/main/resources/ml-1m/")
-  prefix = os.path.join(proj_dir, "src/test/resources/ml-1m/")
   if use_small:
-    ratings_uri = os.path.join(prefix, "small", "ratings.dat")
+    ratings_uri = os.path.join(prefix_test, "small", "ratings.dat")
   else:
-    ratings_uri = os.path.join(prefix_main,"ratings_train.dat")
+    ratings_uri = os.path.join(prefix_test,"ratings_train.dat")
   users_uri = os.path.join(prefix_main, "users.dat")
   movies_uri = os.path.join(prefix_main, "movies.dat")
   add_to_sys(proj_dir)
