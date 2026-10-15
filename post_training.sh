@@ -40,8 +40,8 @@ unset PIPELINE_DATA_DIR_BASELINE
 unset OUTPUT_BASE_DIR_BASELINE
 unset TAG_BASELINE
 #if have a baseline model such as previous bes to compare PIPELINE_DATA_DIR to, set these vars
-#export PIPELINE_DATA_DIR_BASELINE=../TMP10/bin/rs_pipeline
-#export OUTPUT_BASE_DIR_BASELINE=../TMP10
+#export PIPELINE_DATA_DIR_BASELINE=`realpath ../TMP10/bin/rs_pipeline`
+#export OUTPUT_BASE_DIR_BASELINE=`realpath ../TMP10`
 #export TAG_BASELINE="high_temp"
 
 #======= generate the train, val, test curves ====================
@@ -68,9 +68,9 @@ if [ -n "$PIPELINE_DATA_DIR_BASELINE" ]; then
     --OUTPUT_BASE_DIR_1=$OUTPUT_BASE_DIR_BASELINE \
     --PIPELINE_DATA_DIR_2=$PIPELINE_DATA_DIR \
     --OUTPUT_BASE_DIR_2=$OUTPUT_BASE_DIR \
-    --TAG_1=$TAG \
-    --TAG_2=$TAG_BASELINE \
-    --OUTPUT_COMPARE_DIR="../$TAG1_$TAG2_Compare" \
+    --TAG_1=$TAG_BASELINE \
+    --TAG_2=$TAG \
+    --OUTPUT_COMPARE_DIR="../${TAG_BASELINE}_${TAG}_Compare" \
     --quiet
 else
     echo "analyze model at $PIPELINE_DATA_DIR"
