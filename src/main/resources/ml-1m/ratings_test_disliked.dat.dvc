@@ -1,5 +1,0 @@
-outs:
-- md5: ecf6c9b850a7db675a4c9874f291b478
-  size: 488151
-  hash: md5
-  path: ratings_test_disliked.dat
