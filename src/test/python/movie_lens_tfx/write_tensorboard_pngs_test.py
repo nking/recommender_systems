@@ -17,7 +17,6 @@ NOTE: can also set PUSHER_URI and TRAINER_URI, but they are automatically found 
 
 is_cli = __name__ == '__main__' or any('unittest' in arg for arg in sys.argv)
 if is_cli:
-    print('** running from CLI **', flush=True)
     sys.path.insert(0,
         os.path.join(os.getcwd(), "src/test/python/movie_lens_tfx"))
     sys.path.insert(0,
