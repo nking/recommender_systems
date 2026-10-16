@@ -1,0 +1,54 @@
+{
+    "expected_random_recall@100": 0.025753,
+    "comparison_metrics": {
+        "recall@100_overall": {
+            "test set": 0.109589,
+            "cold-start set": 0.034247,
+            "abs_change": -0.075342,
+            "rel_change_pct": "-68.75%"
+        },
+        "recall_movie_tier0@100": {
+            "test set": 0.034375,
+            "cold-start set": 0.0,
+            "abs_change": -0.034375,
+            "rel_change_pct": "-100.00%"
+        },
+        "recall_movie_tier1@100": {
+            "test set": 0.11875,
+            "cold-start set": 0.0375,
+            "abs_change": -0.08125,
+            "rel_change_pct": "-68.42%"
+        },
+        "recall_movie_tier2@100": {
+            "test set": 0.17,
+            "cold-start set": 0.07,
+            "abs_change": -0.1,
+            "rel_change_pct": "-58.82%"
+        },
+        "retrieved_share_tier0@100": {
+            "test set": 0.18863,
+            "cold-start set": 0.173904,
+            "abs_change": -0.014726,
+            "rel_change_pct": "-7.81%"
+        },
+        "retrieved_share_tier1@100": {
+            "test set": 0.509589,
+            "cold-start set": 0.517009,
+            "abs_change": 0.00742,
+            "rel_change_pct": "+1.46%"
+        },
+        "retrieved_share_tier2@100": {
+            "test set": 0.301781,
+            "cold-start set": 0.309087,
+            "abs_change": 0.007306,
+            "rel_change_pct": "+2.42%"
+        }
+    },
+    "recall_cold_start_percnt_drop": 68.75,
+    "automated_conclusions": [
+        "[SEVERE COLD-START PENALTY]: cold-start set overall recall dropped by 68.8% relative to test set (10.96% -> 3.42%). The item tower overfits to interaction IDs rather than generalizing via metadata.",
+        "[TIER 0 COLLAPSE]: Tier 0 recall dropped from 3.44% to 0.00%. Without interaction history, the model's ability to target Tier 0 falls to random chance.",
+        "[PRECISION DEFICIT - TIER 0]: Model allocates 17.4% of top-100 candidate slots to Tier 0 items, yet recall (0.00%) is at/below random chance. It retrieves the WRONG items.",
+        "[SLATE COMPOSITION - cold-start set]: Top-100 candidate slates consist of 17.4% Tier 0, 51.7% Tier 1, and 30.9% Tier 2 items."
+    ]
+}

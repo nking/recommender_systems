@@ -1,0 +1,52 @@
+{
+    "all_users_inter_user_diversity_metrics": {
+        "mean_jaccard_similarity": 0.0196,
+        "inter_user_diversity": 0.9804,
+        "expected_random_jaccard": 0.013045,
+        "expected_random_iud": 0.986955,
+        "jaccard_multiplier_vs_random": 1.5
+    },
+    "all_users_inter_user_diversity_conclusions": [
+        "[HYPER-PERSONALIZED SLATES]: Mean Jaccard overlap (1.96%) aligns closely with random chance (1.30%). Candidate slates are highly individualized across users."
+    ],
+    "user_tier_0_inter_user_diversity_metrics": {
+        "mean_jaccard_similarity": 0.020307,
+        "inter_user_diversity": 0.979693,
+        "expected_random_jaccard": 0.013045,
+        "expected_random_iud": 0.986955,
+        "jaccard_multiplier_vs_random": 1.56
+    },
+    "user_tier_0_inter_user_diversity_conclusions": [
+        "[HYPER-PERSONALIZED SLATES]: Mean Jaccard overlap (2.03%) aligns closely with random chance (1.30%). Candidate slates are highly individualized across users."
+    ],
+    "user_tier_1_inter_user_diversity_metrics": {
+        "mean_jaccard_similarity": 0.019592,
+        "inter_user_diversity": 0.980408,
+        "expected_random_jaccard": 0.013045,
+        "expected_random_iud": 0.986955,
+        "jaccard_multiplier_vs_random": 1.5
+    },
+    "user_tier_1_inter_user_diversity_conclusions": [
+        "[HYPER-PERSONALIZED SLATES]: Mean Jaccard overlap (1.96%) aligns closely with random chance (1.30%). Candidate slates are highly individualized across users."
+    ],
+    "user_tier_2_inter_user_diversity_metrics": {
+        "mean_jaccard_similarity": 0.021445,
+        "inter_user_diversity": 0.978555,
+        "expected_random_jaccard": 0.013045,
+        "expected_random_iud": 0.986955,
+        "jaccard_multiplier_vs_random": 1.64
+    },
+    "user_tier_2_inter_user_diversity_conclusions": [
+        "[HYPER-PERSONALIZED SLATES]: Mean Jaccard overlap (2.14%) aligns closely with random chance (1.30%). Candidate slates are highly individualized across users."
+    ],
+    "all_users_and_catalog_has_cold_start_movies_inter_user_diversity_metrics": {
+        "mean_jaccard_similarity": 0.019191,
+        "inter_user_diversity": 0.980809,
+        "expected_random_jaccard": 0.011982,
+        "expected_random_iud": 0.988018,
+        "jaccard_multiplier_vs_random": 1.6
+    },
+    "all_users_and_catalog_has_cold_start_movies_inter_user_diversity_conclusions": [
+        "[HYPER-PERSONALIZED SLATES]: Mean Jaccard overlap (1.92%) aligns closely with random chance (1.20%). Candidate slates are highly individualized across users."
+    ]
+}
