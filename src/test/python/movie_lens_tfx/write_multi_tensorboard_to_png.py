@@ -3,7 +3,7 @@ import json
 import math
 import os
 import unittest
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
@@ -16,17 +16,19 @@ from helper import *
 
 class WriteMultiTensorboardToPng(unittest.TestCase):
     """
-    Generates single-page multi-run comparison PNGs for *ndcg*, *recal*, and *loss* metrics.
+    Generates single-page multi-run comparison PNGs for *ndcg*, *recal*, and *loss* metrics,
+    plus a unified `hyperparameters_table.png` comparing numeric hyperparameters across all runs.
     """
     
     output_dir = os.path.join(get_bin_dir(), "multi_tensorboard_pngs")
-
     
-    direcs = ["../TMP05", "../TMP02", "../TMP06",    "../TMP01",    "../TMP03",     "../TMP04"]
-    titles = ["DNN[8,4]", "DNN[16,8]", "DNN[32,16]", "DNN[64, 32]", "DNN[128,64]", "DNN[256,128]"]
+    direcs = ["../TMP05", "../TMP02", "../TMP06", "../TMP01", "../TMP03",
+        "../TMP04"]
+    titles = ["DNN[8,4]", "DNN[16,8]", "DNN[32,16]", "DNN[64, 32]",
+        "DNN[128,64]", "DNN[256,128]"]
     
     direcs = ["../TMP02", "../TMP01", "../TMP03"]
-    titles = ["DNN[16,8]",  "DNN[64, 32]", "DNN[128,64]"]
+    titles = ["DNN[16,8]", "DNN[64, 32]", "DNN[128,64]"]
     
     runs_list: List[Dict[str, str]] = []
     
@@ -41,11 +43,11 @@ class WriteMultiTensorboardToPng(unittest.TestCase):
         logdir = trainer_uri
         
         runs_list.append({
-            "saved_model_dir" : saved_model_dir,
-            "logdir" : logdir,
-            "title" : titles[i]
+            "saved_model_dir": saved_model_dir,
+            "logdir": logdir,
+            "title": titles[i]
         })
-        
+
     def test_write_multi_tensorboard_to_png(self):
         if not self.runs_list:
             print("WriteMultiTensorboardToPng.runs_list is empty. Nothing to plot.")
@@ -60,18 +62,22 @@ class WriteMultiTensorboardToPng(unittest.TestCase):
         smoothing_weight: float = 0.6,
         panel_size: Tuple[float, float] = (1.95, 1.95),
         max_cols: int = 3,
+        runs_as_rows_in_hyperparams_table: bool = False,
     ) -> None:
         """
         Takes a list of dictionaries where each dictionary has:
             - 'saved_model_dir': path to SavedModel directory
             - 'logdir': path to TensorBoard log directory (containing train/validation/test)
             - 'title': display title for the run
-        Generates one PNG page per metric (filtered to *ndcg*, *recal*, *loss*).
+        Generates:
+            1. `hyperparameters_table.png` (and `.json`) comparing all numeric hyperparameters
+               ordered by `runs`.
+            2. One PNG page per metric (filtered to *ndcg*, *recal*, *loss*).
         """
         os.makedirs(outdir, exist_ok=True)
 
-        # Pre-load metadata (hyperparameters, random baselines, irreducible error) per run
         prepared_runs = []
+        runs_hyperparams: List[Tuple[str, Optional[Dict[str, Any]]]] = []
         all_metrics = []
 
         for item in runs:
@@ -84,6 +90,8 @@ class WriteMultiTensorboardToPng(unittest.TestCase):
             test_dir = os.path.join(logdir, "test")
 
             hyperparams_dict = cls.get_hyperparams_dict(saved_model_dir)
+            runs_hyperparams.append((title, hyperparams_dict))
+
             irred_err_dict = cls.get_irred_error_dict(saved_model_dir)
 
             random_ndcg = None
@@ -117,6 +125,16 @@ class WriteMultiTensorboardToPng(unittest.TestCase):
                 }
             )
 
+        # 1. Generate the unified Numeric Hyperparameters Table PNG in outdir
+        hp_table_outfile = os.path.join(outdir, "hyperparameters_table.png")
+        generate_hyperparams_table_png(
+            runs_hyperparams=runs_hyperparams,
+            output_path=hp_table_outfile,
+            runs_as_rows=runs_as_rows_in_hyperparams_table,
+        )
+        print(f"Wrote hyperparameters comparison table to {hp_table_outfile}", flush=True)
+
+        # 2. Generate per-metric multi-run comparison pages
         print(f"Filtered target metrics (*ndcg*, *recal*, *loss*): {all_metrics}", flush=True)
 
         for metric in all_metrics:
@@ -209,6 +227,7 @@ class WriteMultiTensorboardToPng(unittest.TestCase):
             return None
         clean_name = metric_name.replace("epoch_", "")
         return irred_err_dict.get(clean_name, None)
+
 
 def get_latest_scalars(
     log_dir: str, scalar_name: str
@@ -304,6 +323,174 @@ def is_target_metric(metric_name: str) -> bool:
     """
     m = metric_name.lower()
     return ("ndcg" in m) or ("recal" in m) or ("loss" in m)
+
+
+def is_numeric_hyperparam(val: Any) -> bool:
+    """
+    Returns True if `val` is a numeric scalar (int/float, excluding bool)
+    or a non-empty list/tuple of numeric scalars (e.g., layer sizes [64, 32]).
+    Excludes strings, URLs, paths, dicts, None, and booleans.
+    """
+    if isinstance(val, bool) or val is None:
+        return False
+    if isinstance(val, (int, float, np.number)):
+        return True
+    if isinstance(val, (list, tuple)) and len(val) > 0:
+        return all(
+            isinstance(x, (int, float, np.number)) and not isinstance(x, bool)
+            for x in val
+        )
+    return False
+
+
+def format_hyperparam_value(val: Any) -> str:
+    """
+    Formats a numeric hyperparameter cleanly for table display.
+    """
+    if val is None:
+        return "-"
+    if isinstance(val, (list, tuple)):
+        return "[" + ", ".join(format_hyperparam_value(x) for x in val) + "]"
+    if isinstance(val, (int, np.integer)) and not isinstance(val, bool):
+        return f"{int(val)}"
+    if isinstance(val, (float, np.floating)):
+        if math.isnan(val) or math.isinf(val):
+            return str(val)
+        if val.is_integer() and abs(val) < 1e12:
+            return f"{int(val)}"
+        return f"{val:.6g}"
+    return str(val)
+
+
+def generate_hyperparams_table_png(
+    runs_hyperparams: List[Tuple[str, Optional[Dict[str, Any]]]],
+    output_path: str,
+    runs_as_rows: bool = False,
+) -> None:
+    """
+    Generates a single PNG table comparing all numeric hyperparameters across runs,
+    ordered by the input `runs` list. Rows where hyperparameter values differ across
+    runs are subtly highlighted for quick visual comparison.
+    """
+    numeric_keys: List[str] = []
+    filtered_run_dicts: List[Tuple[str, Dict[str, Any]]] = []
+
+    for title, h_dict in runs_hyperparams:
+        clean_dict: Dict[str, Any] = {}
+        if isinstance(h_dict, dict):
+            for k, v in h_dict.items():
+                if is_numeric_hyperparam(v):
+                    clean_dict[k] = v
+                    if k not in numeric_keys:
+                        numeric_keys.append(k)
+        filtered_run_dicts.append((title, clean_dict))
+
+    if not numeric_keys or not filtered_run_dicts:
+        print("No numeric hyperparameters found across runs. Skipping hyperparameters table.")
+        return
+
+    # Sort hyperparameter names alphabetically (case-insensitive)
+    numeric_keys = sorted(numeric_keys, key=lambda s: s.lower())
+    run_titles = [t for t, _ in filtered_run_dicts]
+
+    if not runs_as_rows:
+        # Default: Columns = Runs (in run order), Rows = Numeric Hyperparameters
+        col_labels = run_titles
+        row_labels = numeric_keys
+        cell_text = []
+        row_differs = []
+
+        for k in numeric_keys:
+            row_vals = [d.get(k, None) for _, d in filtered_run_dicts]
+            formatted_row = [format_hyperparam_value(v) for v in row_vals]
+            cell_text.append(formatted_row)
+            row_differs.append(len(set(formatted_row)) > 1)
+
+        n_rows = len(row_labels)
+        n_cols = len(col_labels)
+        fig_width = max(3.2, 1.6 + 1.15 * n_cols)
+        fig_height = max(1.8, 0.55 + 0.24 * (n_rows + 1))
+        bbox = [0.28, 0.0, 0.72, 0.92]
+    else:
+        # Alternative: Rows = Runs (in run order), Columns = Numeric Hyperparameters
+        row_labels = run_titles
+        col_labels = numeric_keys
+        cell_text = []
+        for _, d in filtered_run_dicts:
+            cell_text.append(
+                [format_hyperparam_value(d.get(k, None)) for k in numeric_keys]
+            )
+        row_differs = [False] * len(row_labels)
+
+        n_rows = len(row_labels)
+        n_cols = len(col_labels)
+        fig_width = max(4.0, 1.2 + 0.95 * n_cols)
+        fig_height = max(1.6, 0.55 + 0.26 * (n_rows + 1))
+        bbox = [0.18, 0.0, 0.82, 0.90]
+
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height), dpi=300)
+    ax.axis("off")
+    ax.set_title(
+        "Numeric Hyperparameters Comparison",
+        loc="left",
+        fontsize=8.0,
+        fontweight="bold",
+        pad=6,
+    )
+
+    the_table = ax.table(
+        cellText=cell_text,
+        rowLabels=row_labels,
+        colLabels=col_labels,
+        loc="center",
+        cellLoc="center",
+        bbox=bbox,
+    )
+
+    the_table.auto_set_font_size(False)
+    the_table.set_fontsize(5.5)
+
+    for (i, j), cell in the_table.get_celld().items():
+        cell.set_edgecolor("#e5e7eb")
+        cell.set_linewidth(0.6)
+        if i == 0:
+            # Header row
+            cell.set_text_props(weight="bold", color="#1f2937")
+            cell.set_facecolor("#f3f4f6")
+        elif j == -1:
+            # Row label cell
+            is_diff = row_differs[i - 1] if not runs_as_rows else False
+            cell.set_text_props(
+                ha="left",
+                weight="bold" if is_diff else "medium",
+                color="#111827" if is_diff else "#374151",
+            )
+            cell.set_facecolor("#fffbeb" if is_diff else "#f9fafb")
+        else:
+            is_diff = row_differs[i - 1] if not runs_as_rows else False
+            if is_diff:
+                # Subtle highlight for rows where hyperparameters vary across runs
+                cell.set_facecolor("#fffbeb")
+                cell.set_text_props(weight="bold", color="#111827")
+            else:
+                cell.set_facecolor("#ffffff" if i % 2 == 1 else "#f9fafb")
+                cell.set_text_props(color="#374151")
+
+    if os.path.dirname(output_path):
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    plt.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+    output_json_path = output_path.replace(".png", ".json")
+    json_out = {
+        "runs_order": run_titles,
+        "numeric_hyperparameters": {
+            k: {title: d.get(k, None) for title, d in filtered_run_dicts}
+            for k in numeric_keys
+        },
+    }
+    with open(output_json_path, "w") as f:
+        json.dump(json_out, f, indent=4)
 
 
 def generate_multi_run_metric_page(
@@ -761,7 +948,7 @@ def generate_multi_run_metric_page(
         alpha=0.75,
         color="#cbd5e1",
     )
-    for spine in ax_over.spines.values():
+    for spine in ax.spines.values():
         spine.set_visible(False)
 
     ax_legend.legend(
