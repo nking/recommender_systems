@@ -32,16 +32,16 @@
 
 # **** EDIT THIS PATH AS NEEDED ******
 
-export PIPELINE_DATA_DIR=`realpath ../TMP03/bin/rs_pipeline`
-export OUTPUT_BASE_DIR=`realpath ../TMP03`
+export PIPELINE_DATA_DIR="$(realpath -m ../TMP03/bin/rs_pipeline)"
+export OUTPUT_BASE_DIR="$(realpath -m ../TMP03)"
 export TAG="low_temp"
 
 unset PIPELINE_DATA_DIR_BASELINE
 unset OUTPUT_BASE_DIR_BASELINE
 unset TAG_BASELINE
 #if have a baseline model such as previous bes to compare PIPELINE_DATA_DIR to, set these vars
-#export PIPELINE_DATA_DIR_BASELINE=`realpath ../TMP10/bin/rs_pipeline`
-#export OUTPUT_BASE_DIR_BASELINE=`realpath ../TMP10`
+#export PIPELINE_DATA_DIR_BASELINE="$(realpath -m ../TMP10/bin/rs_pipeline)"
+#export OUTPUT_BASE_DIR_BASELINE="$(realpath -m ../TMP10)"
 #export TAG_BASELINE="high_temp"
 
 #======= generate the train, val, test curves ====================
@@ -76,3 +76,5 @@ else
     echo "analyze model at $PIPELINE_DATA_DIR"
     python3 -m unittest src.test.python.movie_lens_retrieval.post_training_analysis.TestAnalysis
 fi
+
+#ls -lctr $OUTPUT_BASE_DIR/post_training_analysis/
