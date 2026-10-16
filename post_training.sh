@@ -32,8 +32,8 @@
 
 # **** EDIT THIS PATH AS NEEDED ******
 
-export PIPELINE_DATA_DIR=`realpath ../TMP11/bin/rs_pipeline`
-export OUTPUT_BASE_DIR=`realpath ../TMP11`
+export PIPELINE_DATA_DIR=`realpath ../TMP01/bin/rs_pipeline`
+export OUTPUT_BASE_DIR=`realpath ../TMP01`
 export TAG="low_temp"
 
 unset PIPELINE_DATA_DIR_BASELINE
