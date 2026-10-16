@@ -8,8 +8,8 @@ from find_pushed_trainer_uri import get_pushed_trainer_uri
 """
 USAGE from cli:
 
-export PIPELINE_DATA_DIR=../TMP10/bin/rs_pipeline
-export OUTPUT_BASE_DIR="../TMP10"
+export PIPELINE_DATA_DIR=../TMP03/bin/rs_pipeline
+export OUTPUT_BASE_DIR="../TMP03"
 python3 -m unittest src.test.python.movie_lens_tfx.write_tensorboard_pngs_test.WriteTensorboardToPng
 
 NOTE: can also set PUSHER_URI and TRAINER_URI, but they are automatically found if not given.
@@ -162,17 +162,6 @@ class WriteTensorboardToPng(unittest.TestCase):
             return None
         metric_name = metric_name.replace("epoch_", "")
         return irred_err_dict.get(metric_name, None)
-    
-    @staticmethod
-    def get_largest_subdir_version(parent_dir: str) -> str:
-        parent_dir = Path(parent_dir)
-        
-        numeric_dirs = [d for d in parent_dir.iterdir() if d.is_dir() and d.name.isdigit()]
-        
-        if numeric_dirs:
-            largest_dir = max(numeric_dirs, key=lambda d: int(d.name))
-            return largest_dir.name
-        raise ValueError("No numeric subdirectories found.")
     
 if __name__ == '__main__':
     unittest.main()

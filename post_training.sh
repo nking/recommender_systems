@@ -32,8 +32,8 @@
 
 # **** EDIT THIS PATH AS NEEDED ******
 
-export PIPELINE_DATA_DIR=`realpath ../TMP01/bin/rs_pipeline`
-export OUTPUT_BASE_DIR=`realpath ../TMP01`
+export PIPELINE_DATA_DIR=`realpath ../TMP03/bin/rs_pipeline`
+export OUTPUT_BASE_DIR=`realpath ../TMP03`
 export TAG="low_temp"
 
 unset PIPELINE_DATA_DIR_BASELINE
@@ -46,7 +46,7 @@ unset TAG_BASELINE
 
 #======= generate the train, val, test curves ====================
 # writes to ${OUTPUT_BASE_DIR}/pngs
-#python3 -m unittest src.test.python.movie_lens_tfx.write_tensorboard_pngs_test.WriteTensorboardToPng
+python3 -m unittest src.test.python.movie_lens_tfx.write_tensorboard_pngs_test.WriteTensorboardToPng
 
 # ======== run post-training analysis
 eval "$(conda shell.bash hook)"
