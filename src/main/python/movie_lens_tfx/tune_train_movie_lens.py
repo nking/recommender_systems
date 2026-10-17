@@ -1824,7 +1824,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
 def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   """Returns hyperparameters for building Keras model."""
   #print(f'get_default_hyperparameters: custom_config={custom_config}')
-  use_fixed = False
+  use_fixed = True
   
   hp = keras_tuner.HyperParameters()
   # Defines search space.
@@ -1849,11 +1849,11 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
       # the last layer in layer_sizes is the query and candidate embedding models' output dimensions-1
       #hp.Choice("layer_sizes", values=[json.dumps([32]), json.dumps([64, 32])], default=json.dumps([32]))
       ## temporarily changing to small layer_sizes to have under-fit curves to compare to
-      hp.Fixed("layer_sizes", value=json.dumps([32, 16]))
+      hp.Fixed("layer_sizes", value=json.dumps([8,4]))
   else:
       hp.Fixed('learning_rate', 0.001)
       hp.Fixed('weight_decay', 0.05)
-      hp.Fixed('drop_rate', 0.35)
+      hp.Fixed('drop_rate', 0.20)
       hp.Fixed("layer_sizes", value=json.dumps([64, 32]))
   
   hp.Fixed('log_q_correction_factor', value=1.0)
