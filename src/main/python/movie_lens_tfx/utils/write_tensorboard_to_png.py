@@ -1,7 +1,6 @@
 import json
 from pathlib import Path
 
-import matplotlib.pyplot as plt
 from tensorboard.backend.event_processing import event_accumulator
 from tensorboard.util import tensor_util
 from typing import List
@@ -9,9 +8,7 @@ from typing import List
 import os
 import glob
 import time
-import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.font_manager import FontProperties
 
 def get_latest_scalars(log_dir, scalar_name):
     """

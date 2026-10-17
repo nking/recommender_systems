@@ -2,6 +2,7 @@ import os
 import shutil
 import unittest
 import sys
+import numpy as np
 from pathlib import Path
 from find_pushed_trainer_uri import get_pushed_trainer_uri
 
