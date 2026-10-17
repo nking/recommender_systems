@@ -1849,7 +1849,7 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
       # the last layer in layer_sizes is the query and candidate embedding models' output dimensions-1
       #hp.Choice("layer_sizes", values=[json.dumps([32]), json.dumps([64, 32])], default=json.dumps([32]))
       ## temporarily changing to small layer_sizes to have under-fit curves to compare to
-      hp.Fixed("layer_sizes", value=json.dumps([16,8]))
+      hp.Fixed("layer_sizes", value=json.dumps([32,16]))
   else:
       hp.Fixed('learning_rate', 0.001)
       hp.Fixed('weight_decay', 0.05)
