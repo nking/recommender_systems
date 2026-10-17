@@ -22,13 +22,13 @@ class WriteMultiTensorboardToPng(unittest.TestCase):
     
     output_dir = os.path.join(get_bin_dir(), "multi_tensorboard_pngs")
     
-    direcs = ["../TMP05", "../TMP02", "../TMP06", "../TMP01", "../TMP03",
+    direcs = ["../TMP05", "../TMP02", "../TMP06", "../TMP01",     "../TMP03",
         "../TMP04"]
-    titles = ["DNN[8,4]", "DNN[16,8]", "DNN[32,16]", "DNN[64, 32]",
-        "DNN[128,64]", "DNN[256,128]"]
+    titles = ["DNN[8,4]", "DNN[16,8]", "DNN[32,16]", "DNN[64, 32]", "DNN[128,64]",
+        "DNN[256,128]"]
     
-    direcs = ["../TMP02", "../TMP01", "../TMP03"]
-    titles = ["DNN[16,8]", "DNN[64, 32]", "DNN[128,64]"]
+    #direcs = ["../TMP02", "../TMP01", "../TMP03"]
+    #titles = ["DNN[16,8]", "DNN[64, 32]", "DNN[128,64]"]
     
     runs_list: List[Dict[str, str]] = []
     
