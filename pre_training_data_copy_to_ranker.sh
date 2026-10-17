@@ -35,3 +35,4 @@ DEST_DIR="$(realpath -m ../retrieval/src/test/resources/data/)"
 echo "      to $DEST_DIR"
 mkdir -p $DEST_DIR
 cp -rf $SRC_DIR/*.array_record $DEST_DIR/
+cp -f src/test/resources/ml-1m//users.bin $DEST_DIR/
