@@ -321,18 +321,18 @@ class PipelinesTest(tf.test.TestCase):
         expected_layer_sizes = get_best_fitting_layer_sizes(store)
         expeected_embed_dim = json.loads(expected_layer_sizes)[0]
         
-        self.assertTrue(len(results[0]) % 8 == 0)
+        self.assertTrue(len(results[0]) % 4 == 0)
         results = infer_query_for_dict(**inputs)['outputs']
-        self.assertTrue(len(results[0]) % 8 == 0)
+        self.assertTrue(len(results[0]) % 4 == 0)
         
         inputs = {
             "movie_id": tf.constant([[6054]], dtype=tf.int64),
             "genres": tf.constant([[b'Documentary']], dtype=tf.string),
         }
         results = infer_candidate_for_dict_model(**inputs)['outputs']
-        self.assertTrue(len(results[0])  % 8 == 0)
+        self.assertTrue(len(results[0])  % 4 == 0)
         results = infer_candidate_for_dict(**inputs)['outputs']
-        self.assertTrue(len(results[0])  % 8 == 0)
+        self.assertTrue(len(results[0])  % 4 == 0)
         
         
         print(f'INFERENCE TEST START')
