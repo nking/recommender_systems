@@ -1852,9 +1852,9 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
       hp.Fixed("layer_sizes", value=json.dumps([256,128]))
   else:
       hp.Fixed('learning_rate', 0.001)
-      hp.Fixed('weight_decay', 0.05)
+      hp.Fixed('weight_decay', 0.01)
       hp.Fixed('drop_rate', 0.20)
-      hp.Fixed("layer_sizes", value=json.dumps([256,128]))
+      hp.Fixed("layer_sizes", value=json.dumps([8,4]))
   
   hp.Fixed('log_q_correction_factor', value=1.0)
   #let AdamW weight decay handle the regularization, so set regl2 to 0:
@@ -1876,7 +1876,7 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   #if batch_size=1024, max temp should be about 0.2;  if batch_size is 2048, temp max ~ 0.4
   if use_bias_corr:
       if use_fixed:
-          hp.Fixed("bias_corr_alpha", 0.01)
+          hp.Fixed("bias_corr_alpha", 0.05)
           hp.Fixed('temperature', 0.25)
       else:
           hp.Choice("bias_corr_alpha", values=[0.01, 0.05, 0.1], default=0.05)
