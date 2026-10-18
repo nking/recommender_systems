@@ -138,9 +138,10 @@ def _make_query_model(n_users : int, layer_sizes : list,
                 keras.layers.Embedding(
                     max_user_id + 1,
                     user_embed_out_dim,
-                    embeddings_regularizer=keras.regularizers.l2(1e-3)
+                    embeddings_regularizer=keras.regularizers.l2(1e-3),
+                    name="user_id_embedding"
                 ),
-                keras.layers.Flatten(data_format='channels_last'),
+                keras.layers.Flatten(data_format='channels_last', name="user_emb_flatten"),
             ], name="user_emb")
             
             # ordinal, dist between items matters
@@ -317,26 +318,35 @@ def _make_query_model(n_users : int, layer_sizes : list,
                 layer_sizes = json.loads(layer_sizes)
             
             self.dense_query = keras.Sequential(name="dense_query")
-            reg = None
+            reg = keras.regularizers.l2(regl2) if regl2 > 0.0 else None
             # Use the ReLU activation for all but the last layer.
-            for layer_size in layer_sizes[:-1]:
-                if regl2 > 0.0:
-                    reg = keras.regularizers.l2(regl2)
+            for idx, layer_size in enumerate(layer_sizes[:-1]):
                 # TODO: consider changing order to: Dense, LayerNorm, Activation(elu), Dropout
                 self.dense_query.add(
                     keras.layers.Dense(layer_size,
                         activation="elu",
                         kernel_regularizer=reg,
                         kernel_initializer="glorot_normal",
-                        use_bias=False, name=f'dense_{layer_size}'))
-                # self.dense_query.add(keras.layers.BatchNormalization())
-                self.dense_query.add(keras.layers.LayerNormalization())
-                self.dense_query.add(keras.layers.Dropout(drop_rate))
+                        use_bias=False,
+                        name=f"query_dense_{idx}_{layer_size}"
+                    ))
+                self.dense_query.add(
+                    keras.layers.LayerNormalization(name=f"query_ln_{idx}")
+                )
+                self.dense_query.add(
+                    keras.layers.Dropout(drop_rate, name=f"query_dropout_{idx}")
+                )
             
             for layer_size in layer_sizes[-1:]:
-                self.dense_query.add(keras.layers.Dense(layer_size,
-                    kernel_initializer="glorot_normal", use_bias=False, name=f'_layers'))
-                    
+                self.dense_query.add(
+                    keras.layers.Dense(
+                        layer_size,
+                        kernel_initializer="glorot_normal",
+                        use_bias=False,
+                        name=f"query_dense_out_{layer_size}"
+                    )
+                )
+           
             # when L2 normalization for the last layer IS NOT present, the the ANN search is dot product and uses the direction and magnitude of the vector emeddings.
             # and when it IS, the ANN search between embeddings is cosine similarity and it is over a unit hypershpere,
             #  so the distances between vectors are angles.  The range of embeddings lies withint [-1, 1].
@@ -426,9 +436,10 @@ def _make_candidate_model(n_movies : int, movies_offset : int,
                 keras.layers.Embedding(
                     self.n_movies,
                     movie_embed_out_dim,
-                    embeddings_regularizer=keras.regularizers.l2(1e-3)
+                    embeddings_regularizer=keras.regularizers.l2(1e-3),
+                    name="movie_id_embedding"
                 ),
-                keras.layers.Flatten(data_format='channels_last'),
+                keras.layers.Flatten(data_format='channels_last', name="movie_emb_flatten"),
             ], name="movie_emb")
             
             genres_emb = None
@@ -436,8 +447,11 @@ def _make_candidate_model(n_movies : int, movies_offset : int,
                 # expand to embed_out_dim for concatenation
                 genres_embed_out_dim = 8  # 18
                 genres_emb = keras.Sequential([
-                    keras.layers.Dense(genres_embed_out_dim, use_bias=False),
-                    keras.layers.Flatten(data_format='channels_last'),
+                    keras.layers.Dense(genres_embed_out_dim,
+                        use_bias=False,
+                        name="genres_emb_dense"
+                    ),
+                    keras.layers.Flatten(data_format='channels_last', name="genres_emb_flatten"),
                 ], name="genres_emb")
             self.genres_emb = genres_emb
         
@@ -528,26 +542,32 @@ def _make_candidate_model(n_movies : int, movies_offset : int,
             self.dense_candidate = keras.Sequential(name="dense_candidate")
             if isinstance(layer_sizes, str):
                 layer_sizes = json.loads(layer_sizes)
-            reg = None
-            # Use the ReLU activation for all but the last layer.
-            for layer_size in layer_sizes[:-1]:
-                if regl2 > 0.0:
-                    reg = keras.regularizers.l2(regl2)
+            reg = keras.regularizers.l2(regl2) if regl2 > 0.0 else None            # Use the ReLU activation for all but the last layer.
+            for idx, layer_size in enumerate(layer_sizes[:-1]):
                 self.dense_candidate.add(
                     keras.layers.Dense(layer_size,
                         activation="elu",
                         kernel_regularizer=reg,
                         kernel_initializer="glorot_normal",
-                        use_bias=False, name=f'{layer_size}'
+                        use_bias=False,
+                        name=f"cand_dense_{idx}_{layer_size}"
                     ))
-                # self.dense_query.add(keras.layers.BatchNormalization())
-                self.dense_candidate.add(keras.layers.LayerNormalization())
-                # self.dense_query.add(keras.activations.elu())
-                self.dense_candidate.add(keras.layers.Dropout(drop_rate))
+                self.dense_candidate.add(
+                    keras.layers.LayerNormalization(name=f"cand_ln_{idx}")
+                )
+                self.dense_candidate.add(
+                    keras.layers.Dropout(drop_rate, name=f"cand_dropout_{idx}")
+                )
             
             for layer_size in layer_sizes[-1:]:
-                self.dense_candidate.add(keras.layers.Dense(layer_size,
-                    kernel_initializer="glorot_normal", use_bias=False, name=f'_layers'))
+                self.dense_candidate.add(
+                    keras.layers.Dense(
+                        layer_size,
+                        kernel_initializer="glorot_normal",
+                        use_bias=False,
+                        name=f"cand_dense_out_{layer_size}"
+                    )
+                )
                     
             #when L2 normalization for the last layer IS NOT present, the the ANN search is dot product and uses the direction and magnitude of the vector emeddings.
             # and when it IS, the ANN search between embeddings is cosine similarity, hence only searches by direction.
@@ -962,6 +982,9 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
             masked_raw_logits = tf.where(mask, tf.constant(-1e9, dtype=logits.dtype), raw_logits)
             
             loss = self.in_batch_softmax_loss_function(y, masked_logits)
+            # Include layer regularization losses (e.g. l2(1e-3) on user_emb, movie_emb, yr_z_emb)
+            if self.losses:
+                loss += tf.add_n(self.losses)
            
         gradients = tape.gradient(loss, self.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
@@ -1029,6 +1052,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
             raw_logits)
         #loss = self.loss_function(y, logits)
         loss = self.in_batch_softmax_loss_function(y, masked_logits)
+        if self.losses:
+            loss += tf.add_n(self.losses)
         
         labels = tf.range(batch_size)
         self.mean_loss_metric.update_state(loss)
@@ -1803,6 +1828,35 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     optimizer = keras.optimizers.AdamW(learning_rate=lr_scheduler,
         weight_decay=hp.get("weight_decay"))
 
+    #collect variables that already have L2 regularization
+    l2_regularized_vars = (
+        model.query_model.user_model.user_emb.trainable_variables +
+        model.candidate_model.movie_model.movie_emb.trainable_variables
+    )
+    if model.query_model.user_model.yr_z_emb is not None:
+        l2_regularized_vars += model.query_model.user_model.yr_z_emb.trainable_variables
+    #Exclude L2-regularized embeddings, LayerNormalization (gamma/beta), and any biases from AdamW weight decay
+    optimizer.exclude_from_weight_decay(
+        var_list=l2_regularized_vars,
+        var_names=[
+            "user_id_embedding",
+            "movie_id_embedding",
+            "yr_z_emb_dense",
+            "query_ln_",
+            "cand_ln_",
+            "layer_normalization",
+            "gamma",
+            "beta",
+            "bias",
+        ]
+    )
+    
+    # Diagnostic log to verify in TFX trainer stdout which weights get AdamW weight decay:
+    for v in model.trainable_variables:
+        is_excluded = optimizer._use_weight_decay(v) is False
+        logging.info(
+            f"Variable: {v.name:<60} | shape: {str(v.shape):<12} | Excluded from AdamW WD: {is_excluded}")
+
     #NOTE: do not set metrics here as they are hard-coded in model
     model.compile(
         loss=None, # internally fixed to sparse softmax cross entropy for logits
@@ -1852,7 +1906,7 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
       hp.Fixed("layer_sizes", value=json.dumps([256,128]))
   else:
       hp.Fixed('learning_rate', 0.001)
-      hp.Fixed('weight_decay', 0.01)
+      hp.Fixed('weight_decay', 0.05)
       hp.Fixed('drop_rate', 0.20)
       hp.Fixed("layer_sizes", value=json.dumps([8,4]))
   
@@ -1876,7 +1930,7 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   #if batch_size=1024, max temp should be about 0.2;  if batch_size is 2048, temp max ~ 0.4
   if use_bias_corr:
       if use_fixed:
-          hp.Fixed("bias_corr_alpha", 0.05)
+          hp.Fixed("bias_corr_alpha", 0.01)
           hp.Fixed('temperature', 0.25)
       else:
           hp.Choice("bias_corr_alpha", values=[0.01, 0.05, 0.1], default=0.05)
