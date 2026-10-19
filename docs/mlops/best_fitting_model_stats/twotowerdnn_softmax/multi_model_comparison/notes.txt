@@ -1,0 +1,135 @@
+Analysis:
+   these models were trained from a pipeline with same fixed
+   hyper-parameters, exceptinf layer_sizes which is the DNN on the 
+   end of the CandidateModel and Query Model.
+   The DNN layer_sizes was run for 6 pipelines, each of which had
+   layer_Sizes within the increasing range of [8,4] to [256,128].
+
+   The main h-parameters affecting the mebeddings are
+       weight_decay = 0.01, bias_corr_alpha = 0.05, drop_rate = 0.25
+
+   Note that the User and Movie Models were changed to removed the 
+   l2 regularization from the id and yr embeddings and let
+   AdamW handle them  Also, AdamW exlucsions were used for
+   normalization, bias, gamma and beta layers.
+
+   The results are summarized below and the figures and analysis
+   results are in this folder.
+
+A look through the movie embeddings t-SNE and Umap plots and the
+same for the user embeddings:
+- underfitting:
+  DNN[8,4] and DNN[16,8]
+  maps show that the user hypershpere collapses into a hollow ring
+  because there are not enough dimensions to represent the features
+  well without wrapping around the ring.
+  (this effect is even more obvious when a high weight_Decay of 0.05
+   is used and a bias_corr_alpha of 0.01 is used)
+  
+- overfitting:
+  DNN[128,64] and DNN[256, 128]
+  maps show that the embeddings are not evenly filling the space,
+  but ratther are highly fractured and separated as clumps
+  and that the tiers are no co-spatial.
+
+- contenders:
+  DNN[16,32] and DNN[64,32] fill the embedding space relatively well, 
+  especially considering that movie features are only id and genres
+  at this point.  the tiers are co-spatial.
+  one would expect good ability to perform ANN searches using these
+  embeddings.
+
+a comparison of DNN[16,32] and DNN[64,32] was done.
+
+before making decisions about the comparisons,
+rembember from data shift calcs:
+"P_X MOVIE TIER HIGH DRIFT WARNING: Significant item popularity shift between Train and Test splits (Train-Test EMD: 0.0932).",
+"P_Y|X MOVIE TIER STABILITY EXCELLENT: Activity profile distribution remains consistent across splits (Train-Test EMD: 0.0049).",
+"P_Y MOVIE TIER HIGH DRIFT WARNING: Significant item popularity shift between Train and Test splits (Train-Test EMD: 0.0531).",
+"P_X|Y MOVIE TIER HIGH DRIFT WARNING: Significant item popularity shift between Train and Test splits (Train-Test EMD: 0.0679).",
+"Covariate shift between Train and Test splits."
+
+This states that a business goal pursuing accurate prediction of popularity
+cannot predict future well because of the covariate shift.  
+Popularity is non-stationary.
+
+A business goal focusing on P(Y|X) is stable.
+Personalization and latent preferences should be fine to use.
+P(Y=1 | user_context, item_features) remains stable, for instance.
+
+A comparison of the 2 models DNN[32,16] and DNN[64,32] 
+show these results:
+
+┌─────────────────────────┬──────┬───────────────────┬───────────────────┬─────────────┬──────────┬────────────┬─────────────────┐
+│ Metric                  ┆ N    ┆ Mean (DNN[32,16]) ┆ Mean (DNN[64,32]) ┆ T-Statistic ┆ T-PValue ┆ Wilcoxon-W ┆ Wilcoxon-PValue │
+│ ---                     ┆ ---  ┆ ---               ┆ ---               ┆ ---         ┆ ---      ┆ ---        ┆ ---             │
+│ str                     ┆ i64  ┆ f64               ┆ f64               ┆ f64         ┆ f64      ┆ f64        ┆ f64             │
+╞═════════════════════════╪══════╪═══════════════════╪═══════════════════╪═════════════╪══════════╪════════════╪═════════════════╡
+│ NDCG@20                 ┆ 5096 ┆ 0.019266          ┆ 0.018557          ┆ 0.718401    ┆ 0.472543 ┆ 2.684976e6 ┆ 0.558237        │
+│ Recall@20               ┆ 5096 ┆ 0.030694          ┆ 0.030464          ┆ 0.136702    ┆ 0.891272 ┆ 2244477.5  ┆ 0.996136        │
+│ Precision@20            ┆ 5096 ┆ 0.009301          ┆ 0.009213          ┆ 0.242337    ┆ 0.808529 ┆ 2.239642e6 ┆ 0.942574        │
+│ Item Retrieval Count@20 ┆ 3883 ┆ 26.247747         ┆ 26.247747         ┆ 57.173087   ┆ 0.0      ┆ 3.637349e6 ┆ 0.082105        │
+└─────────────────────────┴──────┴───────────────────┴───────────────────┴─────────────┴──────────┴────────────┴─────────────────┘
+shape: (13, 8)
+┌────────────────────────────┬──────┬───────────────────┬───────────────────┬─────────────┬────────────┬────────────┬─────────────────┐
+│ Metric                     ┆ N    ┆ Mean (DNN[32,16]) ┆ Mean (DNN[64,32]) ┆ T-Statistic ┆ T-PValue   ┆ Wilcoxon-W ┆ Wilcoxon-PValue │
+│ ---                        ┆ ---  ┆ ---               ┆ ---               ┆ ---         ┆ ---        ┆ ---        ┆ ---             │
+│ str                        ┆ i64  ┆ f64               ┆ f64               ┆ f64         ┆ f64        ┆ f64        ┆ f64             │
+╞════════════════════════════╪══════╪═══════════════════╪═══════════════════╪═════════════╪════════════╪════════════╪═════════════════╡
+│ NDCG@100                   ┆ 5096 ┆ 0.046354          ┆ 0.047592          ┆ -1.223054   ┆ 0.221366   ┆ 4.906413e6 ┆ 0.001288        │
+│ Recall@100                 ┆ 5096 ┆ 0.1211            ┆ 0.129017          ┆ -3.029766   ┆ 0.00246    ┆ 3.749223e6 ┆ 0.002715        │
+│ Precision@100              ┆ 5096 ┆ 0.007979          ┆ 0.008212          ┆ -1.752061   ┆ 0.079823   ┆ 3.78988e6  ┆ 0.010413        │
+│ ILD@100                    ┆ 5096 ┆ 0.342675          ┆ 0.339772          ┆ 3.263698    ┆ 0.001107   ┆ 6205338.5  ┆ 0.006063        │
+│ Inter-List Diversity (All  ┆ 52   ┆ 0.975727          ┆ 0.976913          ┆ -1.265434   ┆ 0.211467   ┆ 502.0      ┆ 0.088569        │
+│ User…                      ┆      ┆                   ┆                   ┆             ┆            ┆            ┆                 │
+│ …                          ┆ …    ┆ …                 ┆ …                 ┆ …           ┆ …          ┆ …          ┆ …               │
+│ Inter-List Diversity (User ┆ 268  ┆ 0.973135          ┆ 0.970193          ┆ 5.320182    ┆ 2.1960e-7  ┆ 11228.0    ┆ 8.7891e-8       │
+│ Tie…                       ┆      ┆                   ┆                   ┆             ┆            ┆            ┆                 │
+│ Delta Log Pop (User Tier   ┆ 1059 ┆ -1.947374         ┆ -2.160138         ┆ 6.757329    ┆ 2.3171e-11 ┆ 216794.0   ┆ 1.4299e-10      │
+│ 0)                         ┆      ┆                   ┆                   ┆             ┆            ┆            ┆                 │
+│ Delta Log Pop (User Tier   ┆ 3126 ┆ -2.622752         ┆ -2.548049         ┆ -4.169952   ┆ 0.000031   ┆ 2.165374e6 ┆ 3.4652e-8       │
+│ 1)                         ┆      ┆                   ┆                   ┆             ┆            ┆            ┆                 │
+│ Delta Log Pop (User Tier   ┆ 911  ┆ -2.895575         ┆ -2.660151         ┆ -6.617297   ┆ 6.2383e-11 ┆ 149078.0   ┆ 1.5790e-13      │
+│ 2)                         ┆      ┆                   ┆                   ┆             ┆            ┆            ┆                 │
+│ Item Retrieval Count@100   ┆ 3883 ┆ 131.238733        ┆ 131.238733        ┆ 59.435368   ┆ 0.0        ┆ 3659045.5  ┆ 0.111497        │
+└────────────────────────────┴──────┴───────────────────┴───────────────────┴─────────────┴────────────┴────────────┴─────────────────┘
+
+--- Top 20 Analysis ---
+[=] DNN[32,16] is not significantly different from DNN[64,32] at ranking relevant results at higher positions.
+[=] DNN[32,16] is not significantly different from DNN[64,32] at retrieving a high volume of relevant ground truth positives.
+[=] DNN[32,16] is not significantly different from DNN[64,32] at maintaining a high density of relevant results within the slate.
+[=] DNN[32,16] is not significantly different from DNN[64,32] at distributing recommendation slots differently across the catalog.
+
+--- Bootstrap Global Metrics @20 (1000 samples) ---
+[*] DNN[32,16] has SIGNIFICANTLY HIGHER Coverage than DNN[64,32] (P-Val: 0.0220, 95% CI: [0.0023, 0.0178]). 
+[*] DNN[32,16] has SIGNIFICANTLY LOWER Gini than DNN[64,32] (P-Val: 0.0000, 95% CI: [-0.0334, -0.0228]). (lower means more equitable catalog exposure and less popularity bias)
+[*] DNN[32,16] has SIGNIFICANTLY HIGHER Uniformity_Entropy than DNN[64,32] (P-Val: 0.0000, 95% CI: [0.0539, 0.0783]). (higher means a more efficient use of latent space and has learned diverse, well-spread features)
+
+--- Top 100 Analysis ---
+[=] DNN[32,16] is not significantly different from DNN[64,32] at ranking relevant results at higher positions.
+[-] DNN[32,16] is significantly WORSE than DNN[64,32] at retrieving a high volume of relevant ground truth positives.
+[=] DNN[32,16] is not significantly different from DNN[64,32] at maintaining a high density of relevant results within the slate.
+[+] DNN[32,16] is significantly BETTER than DNN[64,32] at recommending a wide, semantically diverse range of movie genres.
+[=] DNN[32,16] is not significantly different from DNN[64,32] at providing personalized, unique recommendation slates across the general user base.
+[=] DNN[32,16] is not significantly different from DNN[64,32] at maintaining slate personalization when surfacing cold-start items.
+[=] DNN[32,16] is not significantly different from DNN[64,32] at providing highly individualized slates to mainstream users.
+[+] DNN[32,16] is significantly BETTER than DNN[64,32] at providing highly individualized slates to mid-tail users.
+[+] DNN[32,16] is significantly BETTER than DNN[64,32] at providing highly individualized slates to niche users.
+[-] DNN[32,16] is significantly WORSE than DNN[64,32] at surfacing niche, long-tail movies to mainstream users.
+[+] DNN[32,16] is significantly BETTER than DNN[64,32] at surfacing niche, long-tail movies to mid-tail users.
+[+] DNN[32,16] is significantly BETTER than DNN[64,32] at surfacing niche, long-tail movies to niche users.
+[=] DNN[32,16] is not significantly different from DNN[64,32] at distributing recommendation slots differently across the catalog.
+
+--- Bootstrap Global Metrics @100 (1000 samples) ---
+[*] DNN[32,16] has SIGNIFICANTLY LOWER Coverage than DNN[64,32] (P-Val: 0.0100, 95% CI: [-0.0054, -0.0010]). 
+[*] DNN[32,16] has SIGNIFICANTLY LOWER Gini than DNN[64,32] (P-Val: 0.0000, 95% CI: [-0.0305, -0.0196]). (lower means more equitable catalog exposure and less popularity bias)
+[*] DNN[32,16] has SIGNIFICANTLY HIGHER Uniformity_Entropy than DNN[64,32] (P-Val: 0.0000, 95% CI: [0.0296, 0.0456]). (higher means a more efficient use of latent space and has learned diverse, well-spread features)
+
+=== OVERALL MACRO TRENDS ===
+-> TRADE-OFF: DNN[32,16] increases diversity and long-tail exploration, but at the cost of top-tier precision/accuracy.
+
+
+so will pursue a round of HPO using fixed layer_sizes=[32,16]
+
+and then train GraphRanker from those results.
+
