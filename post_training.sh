@@ -32,8 +32,8 @@
 
 # **** EDIT THIS PATH AS NEEDED ******
 
-export PIPELINE_DATA_DIR="$(realpath -m ../TMP25/bin/rs_pipeline)"
-export OUTPUT_BASE_DIR="$(realpath -m ../TMP25)"
+export PIPELINE_DATA_DIR="$(realpath -m ../TMP32/bin/rs_pipeline)"
+export OUTPUT_BASE_DIR="$(realpath -m ../TMP32)"
 export TAG="low_temp"
 
 unset PIPELINE_DATA_DIR_BASELINE
