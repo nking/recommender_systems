@@ -1878,7 +1878,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
 def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   """Returns hyperparameters for building Keras model."""
   #print(f'get_default_hyperparameters: custom_config={custom_config}')
-  use_fixed = True
+  use_fixed = False
   
   hp = keras_tuner.HyperParameters()
   # Defines search space.
@@ -1895,7 +1895,7 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   if not use_fixed:
       hp.Float('learning_rate', 1e-4, 1e-3, sampling='log')
       #hp.Float('weight_decay', 1e-4, 1e-2, sampling='log')
-      hp.Float('weight_decay', 1e-3, 5e-2, sampling='log')
+      hp.Float('weight_decay', 0.005, 0.05, sampling='log')
       #hp.Float('drop_rate', min_value=0.1, max_value=0.4, default=0.3)
       hp.Float('drop_rate', min_value=0.1, max_value=0.4, default=0.35)
       #hp.Float('log_q_correction_factor', min_value=0.1, max_value=1.0, default=0.5)
@@ -1903,12 +1903,12 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
       # the last layer in layer_sizes is the query and candidate embedding models' output dimensions-1
       #hp.Choice("layer_sizes", values=[json.dumps([32]), json.dumps([64, 32])], default=json.dumps([32]))
       ## temporarily changing to small layer_sizes to have under-fit curves to compare to
-      hp.Fixed("layer_sizes", value=json.dumps([256,128]))
+      hp.Fixed("layer_sizes", value=json.dumps([32,16]))
   else:
       hp.Fixed('learning_rate', 0.001)
       hp.Fixed('weight_decay', 0.01)
       hp.Fixed('drop_rate', 0.25)
-      hp.Fixed("layer_sizes", value=json.dumps([256,128]))
+      hp.Fixed("layer_sizes", value=json.dumps([32,16]))
   
   hp.Fixed('log_q_correction_factor', value=1.0)
   #let AdamW weight decay handle the regularization, so set regl2 to 0:
@@ -1934,9 +1934,9 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
           hp.Fixed('temperature', 0.25)
       else:
           hp.Choice("bias_corr_alpha", values=[0.01, 0.05, 0.1], default=0.05)
-          hp.Float('temperature', 0.05, 0.25, step=0.025)
+          hp.Float('temperature', 0.05, 0.30, step=0.025)
   else:
-      hp.Choice("bias_corr_alpha", values=[0.1], default=0.05)  # 0.01, 0.05, 0.1
+      hp.Choice("bias_corr_alpha", values=[0.1], default=0.1)  # 0.01, 0.05, 0.1
       hp.Fixed("temperature", value=1.0)
   hp.Fixed('movie_tiers_uri', value=custom_config["movie_tiers_uri"])
   hp.Fixed('n_users', value=custom_config["n_users"])
