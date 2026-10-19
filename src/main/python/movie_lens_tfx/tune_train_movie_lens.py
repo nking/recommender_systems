@@ -1908,7 +1908,7 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
       hp.Fixed('learning_rate', 0.001)
       hp.Fixed('weight_decay', 0.01)
       hp.Fixed('drop_rate', 0.25)
-      hp.Fixed("layer_sizes", value=json.dumps([64,32]))
+      hp.Fixed("layer_sizes", value=json.dumps([128,64]))
   
   hp.Fixed('log_q_correction_factor', value=1.0)
   #let AdamW weight decay handle the regularization, so set regl2 to 0:
