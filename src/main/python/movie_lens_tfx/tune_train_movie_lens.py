@@ -138,7 +138,7 @@ def _make_query_model(n_users : int, layer_sizes : list,
                 keras.layers.Embedding(
                     max_user_id + 1,
                     user_embed_out_dim,
-                    embeddings_regularizer=keras.regularizers.l2(1e-3),
+                    #embeddings_regularizer=keras.regularizers.l2(1e-3),
                     name="user_id_embedding"
                 ),
                 keras.layers.Flatten(data_format='channels_last', name="user_emb_flatten"),
@@ -161,7 +161,7 @@ def _make_query_model(n_users : int, layer_sizes : list,
                 yr_z_emb = keras.Sequential([
                     keras.layers.Dense(yr_embed_out_dim, activation='swish',
                         kernel_initializer='he_normal', use_bias=False,
-                        kernel_regularizer=keras.regularizers.l2(1e-3),
+                        #kernel_regularizer=keras.regularizers.l2(1e-3),
                         name='yr_z_emb_dense'),
                     keras.layers.Flatten(data_format='channels_last'),
                 ], name="yr_z_emb")
@@ -436,7 +436,7 @@ def _make_candidate_model(n_movies : int, movies_offset : int,
                 keras.layers.Embedding(
                     self.n_movies,
                     movie_embed_out_dim,
-                    embeddings_regularizer=keras.regularizers.l2(1e-3),
+                    #embeddings_regularizer=keras.regularizers.l2(1e-3),
                     name="movie_id_embedding"
                 ),
                 keras.layers.Flatten(data_format='channels_last', name="movie_emb_flatten"),
@@ -1839,9 +1839,9 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     optimizer.exclude_from_weight_decay(
         var_list=l2_regularized_vars,
         var_names=[
-            "user_id_embedding",
-            "movie_id_embedding",
-            "yr_z_emb_dense",
+            #"user_id_embedding",
+            #"movie_id_embedding",
+            #"yr_z_emb_dense",
             "query_ln_",
             "cand_ln_",
             "layer_normalization",
@@ -1908,7 +1908,7 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
       hp.Fixed('learning_rate', 0.001)
       hp.Fixed('weight_decay', 0.05)
       hp.Fixed('drop_rate', 0.20)
-      hp.Fixed("layer_sizes", value=json.dumps([256,128]))
+      hp.Fixed("layer_sizes", value=json.dumps([8,4]))
   
   hp.Fixed('log_q_correction_factor', value=1.0)
   #let AdamW weight decay handle the regularization, so set regl2 to 0:
