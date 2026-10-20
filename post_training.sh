@@ -60,11 +60,10 @@ cd ../retrieval
 
 # writes to ${OUTPUT_BASE_DIR}/post_training_analysis
 ## to compare to previous best model use:
-#   --analyze_and_compare \
 if [ -n "$PIPELINE_DATA_DIR_BASELINE" ]; then
     echo "compare models $TAG and $TAG_BASELINE"
     python3 src/test/python/movie_lens_retrieval/post_training_compare_models.py \
-    --compare \
+    --analyze_and_compare \
     --PIPELINE_DATA_DIR_1=$PIPELINE_DATA_DIR \
     --OUTPUT_BASE_DIR_1=$OUTPUT_BASE_DIR \
     --TAG_1=$TAG \
