@@ -923,6 +923,88 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         
         return tf.reduce_mean(loss)
     
+    def _compute_batch_geometry_stats(
+            self,
+            user_embeddings: tf.Tensor,
+            movie_embeddings: tf.Tensor,
+            masked_raw_logits: tf.Tensor,
+            user_mask: tf.Tensor,
+            movie_mask: tf.Tensor,
+            ild_top_k: int = 100
+    ) -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor]:
+        """
+        Computes in-batch Hypersphere Uniformity (Wang & Isola, t=2.0) across distinct
+        users/movies, In-Batch Top-K Intra-List Diversity (ILD), and Softmax Column Entropy.
+        """
+        batch_size = tf.shape(user_embeddings)[0]
+        b_float = tf.cast(batch_size, tf.float32)
+        
+        # Distinct-Entity Hypersphere Uniformity: log E_{i != j}[exp(-2 * ||x_i - x_j||^2)]
+        # Use logical_not(user_mask) and logical_not(movie_mask) so duplicate occurrences
+        # of the same user_id or movie_id in the batch are excluded along with the diagonal.
+        u_sim = tf.matmul(user_embeddings, user_embeddings, transpose_b=True)
+        m_sim = tf.matmul(movie_embeddings, movie_embeddings, transpose_b=True)
+        
+        valid_u_mask = tf.cast(tf.logical_not(user_mask), tf.float32)
+        valid_m_mask = tf.cast(tf.logical_not(movie_mask), tf.float32)
+        
+        u_kernel = tf.exp(
+            -4.0 + 4.0 * tf.clip_by_value(u_sim, -1.0, 1.0)) * valid_u_mask
+        m_kernel = tf.exp(
+            -4.0 + 4.0 * tf.clip_by_value(m_sim, -1.0, 1.0)) * valid_m_mask
+        
+        u_mean_potential = tf.reduce_sum(u_kernel) / tf.maximum(
+            tf.reduce_sum(valid_u_mask), 1.0)
+        m_mean_potential = tf.reduce_sum(m_kernel) / tf.maximum(
+            tf.reduce_sum(valid_m_mask), 1.0)
+        
+        #L_unif(U)
+        user_uniformity = tf.math.log(tf.maximum(u_mean_potential, 1e-12))
+        #L_unif(M)
+        movie_uniformity = tf.math.log(tf.maximum(m_mean_potential, 1e-12))
+        
+        # In-Batch Local Intra-List Diversity (ILD@K) to detect Island Collapse
+        k_actual = tf.minimum(ild_top_k, batch_size)
+        _, top_indices = tf.math.top_k(masked_raw_logits, k=k_actual)  # [B, k_actual]
+        top_k_embs = tf.gather(movie_embeddings, top_indices)  # [B, k_actual, D]
+        slate_sim = tf.matmul(top_k_embs, top_k_embs, transpose_b=True)  # [B, k_actual, k_actual]
+        slate_dist = 1.0 - tf.clip_by_value(slate_sim, -1.0, 1.0)
+        k_eye = tf.expand_dims(tf.eye(k_actual, dtype=tf.float32), axis=0)
+        slate_dist = slate_dist * (1.0 - k_eye)
+        k_float = tf.cast(k_actual, tf.float32)
+        #adding Local Intra-List Diversity to prevent the HPO from prefering global uniformity that
+        #   isn't evenly spread, like 4 tight, isolated islands located at the 4 corners of a tetrahedron.
+        #Local Intra-List Diversity
+        in_batch_ild = tf.reduce_mean(
+            tf.reduce_sum(slate_dist, axis=[1, 2]) / tf.maximum(
+                k_float * (k_float - 1.0), 1.0)
+        )
+        
+        # Soft In-Batch Hubness Penalty (Normalized Column Exposure Entropy in [0, 1])
+        row_probs = tf.nn.softmax(masked_raw_logits / self.temperature,
+            axis=-1)
+        col_exposure = tf.reduce_mean(row_probs, axis=0)
+        col_entropy = -tf.reduce_sum(
+            col_exposure * tf.math.log(tf.maximum(col_exposure, 1e-12))
+        ) / tf.maximum(tf.math.log(b_float), 1e-6)
+        
+        # Combined Geometry Health Multiplier in [0.5, 1.0] for HPO
+        # - user_spread = 1 - exp(L_unif(U)) in [0, 1] (~0.94 when healthy, drops when clumped)
+        # - ild_factor = clip(in_batch_ild / 0.32, 0.5, 1.0) (1.0 when ILD >= 0.32, penalizes island collapse < 0.32)
+        # Inside _compute_batch_geometry_stats:
+        # 1.0 when L_unif(U) <= -2.65 (1 - exp(-2.65) = 0.93); penalizes clumping > -2.65
+        user_spread = tf.clip_by_value((1.0 - u_mean_potential) / 0.93, 0.5,1.0)
+        # 1.0 when L_unif(M) <= -2.52 (1 - exp(-2.52) = 0.92); penalizes clumping > -2.52
+        movie_spread = tf.clip_by_value((1.0 - m_mean_potential) / 0.92, 0.5, 1.0)
+        # 1.0 when in_batch_ild >= 0.32; penalizes island collapse < 0.32
+        ild_factor = tf.clip_by_value(in_batch_ild / 0.32, 0.5, 1.0)
+        # 1.0 when col_entropy >= 0.95; penalizes extreme hub domination < 0.95
+        ent_factor = tf.clip_by_value(col_entropy / 0.95, 0.7, 1.0)
+        
+        geom_multiplier = user_spread * movie_spread * ild_factor * ent_factor
+        
+        return user_uniformity, movie_uniformity, in_batch_ild, col_entropy, geom_multiplier
+    
     def train_step(self, batch):
         x, y = batch  # y is typically not used in pure In-Batch Softmax (identity matrix is the target)
         #y is rating normalized to [0.,1.] and since training is on positives,
@@ -1006,11 +1088,19 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         batch_movie_tiers = tf.gather(self.movie_tiers, safe_ids)
         #batch_movie_tiers is shape [batch_size]
         
+        u_unif, m_unif, batch_ild, col_ent, geom_mult = self._compute_batch_geometry_stats(
+            user_embeddings=user_embeddings,
+            movie_embeddings=movie_embeddings,
+            masked_raw_logits=masked_raw_logits,
+            user_mask=user_mask,
+            movie_mask=movie_mask,
+        )
         self.ndcg_k_composite_metric.update_state(
             y_true=labels,
             y_pred=masked_raw_logits,
-            batch_movie_tiers = batch_movie_tiers,
-            sample_weight=y
+            batch_movie_tiers=batch_movie_tiers,
+            sample_weight=y,
+            geom_multiplier=geom_mult,
         )
         
         output = {m.name: m.result() for m in self.metrics}
@@ -1069,12 +1159,19 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         safe_ids = tf.cast(safe_ids, dtype=tf.int32)
         batch_movie_tiers = tf.gather(self.movie_tiers, safe_ids)
         
-        #def update_state(self, y_true, y_pred, sample_weight=None, table_b = None, movie_ids=None)
+        u_unif, m_unif, batch_ild, col_ent, geom_mult = self._compute_batch_geometry_stats(
+            user_embeddings=user_embeddings,
+            movie_embeddings=movie_embeddings,
+            masked_raw_logits=masked_raw_logits,
+            user_mask=user_mask,
+            movie_mask=movie_mask,
+        )
         self.ndcg_k_composite_metric.update_state(
             y_true=labels,
             y_pred=masked_raw_logits,
             batch_movie_tiers=batch_movie_tiers,
-            sample_weight=y
+            sample_weight=y,
+            geom_multiplier=geom_mult,
         )
         
         output = {m.name: m.result() for m in self.metrics}
@@ -1554,71 +1651,90 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
       
       def get_name(self, name: str, k: int):
           return f"{name}_tail_{k}"
-      
+  
   @keras.utils.register_keras_serializable(package=package)
   class NDCGAtKComposite(keras.metrics.Metric):
-    def __init__(self, name="composite_ndcg",
-            k: int = 100, use_composite:bool=True,
-            w_head:float=0.33, w_torso:float=0.33, w_tail:float=0.33, **kwargs):
-        """
-        Args:
-            b_threshold_head (float): b_table values less than this are the head of the distribution frequently picked movies but few unique movies.
-            b_threshold_tail (float): b_table values greater than this are the tail of the ditstribution rarly picked and are few in number of unique movies.
-            k (int): top k to use in NDCG metrics
-            use_composite (bool): if False, the standard NDCG metrics is used, else the composite is used.
-            The composite is w_head * NDCG_head + w_torso * NDCG_torso + w_tail * NDCG_tail.
+      def __init__(self, name="composite_ndcg",
+              k: int = 100, use_composite: bool = True,
+              w_head: float = 0.33, w_torso: float = 0.33,
+              w_tail: float = 0.33, **kwargs):
+          """
+          Args:
+              b_threshold_head (float): b_table values less than this are the head of the distribution frequently picked movies but few unique movies.
+              b_threshold_tail (float): b_table values greater than this are the tail of the ditstribution rarly picked and are few in number of unique movies.
+              k (int): top k to use in NDCG metrics
+              use_composite (bool): if False, the standard NDCG metrics is used, else the composite is used.
+              The composite is w_head * NDCG_head + w_torso * NDCG_torso + w_tail * NDCG_tail.
+
+          NOTE:
+          (1) if business goal is to maximize inventory movement across the full tail of catalog,
+          then the w_head, w_torso_w_tail should resemble the movie_tier distribution of the
+          catalog, i.e. (0.15 / 0.44 / 0.41)
+          (2) if business goal is balanced personalization, then use 0.33, 0.33, 0.33.
+          A user's interest in a niche cult classic (Tail) as equally important as
+           their interest in a blockbuster (Head).  The pipeline HPO uses composite_ndcg_k as its
+           selector and so the result is user's mainsteam and personal preferences.
+
+          """
+          name = f"{name}_{k}"
+          super(NDCGAtKComposite, self).__init__(name=name, **kwargs)
+          self.w_head = w_head
+          self.w_torso = w_torso
+          self.w_tail = w_tail
+          self.k = k
+          self.use_composite = use_composite
+          self.geom_mult_sum = self.add_weight(name="geom_mult_sum", initializer="zeros")
+          self.geom_count = self.add_weight(name="geom_count", initializer="zeros")
+          if use_composite:
+              self.ndcg_head = NDCGAtKForInBatchHead(k=k)
+              self.ndcg_torso = NDCGAtKForInBatchTorso(k=k)
+              self.ndcg_tail = NDCGAtKForInBatchTail(k=k)
+          else:
+              self.ndcg = NDCGAtKForInBatchNegatives(k=k)
+      
+      def update_state(self, y_true, y_pred, sample_weight=None,
+              batch_movie_tiers: tf.Tensor = None,
+              geom_multiplier: tf.Tensor = None):
+          if self.use_composite:
+              self.ndcg_head.update_state(y_true, y_pred, batch_movie_tiers,
+                  sample_weight)
+              self.ndcg_torso.update_state(y_true, y_pred, batch_movie_tiers,
+                  sample_weight)
+              self.ndcg_tail.update_state(y_true, y_pred, batch_movie_tiers,
+                  sample_weight)
+          else:
+              self.ndcg.update_state(y_true, y_pred, sample_weight)
+          if geom_multiplier is not None:
+              self.geom_mult_sum.assign_add(tf.cast(geom_multiplier, tf.float32))
+              self.geom_count.assign_add(1.0)
+      
+      def result(self):
+          if self.use_composite:
+              base_score = (
+                      self.w_head * self.ndcg_head.result() +
+                      self.w_torso * self.ndcg_torso.result() +
+                      self.w_tail * self.ndcg_tail.result()
+              )
+          else:
+              base_score = self.ndcg.result()
+          mean_geom_mult = tf.where(
+              self.geom_count > 0.0,
+              tf.math.divide_no_nan(self.geom_mult_sum, self.geom_count),
+              1.0
+          )
+          return base_score * mean_geom_mult
+      
+      def reset_state(self):
+          self.geom_mult_sum.assign(0.0)
+          self.geom_count.assign(0.0)
+          if self.use_composite:
+              self.ndcg_head.reset_state()
+              self.ndcg_torso.reset_state()
+              self.ndcg_tail.reset_state()
+          else:
+              self.ndcg.reset_state()
             
-        NOTE:
-        (1) if business goal is to maximize inventory movement across the full tail of catalog,
-        then the w_head, w_torso_w_tail should resemble the movie_tier distribution of the
-        catalog, i.e. (0.15 / 0.44 / 0.41)
-        (2) if business goal is balanced personalization, then use 0.33, 0.33, 0.33.
-        A user's interest in a niche cult classic (Tail) as equally important as
-         their interest in a blockbuster (Head).  The pipeline HPO uses composite_ndcg_k as its
-         selector and so the result is user's mainsteam and personal preferences.
-        
-        """
-        name = f"{name}_{k}"
-        super(NDCGAtKComposite, self).__init__(name=name, **kwargs)
-        self.w_head = w_head
-        self.w_torso = w_torso
-        self.w_tail = w_tail
-        self.k = k
-        self.use_composite = use_composite
-        if use_composite:
-            self.ndcg_head = NDCGAtKForInBatchHead(k=k)
-            self.ndcg_torso = NDCGAtKForInBatchTorso(k=k)
-            self.ndcg_tail = NDCGAtKForInBatchTail(k=k)
-        else:
-            self.ndcg = NDCGAtKForInBatchNegatives(k=k)
-    
-    def update_state(self, y_true, y_pred, sample_weight=None,
-            batch_movie_tiers:tf.Tensor = None):
-        if self.use_composite:
-            self.ndcg_head.update_state(y_true, y_pred, batch_movie_tiers, sample_weight)
-            self.ndcg_torso.update_state(y_true, y_pred, batch_movie_tiers, sample_weight)
-            self.ndcg_tail.update_state(y_true, y_pred, batch_movie_tiers, sample_weight)
-        else:
-            self.ndcg.update_state(y_true, y_pred, sample_weight)
-    
-    def result(self):
-        if self.use_composite:
-            s0 = self.w_head * self.ndcg_head.result()
-            s1 = self.w_torso * self.ndcg_torso.result()
-            s2 = self.w_tail * self.ndcg_tail.result()
-            return s0 + s1 + s2
-        else:
-            return self.ndcg.result()
-        
-    def reset_state(self):
-        if self.use_composite:
-            self.ndcg_head.reset_state()
-            self.ndcg_torso.reset_state()
-            self.ndcg_tail.reset_state()
-        else:
-            self.ndcg.reset_state()
-        
-    def get_config(self):
+      def get_config(self):
         # Fix: super(NDCGAtKComposite).get_config() throws an error in python.
         # Use super().get_config()
         config = super().get_config()
@@ -2106,17 +2222,16 @@ class ResetFrequencyTablesCallback(tf.keras.callbacks.Callback):
                 print("\nWarning: Model does not have 'reset_frequency_tables' method.")
                 
 def get_stop_early_callback(k: int):
-    # use patience=3 or so with batch_size 1024, and patience=5 with batch_size 2048
-    # for val_ndcg_{k} and batch_size=2056, min_delta should be 0.005 (random)
-    # for val_mean_loss, min_delta=0.015 and patience=3
-    # for cal_composite_ndcg_k
     # we use val_composite_ndcg_k in order to better recommend items to the tail users
     # by including them in the NDCG score.
     # note that the val_composite_ndcg_k peaks well before ndcg_k and the other metrics,
     #  because those are maximized by popularity.
     # for ndcg, min_delta=0.0005 is what was used before.  increasing it now to stop earlier at level similar to test data
     return keras.callbacks.EarlyStopping(
-        monitor=f'val_composite_ndcg_{k}', min_delta=0.002, patience=2, mode="max",
+        monitor=f'val_composite_ndcg_{k}',
+        min_delta=0.0008,
+        patience=3,
+        mode="max",
         start_from_epoch=1,
         restore_best_weights=True)
 
