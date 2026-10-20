@@ -32,17 +32,17 @@
 
 # **** EDIT THIS PATH AS NEEDED ******
 
-export PIPELINE_DATA_DIR="$(realpath -m ../TMP45/bin/rs_pipeline)"
-export OUTPUT_BASE_DIR="$(realpath -m ../TMP45)"
-export TAG="low_temp"
+export PIPELINE_DATA_DIR="$(realpath -m ../TMP42/bin/rs_pipeline)"
+export OUTPUT_BASE_DIR="$(realpath -m ../TMP42)"
+export TAG="fixd[32,16]"
 
 unset PIPELINE_DATA_DIR_BASELINE
 unset OUTPUT_BASE_DIR_BASELINE
 unset TAG_BASELINE
 #if have a baseline model such as previous bes to compare PIPELINE_DATA_DIR to, set these vars
-#export PIPELINE_DATA_DIR_BASELINE="$(realpath -m ../TMP10/bin/rs_pipeline)"
-#export OUTPUT_BASE_DIR_BASELINE="$(realpath -m ../TMP10)"
-#export TAG_BASELINE="high_temp"
+export PIPELINE_DATA_DIR_BASELINE="$(realpath -m ../TMP50/bin/rs_pipeline)"
+export OUTPUT_BASE_DIR_BASELINE="$(realpath -m ../TMP50)"
+export TAG_BASELINE="HPO[32,16]"
 
 #======= generate the train, val, test curves ====================
 # writes to ${OUTPUT_BASE_DIR}/pngs
@@ -60,10 +60,11 @@ cd ../retrieval
 
 # writes to ${OUTPUT_BASE_DIR}/post_training_analysis
 ## to compare to previous best model use:
+#   --analyze_and_compare \
 if [ -n "$PIPELINE_DATA_DIR_BASELINE" ]; then
     echo "compare models $TAG and $TAG_BASELINE"
     python3 src/test/python/movie_lens_retrieval/post_training_compare_models.py \
-    --analyze_and_compare \
+    --compare \
     --PIPELINE_DATA_DIR_1=$PIPELINE_DATA_DIR \
     --OUTPUT_BASE_DIR_1=$OUTPUT_BASE_DIR \
     --TAG_1=$TAG \
