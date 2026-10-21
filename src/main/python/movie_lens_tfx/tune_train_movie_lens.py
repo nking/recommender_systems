@@ -99,6 +99,7 @@ def _make_query_model(n_users : int, layer_sizes : list,
         def get_config(self):
             config = super(CyclicalEncoding, self).get_config()
             config.update({"max_val": self.max_val})
+            return config
     
     @keras.utils.register_keras_serializable(package=package)
     class UserModel(keras.Model):
@@ -930,16 +931,17 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
             masked_raw_logits: tf.Tensor,
             user_mask: tf.Tensor,
             movie_mask: tf.Tensor,
-            ild_top_k: int = 100
+            ild_top_k: int = 20
     ) -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor]:
         """
         Computes in-batch Hypersphere Uniformity (Wang & Isola, t=2.0) across distinct
-        users/movies, In-Batch Top-K Intra-List Diversity (ILD), and Softmax Column Entropy.
+        users/movies, In-Batch Top-K Intra-List Diversity (ILD@20 over distinct candidate movies),
+        and Softmax Column Entropy.
         """
         batch_size = tf.shape(user_embeddings)[0]
         b_float = tf.cast(batch_size, tf.float32)
         
-        # Distinct-Entity Hypersphere Uniformity: log E_{i != j}[exp(-2 * ||x_i - x_j||^2)]
+        # 1. Distinct-Entity Hypersphere Uniformity: log E_{i != j}[exp(-2 * ||x_i - x_j||^2)]
         # Use logical_not(user_mask) and logical_not(movie_mask) so duplicate occurrences
         # of the same user_id or movie_id in the batch are excluded along with the diagonal.
         u_sim = tf.matmul(user_embeddings, user_embeddings, transpose_b=True)
@@ -958,50 +960,59 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         m_mean_potential = tf.reduce_sum(m_kernel) / tf.maximum(
             tf.reduce_sum(valid_m_mask), 1.0)
         
-        #L_unif(U)
+        # L_unif(U) and L_unif(M)
         user_uniformity = tf.math.log(tf.maximum(u_mean_potential, 1e-12))
-        #L_unif(M)
         movie_uniformity = tf.math.log(tf.maximum(m_mean_potential, 1e-12))
         
-        # In-Batch Local Intra-List Diversity (ILD@K) to detect Island Collapse
+        # 2. In-Batch Local Intra-List Diversity (ILD@20) over DISTINCT candidate movies in the batch
+        # Because popular movies appear multiple times in a 2048 batch, mask out duplicate columns
+        # (any column j that has the same movie_id as an earlier column c < j) so top_k selects 20 unique movies!
+        strict_lower_movie = tf.logical_and(
+            tf.linalg.band_part(movie_mask, -1, 0),
+            tf.logical_not(tf.eye(batch_size, dtype=tf.bool))
+        )
+        is_dup_movie_col = tf.reduce_any(strict_lower_movie, axis=1)  # [B]
+        dedup_raw_logits = tf.where(
+            tf.expand_dims(is_dup_movie_col, axis=0),
+            tf.constant(-1e9, dtype=masked_raw_logits.dtype),
+            masked_raw_logits
+        )
+        
         k_actual = tf.minimum(ild_top_k, batch_size)
-        _, top_indices = tf.math.top_k(masked_raw_logits, k=k_actual)  # [B, k_actual]
+        _, top_indices = tf.math.top_k(dedup_raw_logits, k=k_actual)  # [B, k_actual]
         top_k_embs = tf.gather(movie_embeddings, top_indices)  # [B, k_actual, D]
         slate_sim = tf.matmul(top_k_embs, top_k_embs, transpose_b=True)  # [B, k_actual, k_actual]
         slate_dist = 1.0 - tf.clip_by_value(slate_sim, -1.0, 1.0)
         k_eye = tf.expand_dims(tf.eye(k_actual, dtype=tf.float32), axis=0)
         slate_dist = slate_dist * (1.0 - k_eye)
         k_float = tf.cast(k_actual, tf.float32)
-        #adding Local Intra-List Diversity to prevent the HPO from prefering global uniformity that
-        #   isn't evenly spread, like 4 tight, isolated islands located at the 4 corners of a tetrahedron.
-        #Local Intra-List Diversity
         in_batch_ild = tf.reduce_mean(
             tf.reduce_sum(slate_dist, axis=[1, 2]) / tf.maximum(
                 k_float * (k_float - 1.0), 1.0)
         )
         
-        # Soft In-Batch Hubness Penalty (Normalized Column Exposure Entropy in [0, 1])
-        row_probs = tf.nn.softmax(masked_raw_logits / self.temperature,
-            axis=-1)
+        # 3. Soft In-Batch Hubness Penalty (Normalized Column Exposure Entropy in [0, 1])
+        row_probs = tf.nn.softmax(masked_raw_logits / self.temperature, axis=-1)
         col_exposure = tf.reduce_mean(row_probs, axis=0)
         col_entropy = -tf.reduce_sum(
             col_exposure * tf.math.log(tf.maximum(col_exposure, 1e-12))
         ) / tf.maximum(tf.math.log(b_float), 1e-6)
         
-        # Combined Geometry Health Multiplier in [0.5, 1.0] for HPO
-        # - user_spread = 1 - exp(L_unif(U)) in [0, 1] (~0.94 when healthy, drops when clumped)
-        # - ild_factor = clip(in_batch_ild / 0.32, 0.5, 1.0) (1.0 when ILD >= 0.32, penalizes island collapse < 0.32)
-        # Inside _compute_batch_geometry_stats:
-        # 1.0 when L_unif(U) <= -2.65 (1 - exp(-2.65) = 0.93); penalizes clumping > -2.65
-        user_spread = tf.clip_by_value((1.0 - u_mean_potential) / 0.93, 0.5,1.0)
-        # 1.0 when L_unif(M) <= -2.52 (1 - exp(-2.52) = 0.92); penalizes clumping > -2.52
-        movie_spread = tf.clip_by_value((1.0 - m_mean_potential) / 0.92, 0.5, 1.0)
-        # 1.0 when in_batch_ild >= 0.32; penalizes island collapse < 0.32
-        ild_factor = tf.clip_by_value(in_batch_ild / 0.32, 0.5, 1.0)
-        # 1.0 when col_entropy >= 0.95; penalizes extreme hub domination < 0.95
-        ent_factor = tf.clip_by_value(col_entropy / 0.95, 0.7, 1.0)
+        # 4. Threshold-Normalized Convex Combination in [0.75, 1.0]:
+        # Using a weighted sum instead of a 4-way product prevents early warmup epochs from compounding
+        # to ~0.31 (which would trigger false pruning in MinimumThresholdCallback), while still
+        # penalizing island collapse (ILD < 0.32 or L_unif > -2.5) by 7% to 25% during HPO.
+        user_spread = tf.clip_by_value((1.0 - u_mean_potential) / 0.93, 0.75, 1.0)
+        movie_spread = tf.clip_by_value((1.0 - m_mean_potential) / 0.92, 0.75, 1.0)
+        ild_factor = tf.clip_by_value(in_batch_ild / 0.32, 0.75, 1.0)
+        ent_factor = tf.clip_by_value(col_entropy / 0.95, 0.75, 1.0)
         
-        geom_multiplier = user_spread * movie_spread * ild_factor * ent_factor
+        geom_multiplier = (
+            0.25 * user_spread +
+            0.25 * movie_spread +
+            0.35 * ild_factor +
+            0.15 * ent_factor
+        )
         
         return user_uniformity, movie_uniformity, in_batch_ild, col_entropy, geom_multiplier
     
@@ -1106,6 +1117,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         output = {m.name: m.result() for m in self.metrics}
         #DEBUG: =====
         output.update({
+            "geom_mult": geom_mult,
+            "batch_ild": batch_ild,
             "pre_logit_max": pre_logit_max,
             "pre_logit_min": pre_logit_min,
             "pre_logit_mean": pre_logit_mean,
@@ -1180,6 +1193,8 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         logit_min = tf.reduce_min(logits)
         logit_mean = tf.reduce_mean(logits)
         output.update({
+            "geom_mult": geom_mult,
+            "batch_ild": batch_ild,
             "logit_max": logit_max,
             "logit_min": logit_min,
             "logit_mean": logit_mean
@@ -1944,20 +1959,11 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     optimizer = keras.optimizers.AdamW(learning_rate=lr_scheduler,
         weight_decay=hp.get("weight_decay"))
 
-    #collect variables that already have L2 regularization
-    l2_regularized_vars = (
-        model.query_model.user_model.user_emb.trainable_variables +
-        model.candidate_model.movie_model.movie_emb.trainable_variables
-    )
-    if model.query_model.user_model.yr_z_emb is not None:
-        l2_regularized_vars += model.query_model.user_model.yr_z_emb.trainable_variables
-    #Exclude L2-regularized embeddings, LayerNormalization (gamma/beta), and any biases from AdamW weight decay
+    # Exclude ONLY LayerNormalization (gamma/beta) and biases from AdamW weight decay.
+    # Because explicit l2(1e-3) regularizers are disabled on user_emb, movie_emb, and yr_z_emb,
+    # those embeddings MUST remain included in AdamW weight_decay so they are properly regularized!
     optimizer.exclude_from_weight_decay(
-        var_list=l2_regularized_vars,
         var_names=[
-            #"user_id_embedding",
-            #"movie_id_embedding",
-            #"yr_z_emb_dense",
             "query_ln_",
             "cand_ln_",
             "layer_normalization",
@@ -2009,16 +2015,9 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   #    and hence, memorizing data.  in this model we see strong over-fitting when weight_decay is as low as 1e-4
   
   if not use_fixed:
-      hp.Float('learning_rate', 1e-4, 1e-3, sampling='log')
-      #hp.Float('weight_decay', 1e-4, 1e-2, sampling='log')
-      hp.Float('weight_decay', 0.005, 0.05, sampling='log')
-      #hp.Float('drop_rate', min_value=0.1, max_value=0.4, default=0.3)
-      hp.Float('drop_rate', min_value=0.1, max_value=0.4, default=0.35)
-      #hp.Float('log_q_correction_factor', min_value=0.1, max_value=1.0, default=0.5)
-      # layers_sizes is a list of ints, so encode each list as a string, choices can only be int,float,bool,str
-      # the last layer in layer_sizes is the query and candidate embedding models' output dimensions-1
-      #hp.Choice("layer_sizes", values=[json.dumps([32]), json.dumps([64, 32])], default=json.dumps([32]))
-      ## temporarily changing to small layer_sizes to have under-fit curves to compare to
+      hp.Float('learning_rate', 5e-4, 1e-3, sampling='log', default=1e-3)
+      hp.Float('weight_decay', 0.005, 0.05, sampling='log', default=0.01)
+      hp.Float('drop_rate', min_value=0.15, max_value=0.35, step=0.05, default=0.25)
       hp.Fixed("layer_sizes", value=json.dumps([32,16]))
   else:
       hp.Fixed('learning_rate', 0.001)
@@ -2049,8 +2048,8 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
           hp.Fixed("bias_corr_alpha", 0.05)
           hp.Fixed('temperature', 0.25)
       else:
-          hp.Choice("bias_corr_alpha", values=[0.01, 0.05, 0.1], default=0.05)
-          hp.Float('temperature', 0.05, 0.30, step=0.025)
+          hp.Choice("bias_corr_alpha", values=[0.025, 0.05, 0.1], default=0.05)
+          hp.Float('temperature', 0.175, 0.275, step=0.025, default=0.25)
   else:
       hp.Choice("bias_corr_alpha", values=[0.1], default=0.1)  # 0.01, 0.05, 0.1
       hp.Fixed("temperature", value=1.0)
@@ -2222,15 +2221,12 @@ class ResetFrequencyTablesCallback(tf.keras.callbacks.Callback):
                 print("\nWarning: Model does not have 'reset_frequency_tables' method.")
                 
 def get_stop_early_callback(k: int):
-    # we use val_composite_ndcg_k in order to better recommend items to the tail users
-    # by including them in the NDCG score.
-    # note that the val_composite_ndcg_k peaks well before ndcg_k and the other metrics,
-    #  because those are maximized by popularity.
-    # for ndcg, min_delta=0.0005 is what was used before.  increasing it now to stop earlier at level similar to test data
+    # we use val_composite_ndcg_k (with threshold-normalized geometry multiplier)
+    # patience=2 with min_delta=0.0008 prevents dead-end trials from dragging out HPO runtime.
     return keras.callbacks.EarlyStopping(
         monitor=f'val_composite_ndcg_{k}',
         min_delta=0.0008,
-        patience=3,
+        patience=2,
         mode="max",
         start_from_epoch=1,
         restore_best_weights=True)
@@ -2488,10 +2484,11 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
   print(f'invoked_by_trainer={invoked_by_trainer}')
   irred_error_dict = None
   if invoked_by_trainer:
-      test_dataset : tf.data.Dataset = run_test_eval(model, fn_args, tf_transform_output,
+      test_dataset, full_test_results = run_test_eval(model, fn_args, tf_transform_output,
           GLOBAL_BATCH_SIZE, total_epochs_run, TEST_STEPS_PER_EPOCH)
       irred_error_dict = run_evals_and_calc_irred(train_dataset, eval_dataset, test_dataset,
-          hp, TRAIN_STEPS_PER_EPOCH, EVAL_STEPS_PER_EPOCH, TEST_STEPS_PER_EPOCH, NUM_EPOCHS, GLOBAL_BATCH_SIZE)
+          hp, TRAIN_STEPS_PER_EPOCH, EVAL_STEPS_PER_EPOCH, TEST_STEPS_PER_EPOCH, NUM_EPOCHS, GLOBAL_BATCH_SIZE,
+          full_test_results=full_test_results)
       print(f"irred_error_dict={irred_error_dict}")
   
   #TODO: consider adding the vocabularies as assets:
@@ -2855,7 +2852,7 @@ def run_test_eval(model, fn_args, tf_transform_output,
           for metric_name, metric_value in test_results.items():
               tf.summary.scalar(metric_name, metric_value,
                   step=total_epochs_run)
-      return test_dataset
+      return test_dataset, test_results
 
 def get_deterministic_hash_filter(frac) -> Callable[[Any, Any], tf.Tensor]:
     # We map the hash to a large number of buckets to support fine fraction percentages
@@ -2877,7 +2874,8 @@ def get_deterministic_hash_filter(frac) -> Callable[[Any, Any], tf.Tensor]:
 def run_evals_and_calc_irred(train_dataset: tf.data.Dataset,
         eval_dataset: tf.data.Dataset,
         test_dataset: tf.data.Dataset, hp,
-        TRAIN_STEPS_PER_EPOCH, EVAL_STEPS_PER_EPOCH, TEST_STEPS_PER_EPOCH, NUM_EPOCHS, BATCH_SIZE) -> Dict[str, Any]:
+        TRAIN_STEPS_PER_EPOCH, EVAL_STEPS_PER_EPOCH, TEST_STEPS_PER_EPOCH, NUM_EPOCHS, BATCH_SIZE,
+        full_test_results: Dict[str, Any] = None) -> Dict[str, Any]:
     
     """
     the method applies the principle of neural scaling laws / empirical learning curves which says that
@@ -2911,12 +2909,16 @@ def run_evals_and_calc_irred(train_dataset: tf.data.Dataset,
     all_test_results = []
     for frac in fractions:
         n_train = math.ceil(frac * hp.get("num_train"))
+        if frac == 1.0 and full_test_results is not None:
+            print(f"--- Reusing 100% Full-Data Trainer Evaluation for irred err calcs (N={n_train}) ---")
+            ns.append(n_train)
+            all_test_results.append(full_test_results)
+            continue
         print(f"--- Training Model on {frac * 100}% of Data for irred err calcs (N={n_train}, BATCH_SIZE={BATCH_SIZE})---")
         if frac < 1.0:
             ## A deterministic way to slice tf.data is using a filter + hash,
             hash_filter = get_deterministic_hash_filter(frac)
             subset_dataset = (train_dataset.unbatch().filter(hash_filter).batch(BATCH_SIZE).prefetch(tf.data.AUTOTUNE))
-            
         else:
             subset_dataset = train_dataset
         
@@ -3199,16 +3201,21 @@ def tuner_fn(fn_args) -> tfx.components.TunerFnResult:
   # alpha = 1e-3: Setting alpha = 1e-3 acts as a gentle noise-smoothing filter. Since validation metrics like ranking NDCG exhibit micro-variance between epochs, this prevents the GP from over-fitting to minor validation jitter.
   print("construct tuner BayesianOptimization")
   if not hp.get("use_fixed"):
-      #when get_default_hyperparameters variable use_fixed = False,
-      # this is used to find best hyperparatmers
+      # With the redundant BASELINE pipeline stage removed, we can afford the full 40-trial
+      # budget (~2.2 hours at ~24s/epoch) for the 5D search space:
+      # - num_initial_points=13 (2*d + 3 rule of thumb for d=5) builds a well-conditioned
+      #   Gaussian Process surrogate across the 5D space before exploitation begins.
+      # - max_trials=40 provides 27 guided GP-UCB acquisitions to map the non-linear interaction
+      #   between ranking accuracy (tier NDCGs) and hypersphere geometry (uniformity + ILD@20).
+      # - beta=3.2 balances multi-basin exploration with local exploitation.
       tuner = keras_tuner.BayesianOptimization(
           _make_2tower_keras_model,
           objective=keras_tuner.Objective(f'val_composite_ndcg_{hp.get("k")}', 'max'),
           hyperparameters=hp,
           alpha=1e-3,
-          beta=3.3, #defaut 2.6;  4.0 for more exploration.
-          num_initial_points=13, #30
-          max_trials=40, #should be 2 to 3 times num_initial_points
+          beta=3.2,
+          num_initial_points=13,
+          max_trials=40,
           allow_new_entries=False,
           directory=fn_args.working_dir,
           project_name='movie_lens_2t_tuning_bayesian')

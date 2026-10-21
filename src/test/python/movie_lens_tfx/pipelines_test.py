@@ -17,6 +17,9 @@ from ml_metadata.proto import metadata_store_pb2
 from ml_metadata.metadata_store import metadata_store
 from tensorflow_transform.tf_metadata import schema_utils
 
+import movie_lens_tfx
+from movie_lens_tfx.PipelineComponentsFactoryShort import \
+    PipelineComponentsFactoryShort
 from movie_lens_tfx.tune_train_movie_lens import *
 
 from helper import *
@@ -69,7 +72,7 @@ class PipelinesTest(tf.test.TestCase):
         self.BATCH_SIZE = 10 #0.1*100
     
     def test_main_model_pipeline(self):
-        print(f'run main user_model model WITH bias corretions')
+        print(f'run main user_model model WITH bias corrections')
         
         test_num = "MAIN_USER_MOVIE"
         
@@ -534,6 +537,375 @@ class PipelinesTest(tf.test.TestCase):
             
             read_prediction_logs_from_directory(inference_result_uri)
     
+    def test_main_model_short_pipeline(self):
+        print(f'run main user_modelshort pipeline')
+        
+        test_num = "MAIN_USER_MOVIE"
+        
+        run_bulk_infer = True
+        
+        PIPELINE_NAME = 'TestPipeline_short'
+        # output_data_dir = os.path.join(os.environ.get('TEST_UNDECLARED_OUTPUTS_DIR',self.get_temp_dir()),self._testMethodName)
+        output_data_dir = os.path.join(get_bin_dir(), PIPELINE_NAME,
+            test_num)
+        PIPELINE_ROOT = output_data_dir
+        METADATA_PATH = os.path.join(PIPELINE_ROOT, 'tfx_metadata',
+            'metadata.db')
+        
+        # remove results from previous test runs:
+        try:
+            logging.debug(f"removing: {PIPELINE_ROOT}")
+            shutil.rmtree(os.path.join(get_bin_dir(), PIPELINE_NAME))
+        except OSError as e:
+            pass
+        
+        os.makedirs(os.path.join(PIPELINE_ROOT, 'tfx_metadata'),
+            exist_ok=True)
+        
+        ENABLE_CACHE = True
+        
+        # metadata_connection_config = metadata_store_pb2.ConnectionConfig()
+        # metadata_connection_config.sqlite.SetInParent()
+        # metadata_connection = metadata.Metadata(metadata_connection_config)
+        metadata_connection_config = metadata.sqlite_metadata_connection_config(
+            METADATA_PATH)
+        
+        store = metadata_store.MetadataStore(metadata_connection_config)
+        
+        if get_kaggle():
+            tr_dir = "/kaggle/working/"
+        else:
+            tr_dir = os.path.join(get_project_dir(),
+                "src/main/python/movie_lens_tfx")
+        
+        serving_model_dir = os.path.join(PIPELINE_ROOT, 'serving_model')
+        query_model_dir = os.path.join(PIPELINE_ROOT, 'serving_query_model')
+        candidate_model_dir = os.path.join(PIPELINE_ROOT,
+            'serving_candidate_model')
+        os.makedirs(serving_model_dir, exist_ok=True)
+        os.makedirs(query_model_dir, exist_ok=True)
+        os.makedirs(candidate_model_dir, exist_ok=True)
+        
+        infiles_dict_of_dicts_ser, split_sizes = get_contrastive_split_infiles_set(
+            ds=DataSize.TINY3)
+        
+        git_hash = None
+        try:
+            import subprocess
+            process = subprocess.Popen(['git', 'rev-parse', 'HEAD'],
+                shell=False,
+                stdout=subprocess.PIPE)
+            git_hash = process.communicate()[0].strip().decode()
+        except Exception as ex:
+            pass
+        
+        movie_tiers_uri = os.path.join(get_project_dir(),
+            "src/test/resources/movie_tiers.json")
+        
+        pipeline_factory = PipelineComponentsFactoryShort(
+            num_train_examples=split_sizes['train'],
+            num_val_examples=split_sizes['val'],
+            num_test_examples=split_sizes['test'],
+            infiles_dict_ser=infiles_dict_of_dicts_ser,
+            output_config_ser=None,
+            transform_dir=tr_dir, n_users=self.n_users,
+            n_movies=self.n_movies,
+            n_genres=self.n_genres,
+            min_eval_size=self.MIN_EVAL_SIZE,
+            batch_size=self.BATCH_SIZE, num_epochs=2,
+            serving_model_dir=serving_model_dir,
+            git_hash=git_hash,
+            movie_tiers_uri=movie_tiers_uri,
+        )
+        
+        SETUP_FILE_PATH = os.path.join(get_project_dir(), 'setup.py')
+        
+        beam_pipeline_args = [
+            '--direct_running_mode=multi_processing',
+            '--direct_num_workers=0',
+            f'--setup_file={SETUP_FILE_PATH}',
+        ]
+        
+        components = pipeline_factory.build_components(
+            movie_lens_tfx.PipelineComponentsFactoryShort.PIPELINE_TYPE.PRODUCTION)
+        # simulate experimentation of one model family
+        my_pipeline = tfx.dsl.Pipeline(
+            pipeline_name=PIPELINE_NAME,
+            pipeline_root=PIPELINE_ROOT,
+            components=components,
+            enable_cache=ENABLE_CACHE,
+            metadata_connection_config=metadata_connection_config,
+            beam_pipeline_args=beam_pipeline_args,
+        )
+        
+        tfx.orchestration.LocalDagRunner().run(my_pipeline)
+        logging.debug("PRODUCTION pipeline finished")
+        
+        # Use built-in conditional features of KFP, Airflow, etc. to enable conditional logic in the workflow.
+        # evaluate models and if passed,
+        # then human verification, then if passed, push to serving
+        
+        pusher_type = store.get_execution_type(
+            "tfx.components.pusher.component.Pusher")
+        executions = store.get_executions_by_type(pusher_type.name)
+        latest_execution = max(executions,
+            key=lambda x: x.last_update_time_since_epoch)
+        # Get all events associated with this execution
+        events = store.get_events_by_execution_ids([latest_execution.id])
+        # Filter for 'OUTPUT' events to find the resulting artifact
+        output_artifact_ids = [
+            event.artifact_id for event in events
+            if event.type == metadata_store_pb2.Event.OUTPUT
+        ]
+        artifacts = store.get_artifacts_by_id(output_artifact_ids)
+        # print(f'artifacts={artifacts}', flush=True)
+        # Filter for the artifact specifically named 'pushed_model'
+        pushed_model_artifact = next(
+            (a for a in artifacts if a.type == "PushedModel"), None)
+        if pushed_model_artifact:
+            model_uri = pushed_model_artifact.uri
+            print(f"Pushed Model URI: {model_uri}")
+        else:
+            self.fail("No pushed model artifact found.")
+        
+        model_artifacts = store.get_artifacts_by_type("Model")
+        print(f"model_artifacts={model_artifacts}", flush=True)
+        trainer_model_artifact = model_artifacts[-1]
+        if trainer_model_artifact:
+            trainer_model_uri = trainer_model_artifact.uri
+            print(f"Trainer Model URI: {trainer_model_uri}")
+        else:
+            self.fail("No Trainer Model artifact found.")
+        
+        # --- get the transformed test dataset to check that can run the model with expected input structure
+        examples_list = store.get_artifacts_by_type("Examples")
+        for artifact in examples_list:
+            if "transformed_examples" in artifact.uri:
+                transfomed_examples_uri = os.path.join(artifact.uri,
+                    "Split-test")
+                break
+        for artifact in examples_list:
+            if "MovieLensSplitExampleGen" in artifact.uri:
+                raw_examples_uri = os.path.join(artifact.uri,
+                    "Split-test")
+                break
+        print(f"raw_examples_uri={raw_examples_uri}")
+        logging.debug(f"transfomed_examples_uri={transfomed_examples_uri}")
+        
+        latest_schema_artifact_list = sorted(
+            store.get_artifacts_by_type("Schema"),
+            key=lambda x: x.last_update_time_since_epoch, reverse=True)
+        raw_schema_uri = None
+        transformed_schema_uri = None
+        for artifact in latest_schema_artifact_list:
+            if "pre_transform_schema" in artifact.uri and raw_schema_uri is None:
+                raw_schema_uri = artifact.uri
+            elif "post_transform_schema" in artifact.uri and transformed_schema_uri is None:
+                transformed_schema_uri = artifact.uri
+        
+        transformed_schema_file_path = \
+        [os.path.join(transformed_schema_uri, name) for name in
+            os.listdir(transformed_schema_uri)][0]
+        raw_schema_file_path = [os.path.join(raw_schema_uri, name) for name in
+            os.listdir(raw_schema_uri)][0]
+        
+        transformed_schema = tfx.utils.parse_pbtxt_file(
+            transformed_schema_file_path, schema_pb2.Schema())
+        transformed_feature_spec = schema_utils.schema_as_feature_spec(
+            transformed_schema).feature_spec
+        
+        raw_schema = tfx.utils.parse_pbtxt_file(raw_schema_file_path,
+            schema_pb2.Schema())
+        raw_feature_spec = schema_utils.schema_as_feature_spec(
+            raw_schema).feature_spec
+        
+        del raw_feature_spec[LABEL_KEY]
+        del transformed_feature_spec[LABEL_KEY]
+        
+        file_paths = [os.path.join(transfomed_examples_uri, name) for
+            name in os.listdir(transfomed_examples_uri)]
+        test_trans_ds_ser = tf.data.TFRecordDataset(file_paths,
+            compression_type="GZIP")
+        file_paths = [os.path.join(raw_examples_uri, name) for name in
+            os.listdir(raw_examples_uri)]
+        test_raw_ds_ser = tf.data.TFRecordDataset(file_paths,
+            compression_type="GZIP")
+        
+        def parse_tf_example(example_proto, feature_spec):
+            return tf.io.parse_single_example(example_proto, feature_spec)
+        
+        test_trans_ds = test_trans_ds_ser.map(
+            lambda x: parse_tf_example(x, transformed_feature_spec))
+        test_raw_ds = test_raw_ds_ser.map(
+            lambda x: parse_tf_example(x, raw_feature_spec))
+        print(f'test_raw_ds.element_spec={test_raw_ds.element_spec}')
+        
+        # test_trans_ds2 = tf.io.parse_example(test_trans_ds_ser, transformed_feature_spec) this fails
+        
+        print(f'trainer_model_uri ={trainer_model_uri}', flush=True)
+        path = Path(trainer_model_uri)
+        serving_query_dir = str(path / "serving_query_model")
+        serving_candidate_dir = str(path / "serving_candidate_model")
+        
+        loaded_saved_model = tf.saved_model.load(model_uri)
+        logging.debug(
+            f'test: loaded SavedModel signatures: {loaded_saved_model.signatures}')
+        infer_twotower = loaded_saved_model.signatures["serving_default"]
+        infer_query = loaded_saved_model.signatures["serving_query"]
+        infer_candidate = loaded_saved_model.signatures["serving_candidate"]
+        transform_raw = loaded_saved_model.signatures["transform_features"]
+        infer_query_for_dict = loaded_saved_model.signatures[
+            "serving_query_dict"]
+        infer_candidate_for_dict = loaded_saved_model.signatures[
+            "serving_candidate_dict"]
+        infer_default_for_dict = loaded_saved_model.signatures[
+            "serving_default_dict"]
+        
+        assert_assets_extra_has_git_hash(model_uri)
+        
+        loaded_saved_query_model = tf.saved_model.load(serving_query_dir)
+        infer_query_for_dict_model = loaded_saved_query_model.signatures[
+            "serving_default"]
+        loaded_saved_candidate_model = tf.saved_model.load(
+            serving_candidate_dir)
+        infer_candidate_for_dict_model = \
+        loaded_saved_candidate_model.signatures["serving_default"]
+        
+        inputs = {
+            "age": tf.constant([[25]], dtype=tf.int64),
+            "gender": tf.constant([[b'F']], dtype=tf.string),
+            "occupation": tf.constant([[10]], dtype=tf.int64),
+            "timestamp": tf.constant([[1720880000]], dtype=tf.int64),
+            "user_id": tf.constant([[99]], dtype=tf.int64)
+        }
+        results = infer_query_for_dict_model(**inputs)['outputs']
+        
+        expected_layer_sizes = get_best_fitting_layer_sizes(store)
+        expeected_embed_dim = json.loads(expected_layer_sizes)[0]
+        
+        self.assertTrue(len(results[0]) % 4 == 0)
+        results = infer_query_for_dict(**inputs)['outputs']
+        self.assertTrue(len(results[0]) % 4 == 0)
+        
+        inputs = {
+            "movie_id": tf.constant([[6054]], dtype=tf.int64),
+            "genres": tf.constant([[b'Documentary']], dtype=tf.string),
+        }
+        results = infer_candidate_for_dict_model(**inputs)['outputs']
+        self.assertTrue(len(results[0]) % 4 == 0)
+        results = infer_candidate_for_dict(**inputs)['outputs']
+        self.assertTrue(len(results[0]) % 4 == 0)
+        
+        print(f'INFERENCE TEST START')
+        
+        ## test the signatures for raw data
+        TT_INPUT_KEY = \
+        list(infer_twotower.structured_input_signature[1].keys())[0]
+        Q_INPUT_KEY = list(infer_query.structured_input_signature[1].keys())[0]
+        C_INPUT_KEY = \
+        list(infer_candidate.structured_input_signature[1].keys())[0]
+        TR_INPUT_KEY = \
+        list(transform_raw.structured_input_signature[1].keys())[0]
+        BATCH_SIZE = 1
+        batched_ds = test_raw_ds_ser.batch(BATCH_SIZE)
+        predictions = []
+        query_embeddings = []
+        candidate_embeddings = []
+        transformed = []
+        try:
+            print('SERIALIZED signatures')
+            for serialized_batch in batched_ds:
+                tt_input_dict = {TT_INPUT_KEY: serialized_batch}
+                predictions.append(infer_twotower(**tt_input_dict)['outputs'])
+                q_input_dict = {Q_INPUT_KEY: serialized_batch}
+                query_embeddings.append(infer_query(**q_input_dict)['outputs'])
+                c_input_dict = {C_INPUT_KEY: serialized_batch}
+                candidate_embeddings.append(
+                    infer_candidate(**c_input_dict)['outputs'])
+                tr_input_dict = {TR_INPUT_KEY: serialized_batch}
+                transformed.append(transform_raw(**tr_input_dict))
+            
+            # self.assertEqual(len(predictions), num_rows)
+            # self.assertEqual(len(query_embeddings), num_rows)
+            # self.assertEqual(len(candidate_embeddings), num_rows)
+            # self.assertEqual(len(transformed), num_rows)
+            self.assertTrue(len(predictions) > 0)
+            self.assertTrue(len(query_embeddings) > 0)
+            self.assertTrue(len(candidate_embeddings) > 0)
+            self.assertTrue(len(transformed) > 0)
+        except Exception as e:
+            print(f'ERROR during infer: {e}')
+        
+        BATCH_SIZE = 2
+        test_raw_ds = test_raw_ds_ser.batch(BATCH_SIZE)
+        query_embeddings = []
+        for serialized_batch in batched_ds:
+            q_input_dict = {Q_INPUT_KEY: serialized_batch}
+            query_embeddings.append(infer_query(**q_input_dict)['outputs'])
+            break
+        self.assertTrue(len(query_embeddings) > 0)
+        
+        x = test_raw_ds.batch(BATCH_SIZE)
+        
+        # test converting input dictionary of numpy arrays or tensors into serialized tf_examples for use with serving
+        fake_inputs_np = {
+            'age': np.array([[45], [35]]),
+            'gender': np.array([[b'M'], [b'M']]),
+            'genres': np.array([[b'Action|Drama'], [b'Action|Drama']]),
+            'movie_id': np.array([[3418], [3418]]),
+            'occupation': np.array([[7], [1]]),
+            'rating': np.array([[4], [3]]),
+            'timestamp': np.array([[978294260], [978234810]]),
+            'user_id': np.array([[4], [7]])}
+        fake_inputs_dict_ser = convert_dict_inputs_to_tfexample_ser(
+            fake_inputs_np)
+        self.assertIsNotNone(fake_inputs_dict_ser)
+        
+        print("Inference completed.")
+        # ====================================================
+        
+        eval_list = store.get_artifacts_by_type("ModelEvaluation")
+        print(f"model evaluation list={eval_list}")
+        latest_eval_artifact = sorted(eval_list, key=lambda
+                x: x.create_time_since_epoch, reverse=True)[0]
+        # or use last_update_time_since_epoch
+        latest_eval_uri = latest_eval_artifact.uri
+        print(f"latest_evaluri={latest_eval_uri}")
+        eval_result = tfma.load_eval_result(latest_eval_uri)
+        print(f'eval_result={eval_result}')
+        
+        # eval_attr_dict = eval_result.get_attributions_for_all_slices()
+        eval_metrics_dict = eval_result.get_metrics_for_all_slices()
+        # print(f"eval_attr_dict={eval_attr_dict}")
+        print(f"eval_metrics_dict={eval_metrics_dict}")
+        
+        ## ========================
+        # to test batch inference, will use existing pipeline root and the trained model within.
+        # it's MLMD store.
+        if run_bulk_infer:
+            # mostly, testing that the component works.
+            # make fake incoming rating data that will be missing ratings (entered as 0)
+            # by taking the user_ids from ratings_1000.dat and taking random movie_ids from the range of movies
+            # and filter out any already seen by user.
+            # then write to bin directory
+            # and create new infiles_dict_ser for those files
+            
+            infiles_dict_of_dicts_ser, split_sizes = get_contrastive_split_infiles_set(
+                ds=DataSize.TINY3)
+            
+            print(f'serving_model_dir={serving_model_dir}')
+            
+            artifact_list = store.get_artifacts_by_type("PushedModel")
+            print(f"model artifact list={artifact_list}")
+            artifact_list = sorted(artifact_list, key=lambda
+                    x: x.create_time_since_epoch, reverse=True)
+            for artifact in artifact_list:
+                if "Pusher" in artifact.uri:
+                    model_uri = artifact.uri
+                    break
+            print(f'model_uri={model_uri}')
+            
+           
     def test_metadata_model_pipeline(self):
         
         test_num = "1"

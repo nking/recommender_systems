@@ -11,7 +11,7 @@ sys.path.append(os.path.join(os.getcwd(), "src/test/python/movie_lens_tfx"))
 sys.path.append(os.path.join(os.getcwd(), "src/main/python/movie_lens_tfx"))
 
 from helper import *
-from movie_lens_tfx.PipelineComponentsFactory import *
+from movie_lens_tfx.PipelineComponentsFactoryShort import *
 from movie_lens_tfx.tune_train_movie_lens import *
 
 from absl import logging
@@ -93,7 +93,7 @@ try:
 except Exception as ex:
     pass
 
-pipeline_factory = PipelineComponentsFactory(
+pipeline_factory = PipelineComponentsFactoryShort(
   num_train_examples=split_sizes['train'],
   num_val_examples=split_sizes['val'],
   num_test_examples=split_sizes['test'],
@@ -106,23 +106,6 @@ pipeline_factory = PipelineComponentsFactory(
   git_hash=git_hash,
   movie_tiers_uri=movie_tiers_uri,
 )
-
-print(f"run baseline pipline to create a baseline model")
-baseline_components = pipeline_factory.build_components(PIPELINE_TYPE.BASELINE,
-  run_example_diff=False, pre_transform_schema_dir_path=pre_dir,
-  post_transform_schema_dir_path=post_dir)
-
-# create baseline model
-my_pipeline = tfx.dsl.Pipeline(
-  pipeline_name=PIPELINE_NAME,
-  pipeline_root=PIPELINE_ROOT,
-  components=baseline_components,
-  enable_cache=ENABLE_CACHE,
-  metadata_connection_config=metadata_connection_config,
-  beam_pipeline_args=beam_pipeline_args,
-)
-
-tfx.orchestration.LocalDagRunner().run(my_pipeline)
 
 print(f'run production pipeline to find best hyper-parameters, train the model and deploy')
 

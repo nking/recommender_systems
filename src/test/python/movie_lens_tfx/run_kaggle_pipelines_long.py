@@ -1,0 +1,148 @@
+import shutil
+
+from tfx.orchestration import metadata
+
+from ml_metadata.metadata_store import metadata_store
+
+import sys
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # 0=all, 1=info, 2=warnings, 3=errors
+sys.path.append(os.path.join(os.getcwd(), "src/test/python/movie_lens_tfx"))
+sys.path.append(os.path.join(os.getcwd(), "src/main/python/movie_lens_tfx"))
+
+from helper import *
+from movie_lens_tfx.PipelineComponentsFactory import *
+from movie_lens_tfx.tune_train_movie_lens import *
+
+from absl import logging
+tf.get_logger().propagate = False
+logging.set_verbosity(logging.INFO)
+logging.set_stderrthreshold(logging.INFO)
+
+# for the in-batch softmax, sampled softmax approach, use only positives:
+infiles_dict_of_dicts_ser, split_sizes = get_contrastive_split_infiles_set(ds = DataSize.FULL)
+# for HueristicLambdaLoss, use the ratings that include pos and neg, e.g. 1-5:
+#infiles_dict_of_dicts_ser = get_pos_and_neg_split_infiles_set(use_small=False)
+
+n_users = 6040
+n_movies = 3883
+n_genres = N_GENRES
+n_occupations = 21
+MIN_EVAL_SIZE = 50  # make this larger for production pipeline
+
+BATCH_SIZE = 2048
+NUM_EPOCHS = 20
+
+PIPELINE_NAME = 'rs_pipeline'
+PIPELINE_ROOT = os.path.join(get_bin_dir(), PIPELINE_NAME)
+
+# remove results from previous test runs:
+try:
+  print(f"removing: {PIPELINE_ROOT}")
+  shutil.rmtree(PIPELINE_ROOT)
+except OSError as e:
+  pass
+METADATA_PATH = os.path.join(PIPELINE_ROOT, 'tfx_metadata',  'metadata.db')
+os.makedirs(os.path.join(PIPELINE_ROOT, 'tfx_metadata'), exist_ok=True)
+
+ENABLE_CACHE = True
+
+metadata_connection_config = metadata.sqlite_metadata_connection_config(
+  METADATA_PATH)
+
+store = metadata_store.MetadataStore(metadata_connection_config)
+
+tr_dir = os.path.join(get_project_dir(), "src/main/python/movie_lens_tfx")
+
+movie_tiers_uri = os.path.join(get_project_dir(), "src/test/resources/movie_tiers.json")
+
+serving_model_dir = os.path.join(PIPELINE_ROOT, 'serving_model')
+query_model_dir = os.path.join(PIPELINE_ROOT, 'serving_query_model')
+candidate_model_dir = os.path.join(PIPELINE_ROOT, 'serving_candidate_model')
+os.makedirs(serving_model_dir, exist_ok=True)
+os.makedirs(query_model_dir, exist_ok=True)
+os.makedirs(candidate_model_dir, exist_ok=True)
+
+output_parquet_path = os.path.join(PIPELINE_ROOT, "transformed_parquet")
+
+pre_dir = os.path.join(get_project_dir(), "src/main/resources", "pre_transform")
+post_dir = os.path.join(get_project_dir(), "src/main/resources", "post_transform")
+
+# for the custom ingestion component, the apache beam pipeline needs to be able to
+# find the sibling scripts it imports.
+# 2 solutions: (1) create a tar archive and use --extra_package in pipeline args
+# or (2) use setup.py and --setup_file in pipeline args.
+
+SETUP_FILE_PATH = os.path.abspath('setup.py')
+beam_pipeline_args = [
+  '--direct_running_mode=multi_processing',
+  '--direct_num_workers=0',
+  f'--setup_file={SETUP_FILE_PATH}',
+  # f'--extra_package={ingest_tar_file}'
+]
+
+#assume this script is running in a directory having git
+#TODO: considering refactoring this script to accept command line arguments
+#   and git_hash can be one of them
+git_hash = None
+try:
+    import subprocess
+    process = subprocess.Popen(['git', 'rev-parse', 'HEAD'], shell=False,
+        stdout=subprocess.PIPE)
+    git_hash = process.communicate()[0].strip().decode()
+except Exception as ex:
+    pass
+
+pipeline_factory = PipelineComponentsFactory(
+  num_train_examples=split_sizes['train'],
+  num_val_examples=split_sizes['val'],
+  num_test_examples=split_sizes['test'],
+  infiles_dict_ser=infiles_dict_of_dicts_ser,
+  output_config_ser=None, transform_dir=tr_dir,
+  n_users=n_users, n_movies=n_movies,
+  n_genres=n_genres,
+  min_eval_size=MIN_EVAL_SIZE, batch_size=BATCH_SIZE, num_epochs=NUM_EPOCHS,
+  serving_model_dir=serving_model_dir, output_parquet_path=output_parquet_path,
+  git_hash=git_hash,
+  movie_tiers_uri=movie_tiers_uri,
+)
+
+print(f"run baseline pipline to create a baseline model")
+baseline_components = pipeline_factory.build_components(PIPELINE_TYPE.BASELINE,
+  run_example_diff=False, pre_transform_schema_dir_path=pre_dir,
+  post_transform_schema_dir_path=post_dir)
+
+# create baseline model
+my_pipeline = tfx.dsl.Pipeline(
+  pipeline_name=PIPELINE_NAME,
+  pipeline_root=PIPELINE_ROOT,
+  components=baseline_components,
+  enable_cache=ENABLE_CACHE,
+  metadata_connection_config=metadata_connection_config,
+  beam_pipeline_args=beam_pipeline_args,
+)
+
+tfx.orchestration.LocalDagRunner().run(my_pipeline)
+
+print(f'run production pipeline to find best hyper-parameters, train the model and deploy')
+
+artifact_types = store.get_artifact_types()
+logging.debug(f"MLMD store artifact_types={artifact_types}")
+artifacts = store.get_artifacts()
+logging.debug(f"MLMD store artifacts={artifacts}")
+
+components = pipeline_factory.build_components(PIPELINE_TYPE.PRODUCTION,
+  run_example_diff=False, pre_transform_schema_dir_path=pre_dir,
+  post_transform_schema_dir_path=post_dir)
+  
+# simulate experimentation of one model family
+my_pipeline = tfx.dsl.Pipeline(
+  pipeline_name=PIPELINE_NAME,
+  pipeline_root=PIPELINE_ROOT,
+  components=components,
+  enable_cache=ENABLE_CACHE,
+  metadata_connection_config=metadata_connection_config,
+  beam_pipeline_args=beam_pipeline_args,
+)
+
+tfx.orchestration.LocalDagRunner().run(my_pipeline)
