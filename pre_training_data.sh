@@ -43,3 +43,7 @@ cp -f bin/tiny/ratings*parquet $TMP_OUT/tiny/
 
 cp -f bin/tiny3/ratings*array_record $TMP_OUT/tiny3/
 cp -f bin/tiny3/ratings*parquet $TMP_OUT/tiny3/
+
+echo "copy movie_tiers to ranker"
+cp -rf bin/movie_tiers/* $TMP_OUT/
+
