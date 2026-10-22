@@ -998,14 +998,16 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
             col_exposure * tf.math.log(tf.maximum(col_exposure, 1e-12))
         ) / tf.maximum(tf.math.log(b_float), 1e-6)
         
-        # 4. Threshold-Normalized Convex Combination in [0.75, 1.0]:
+        # Threshold-Normalized Convex Combination in [0.75, 1.0]:
         # Using a weighted sum instead of a 4-way product prevents early warmup epochs from compounding
         # to ~0.31 (which would trigger false pruning in MinimumThresholdCallback), while still
         # penalizing island collapse (ILD < 0.32 or L_unif > -2.5) by 7% to 25% during HPO.
-        user_spread = tf.clip_by_value((1.0 - u_mean_potential) / 0.93, 0.75, 1.0)
-        movie_spread = tf.clip_by_value((1.0 - m_mean_potential) / 0.92, 0.75, 1.0)
-        ild_factor = tf.clip_by_value(in_batch_ild / 0.32, 0.75, 1.0)
-        ent_factor = tf.clip_by_value(col_entropy / 0.95, 0.75, 1.0)
+        user_spread = tf.clip_by_value((1.0 - u_mean_potential) / 0.96, 0.75,
+            1.0)
+        movie_spread = tf.clip_by_value((1.0 - m_mean_potential) / 0.95, 0.75,
+            1.0)
+        ild_factor = tf.clip_by_value(in_batch_ild / 0.48, 0.75, 1.0)
+        ent_factor = tf.clip_by_value(col_entropy / 0.97, 0.75, 1.0)
         
         geom_multiplier = (
             0.25 * user_spread +
@@ -2016,8 +2018,8 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   
   if not use_fixed:
       hp.Float('learning_rate', 5e-4, 1e-3, sampling='log', default=1e-3)
-      hp.Float('weight_decay', 0.005, 0.05, sampling='log', default=0.01)
-      hp.Float('drop_rate', min_value=0.15, max_value=0.35, step=0.05, default=0.25)
+      hp.Float('weight_decay', 0.01, 0.035, sampling='log', default=0.02)
+      hp.Float('drop_rate', min_value=0.25, max_value=0.35, step=0.05, default=0.25)
       hp.Fixed("layer_sizes", value=json.dumps([32,16]))
   else:
       hp.Fixed('learning_rate', 0.001)
@@ -2048,8 +2050,8 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
           hp.Fixed("bias_corr_alpha", 0.05)
           hp.Fixed('temperature', 0.25)
       else:
-          hp.Choice("bias_corr_alpha", values=[0.025, 0.05, 0.1], default=0.05)
-          hp.Float('temperature', 0.175, 0.275, step=0.025, default=0.25)
+          hp.Choice("bias_corr_alpha", values=[0.05, 0.1], default=0.05)
+          hp.Float('temperature', 0.25, 0.275, step=0.025, default=0.25)
   else:
       hp.Choice("bias_corr_alpha", values=[0.1], default=0.1)  # 0.01, 0.05, 0.1
       hp.Fixed("temperature", value=1.0)
@@ -2225,7 +2227,7 @@ def get_stop_early_callback(k: int):
     # patience=2 with min_delta=0.0008 prevents dead-end trials from dragging out HPO runtime.
     return keras.callbacks.EarlyStopping(
         monitor=f'val_composite_ndcg_{k}',
-        min_delta=0.0008,
+        min_delta=0.0025,
         patience=2,
         mode="max",
         start_from_epoch=1,

@@ -32,17 +32,17 @@
 
 # **** EDIT THIS PATH AS NEEDED ******
 
-export PIPELINE_DATA_DIR="$(realpath -m ../TMP42/bin/rs_pipeline)"
-export OUTPUT_BASE_DIR="$(realpath -m ../TMP42)"
-export TAG="fixd[32,16]"
+export PIPELINE_DATA_DIR="$(realpath -m ../TMP61/bin/rs_pipeline)"
+export OUTPUT_BASE_DIR="$(realpath -m ../TMP61)"
+export TAG="newHPO[32,16]"
 
 unset PIPELINE_DATA_DIR_BASELINE
 unset OUTPUT_BASE_DIR_BASELINE
 unset TAG_BASELINE
 #if have a baseline model such as previous bes to compare PIPELINE_DATA_DIR to, set these vars
-export PIPELINE_DATA_DIR_BASELINE="$(realpath -m ../TMP50/bin/rs_pipeline)"
-export OUTPUT_BASE_DIR_BASELINE="$(realpath -m ../TMP50)"
-export TAG_BASELINE="HPO[32,16]"
+export PIPELINE_DATA_DIR_BASELINE="$(realpath -m ../TMP42/bin/rs_pipeline)"
+export OUTPUT_BASE_DIR_BASELINE="$(realpath -m ../TMP42)"
+export TAG_BASELINE="fixd[32,16]"
 
 #======= generate the train, val, test curves ====================
 # writes to ${OUTPUT_BASE_DIR}/pngs
