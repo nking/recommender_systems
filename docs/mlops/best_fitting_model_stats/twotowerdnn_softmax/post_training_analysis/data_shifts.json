@@ -12,12 +12,17 @@
         0.3851418952589702,
         0.03380557025202053
     ],
-    "P_Y|X_train": [
-        0.4172776994566269,
-        0.3580880476844589,
-        0.2246342528589141
+    "P_Y_given_X_raw_train": [
+        0.690936028361289,
+        0.4694890336142839,
+        0.19114024783053546
     ],
-    "P_Y_train": 0.8457221330470619,
+    "P_Y|X_train": [
+        0.5112117212156093,
+        0.34736688653368547,
+        0.14142139225070513
+    ],
+    "P_Y_train": 0.5887516317346284,
     "movie_tier_0_train_counts": 313392,
     "movie_tier_1_train_counts": 141150,
     "movie_tier_2_train_counts": 5044,
@@ -44,12 +49,17 @@
         0.4713919726729291,
         0.05209222886421862
     ],
-    "P_Y|X_val": [
-        0.41622326703578666,
-        0.35504175277704897,
-        0.2287349801871644
+    "P_Y_given_X_raw_val": [
+        0.6585049876927063,
+        0.43692159944124326,
+        0.20876950424649418
     ],
-    "P_Y_val": 0.813217001224368,
+    "P_Y|X_val": [
+        0.50491256034643,
+        0.33501219818775707,
+        0.16007524146581312
+    ],
+    "P_Y_val": 0.5306246334612575,
     "movie_tier_0_val_counts": 30498,
     "movie_tier_1_val_counts": 20018,
     "movie_tier_2_val_counts": 1057,
@@ -76,12 +86,17 @@
         0.49400135898415937,
         0.072546396568565
     ],
-    "P_Y|X_test": [
-        0.42371969178409624,
-        0.35505250507544095,
-        0.2212278031404629
+    "P_Y_given_X_raw_test": [
+        0.6634252682114339,
+        0.4289367921081476,
+        0.18176496414459242
     ],
-    "P_Y_test": 0.7925744256168514,
+    "P_Y|X_test": [
+        0.5206900532467972,
+        0.3366515142307215,
+        0.14265843252248145
+    ],
+    "P_Y_test": 0.5126449229201172,
     "movie_tier_0_test_counts": 27085,
     "movie_tier_1_test_counts": 19958,
     "movie_tier_2_test_counts": 1242,
@@ -104,11 +119,11 @@
         0.046370508439473955
     ],
     "P_X_emd_train_to_val": 0.061411697319177644,
-    "P_Y|X_emd_train_to_val": 0.0025775798745452105,
+    "P_Y|X_emd_train_to_val": 0.012476505042143704,
     "P_X_emd_val_to_test": 0.03175886085996149,
-    "P_Y|X_emd_val_to_test": 0.007501800897505517,
+    "P_Y|X_emd_val_to_test": 0.016597150921849546,
     "P_X_emd_train_to_test": 0.09317055817913902,
-    "P_Y|X_emd_train_to_test": 0.004924221022960418,
+    "P_Y|X_emd_train_to_test": 0.005357686151482022,
     "movie_tier_emd_train_to_val": 0.050032425224952326,
     "movie_tier_emd_val_to_test": 0.017821372549087,
     "movie_tier_emd_train_to_test": 0.06785379777403933,
@@ -119,11 +134,11 @@
     "automated_conclusions": [
         "HIGH MOVIE TIER DRIFT WARNING: Significant item popularity shift between Train and Test splits (Train-Test EMD: 0.0679). Evaluation may be biased.",
         "USER TIER STABILITY EXCELLENT: Activity profile distribution remains consistent across splits (Train-Test EMD: 0.0113).",
-        "EXPECTED INTERACTION POPULARITY BIAS: Catalog vs. Train EMD is 0.4699. Training interactions heavily concentrate on high-tier items relative to catalog availability.",
-        "P_X MOVIE TIER HIGH DRIFT WARNING: Significant item popularity shift between Train and Test splits (Train-Test EMD: 0.0932).",
-        "P_Y|X MOVIE TIER STABILITY EXCELLENT: Activity profile distribution remains consistent across splits (Train-Test EMD: 0.0049).",
-        "P_Y MOVIE TIER HIGH DRIFT WARNING: Significant item popularity shift between Train and Test splits (Train-Test EMD: 0.0531).",
-        "P_X|Y MOVIE TIER HIGH DRIFT WARNING: Significant item popularity shift between Train and Test splits (Train-Test EMD: 0.0679).",
+        "EXPECTED INTERACTION POPULARITY BIAS: Catalog vs. Train EMD is 0.4699. Training interactions heavily concentrate on popular head (Tier 0) items relative to catalog availability.",
+        "P(X) [Marginal Item Exposure] HIGH DRIFT WARNING: Significant shift between Train and Test splits (Train-Test EMD: 0.0932).",
+        "P(Y=1|X) [Conditional Hit-Rate Profile] STABILITY EXCELLENT: Distribution remains consistent across splits (Train-Test EMD: 0.0054).",
+        "P(Y=1) [Global Positive Rating Rate] HIGH DRIFT WARNING: Significant shift between Train and Test splits (Train-Test AbsDiff: 0.0761).",
+        "P(X|Y=1) [Positive Item Tier Distribution] HIGH DRIFT WARNING: Significant shift between Train and Test splits (Train-Test EMD: 0.0679).",
         "Covariate shift between Train and Test splits."
     ]
 }

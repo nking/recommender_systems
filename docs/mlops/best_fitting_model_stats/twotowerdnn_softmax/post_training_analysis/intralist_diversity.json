@@ -1,8 +1,8 @@
 {
-    "ild_movie": 0.26592,
-    "ild_random": 0.925406,
-    "diversity_ratio": 0.2874,
+    "ild_movie": 0.316862,
+    "ild_random": 0.952152,
+    "diversity_ratio": 0.3328,
     "automated_conclusions": [
-        "[FOCUSED CANDIDATE POOL]: Model ILD (0.2659) retains 28.7% of random catalog diversity. This indicates strong, coherent cluster targeting around user preferences."
+        "[FOCUSED CANDIDATE POOL]: Model ILD (0.3169) retains 33.3% of random catalog diversity. This indicates strong, coherent cluster targeting around user preferences."
     ]
 }

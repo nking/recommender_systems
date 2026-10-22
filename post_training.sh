@@ -32,8 +32,8 @@
 
 # **** EDIT THIS PATH AS NEEDED ******
 
-export PIPELINE_DATA_DIR="$(realpath -m ../TMP61/bin/rs_pipeline)"
-export OUTPUT_BASE_DIR="$(realpath -m ../TMP61)"
+export PIPELINE_DATA_DIR="$(realpath -m ../TMP62/bin/rs_pipeline)"
+export OUTPUT_BASE_DIR="$(realpath -m ../TMP62)"
 export TAG="newHPO[32,16]"
 
 unset PIPELINE_DATA_DIR_BASELINE

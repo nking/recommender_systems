@@ -15,7 +15,7 @@
 set -euo pipefail
 
 #the base dir containing the tower_products directory
-export TMP="$(realpath -m ../TMP01)"
+export TMP="$(realpath -m ../TMP62)"
 export PIPELINE_DATA_DIR="$TMP/bin/rs_pipeline"
 export OUTPUT_BASE_DIR=$TMP
 #the sub_directory number in ../ranker/src/test/resources/model_repositories/saved_model_formats/bi-encoder/ to store model files.
@@ -86,7 +86,7 @@ fi
 #echo "tower_prod_dir=$tower_prod_dir"
 
 ## ============================================================================
-##   dopy to recommender_systems    test resources
+##   copy to recommender_systems    test resources
 ##=============================================================================
 echo "=== Copying Files to recommender_systems ==="
 mkdir -p "$dest_saved_model_dir/BEST" \
