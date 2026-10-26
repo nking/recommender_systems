@@ -10,27 +10,8 @@ exeuction times:
   or choices takes 5-7 hours
 - running the piepline with RandomSearch an all fixed parameters takes 1 hour.
 
-The model learning looks healthy.
-  - The train vs validation curves for loss and metrics can be seen
-    in the sub-directory best_fitting_model_stats.
-  - The tier stratified metrics are better than 3 times a baseline
-    of random selection.
-  - There is evidence of over-fitting, but at the cost of increasing
-    the expressiveness.
-  - Improvements are suggested in analysis.txt
-The best fitting hyperparameters are also in that subdirectory.
-The model is saved to src/test/resources/serving_model
-
-Best fitting model used a batch size of 2056:
-   composite ndcg@100 = 0.033 (random is 0.005)
-   head ndcg@100 = 0.033 
-   torso ndcg@100 = 0.034
-   tail ndcg@100 = 0.035
-   ndcg@100 = 0.033
-   mrr@100 = 0.017 (random is 0.001)
-   recall@100 = 0.113 (random is 0.026)
-   hit rate = 0.013 (random is 0.005)
-
+When reading the metrics in docs/mlops/best_fitting_model_stats/twotowderdnn_softmax
+keep in mind these statistics for random:
 ------------------------
 random recall@k ~ k/movie_catalog_size
 random ndcg@k ~ (1/movie_catalog_size) * sum_{i=1,100}( 1/(log_2(i+1) )
@@ -45,16 +26,41 @@ within the catalog for each user.
 
 The metrics are above expectations for random selection.
 
-Embeddings:
+Embeddings and the t-SNE, UMAP plots:
    the user and candidate embeddings made from these trained models
    were plotted use t-SNE and UMAP in the retrieval github project
    and the results are in the images subdirectory here.
 
-   - there are distinct well separated clusters representing latent
-     features.
-   - the tier 0,1, and 2 are cohabiting the clusters and not isolated
-     into their own clusters and so it appears that popularity bias
-     has been successfully avoided.
+   Because these embedding will be used for retrieval, these charateristics
+   in the UMAP, and t-SNE plots can help interpret results (along with the
+   metrics in post training analysis).
+
+   Expected results:
+      well fit:
+         the expected results when have enough features in both the Query
+         and Candidate models is that the L2 normalized embeddings will
+         evenly fill their hyperspheres in the maps and that the individual 
+         movie tiers will be co-spatial with one another, and the same for 
+         user_tiers.
+      under fit:
+         all points lie in an outside ring because there are not enough dimensions 
+         to represent the features well without wrapping around the ring.
+      over-fit:
+         points are clustered, highly fractured and separated  and the tiers
+         are not co-spatial
+
+   Note that I ran models to see those features by using HPO on fixed layer_sizes
+   from layer_size=[8,4] and doubling that all the way up to [258,128] to see
+   the under fit to over fit evolution.  Then to more properly compare that evolution,
+   I fixed the hyperparameters to the best for the under-fit range and then ran the
+   pipeline for fixe layer_sizes [8,3] through [256,128] again.
+   The results are stored as multi_model_comparison directory.
+
+   The best fits show that the embeddings evely fill their hypershperes with the
+   caveat that one clan see that the Movie features of id and genres are not
+   enough.  (easy to add the movie release year, title, and additional info 
+   such as actors and directors, etc.)
+
 
 How large should num_candidates found from an approx nearest 
 neighbor search of user embeddings who rated tail movies?
@@ -63,9 +69,12 @@ TwoTowerDNN models (in the retrieval stage).
 The common advice is that num_candidates should be 10x to 100x
 the final top_k=20 that end-to-end inference will produce.
 
+To make training and inference more feasible for this project,
+I settled on num_candidates=100 and top_k=20.
+
 
 ------------------------------------
-Some details of viewing the fit results using tfx/tf tools:
+Some details of viewing the fit results using tfx/tf tools alone:
 
 - view the train and val metrics overplotted:
    tensorboard --logdir=bin/rs_pipeline/Trainer/model_run/19/
