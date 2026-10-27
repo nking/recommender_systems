@@ -40,9 +40,9 @@ unset PIPELINE_DATA_DIR_BASELINE
 unset OUTPUT_BASE_DIR_BASELINE
 unset TAG_BASELINE
 #if have a baseline model such as previous bes to compare PIPELINE_DATA_DIR to, set these vars
-export PIPELINE_DATA_DIR_BASELINE="$(realpath -m ../TMP42/bin/rs_pipeline)"
-export OUTPUT_BASE_DIR_BASELINE="$(realpath -m ../TMP42)"
-export TAG_BASELINE="fixd[32,16]"
+#export PIPELINE_DATA_DIR_BASELINE="$(realpath -m ../TMP42/bin/rs_pipeline)"
+#export OUTPUT_BASE_DIR_BASELINE="$(realpath -m ../TMP42)"
+#export TAG_BASELINE="fixd[32,16]"
 
 #======= generate the train, val, test curves ====================
 # writes to ${OUTPUT_BASE_DIR}/pngs
