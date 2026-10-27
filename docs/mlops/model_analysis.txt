@@ -42,6 +42,8 @@ Embeddings and the t-SNE, UMAP plots:
          evenly fill their hyperspheres in the maps and that the individual 
          movie tiers will be co-spatial with one another, and the same for 
          user_tiers.
+         expect  L_unif=-2.75 to -2.8 where L_unif is hypershpere
+                 uniformity from Wang & Isola, 2020
       under fit:
          all points lie in an outside ring because there are not enough dimensions 
          to represent the features well without wrapping around the ring.
