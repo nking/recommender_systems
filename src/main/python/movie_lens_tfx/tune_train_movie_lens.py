@@ -435,7 +435,7 @@ def _make_candidate_model(n_movies : int, movies_offset : int,
             movie_embed_out_dim = round(self.n_movies ** 0.25)  # 8
             self.movie_emb = keras.Sequential([
                 keras.layers.Embedding(
-                    self.n_movies,
+                    self.n_movies+1,
                     movie_embed_out_dim,
                     #embeddings_regularizer=keras.regularizers.l2(1e-3),
                     name="movie_id_embedding"
@@ -485,9 +485,11 @@ def _make_candidate_model(n_movies : int, movies_offset : int,
             
             shifted_ids = inputs['movie_id'] - self.movies_offset
             
-            # 2. Safety guard: Clip IDs to valid range [0, n_movies - 1]
+            ## this safe_ids means that the only OOV is the value that results in 0,
+            #  in other words the movie_id that equals self.movies_offset
+            # Safety guard: Clip IDs to valid range [0, n_movies - 1]
             # This prevents crashes if an unseen offset ID is passed in serving
-            safe_ids = tf.clip_by_value(shifted_ids, 0, self.n_movies - 1)
+            safe_ids = tf.clip_by_value(shifted_ids, 0, self.n_movies)
             
             x = tf.cast(safe_ids, dtype=tf.int32)
             results = [self.movie_emb(x)]
@@ -911,18 +913,64 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         # If B_new is 0.2 (appears 5 times per batch), p_i correctly becomes 5.0
         return 1.0 / tf.maximum(B_new, 1e-6)
     
-    def in_batch_softmax_loss_function(self, y_true, logits):
+    def in_batch_softmax_loss_function(
+        self,
+        y_true: tf.Tensor,
+        logits: tf.Tensor,
+        batch_movie_tiers: tf.Tensor = None,
+    ) -> tf.Tensor:
         """
-        y_true: The original ratings (used as sample weights) [Batch]
-        logits: The [Batch, Batch] matrix after Log-Q correction and Temperature
+        y_true: Normalized ratings [Batch] or [Batch, 1] used as relevance weights.
+        logits: [Batch, Batch] matrix after Log-Q correction, Temperature, and false-negative masking.
+        batch_movie_tiers: 1D [Batch] int32 tensor of movie tiers (0=head, 1=torso, 2=tail).
         """
         batch_size = tf.shape(logits)[0]
         labels = tf.range(batch_size)
-        
-        loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
-            labels=labels, logits=logits)
-        
-        return tf.reduce_mean(loss)
+
+        # Per-example cross-entropy loss: shape [Batch]
+        per_example_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
+            labels=labels, logits=logits
+        )
+
+        if y_true is not None:
+            y_weights = tf.cast(tf.reshape(y_true, [-1]), per_example_loss.dtype)
+        else:
+            y_weights = tf.ones_like(per_example_loss)
+
+        total_y_weight = tf.maximum(tf.reduce_sum(y_weights), 1e-6)
+
+        # Fallback to rating-weighted batch mean when composite bias correction is disabled
+        if not self.use_bias_corr or batch_movie_tiers is None:
+            return tf.reduce_sum(per_example_loss * y_weights) / total_y_weight
+
+        tiers_flat = tf.reshape(tf.cast(batch_movie_tiers, tf.int32), [-1])
+
+        # Pull tier weights directly from ndcg_k_composite_metric to stay 100% synchronized
+        w_head = tf.cast(self.ndcg_k_composite_metric.w_head, per_example_loss.dtype)
+        w_torso = tf.cast(self.ndcg_k_composite_metric.w_torso, per_example_loss.dtype)
+        w_tail = tf.cast(self.ndcg_k_composite_metric.w_tail, per_example_loss.dtype)
+        tier_weights = [w_head, w_torso, w_tail]
+
+        # 5% batch-share floor caps single-item gradient amplification in tiny remainder batches at ~6.7x
+        denom_floor = 0.05 * total_y_weight
+
+        weighted_tier_loss_sum = tf.constant(0.0, dtype=per_example_loss.dtype)
+        active_tier_weight_sum = tf.constant(0.0, dtype=per_example_loss.dtype)
+
+        for tier_idx, w_t in enumerate(tier_weights):
+            part_mask = tf.cast(tf.equal(tiers_flat, tier_idx), per_example_loss.dtype)
+            part_weights = part_mask * y_weights
+            part_weight_sum = tf.reduce_sum(part_weights)
+
+            has_tier = part_weight_sum > 0.0
+            tier_mean_loss = tf.reduce_sum(per_example_loss * part_weights) / tf.maximum(
+                part_weight_sum, denom_floor
+            )
+
+            weighted_tier_loss_sum += tf.where(has_tier, w_t * tier_mean_loss, 0.0)
+            active_tier_weight_sum += tf.where(has_tier, w_t, 0.0)
+
+        return weighted_tier_loss_sum / tf.maximum(active_tier_weight_sum, 1e-6)
     
     def _compute_batch_geometry_stats(
             self,
@@ -931,29 +979,43 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
             masked_raw_logits: tf.Tensor,
             user_mask: tf.Tensor,
             movie_mask: tf.Tensor,
+            mask: tf.Tensor = None,
             ild_top_k: int = 20
-    ) -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor]:
+    ) -> Tuple[
+        tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor]:
         """
         Computes in-batch Hypersphere Uniformity (Wang & Isola, t=2.0) across distinct
         users/movies, In-Batch Top-K Intra-List Diversity (ILD@20 over distinct candidate movies),
-        and Softmax Column Entropy.
+        Softmax Column Entropy, the metric geom_multiplier, and the differentiable geom_loss.
         """
         batch_size = tf.shape(user_embeddings)[0]
         b_float = tf.cast(batch_size, tf.float32)
+        identity_mask = tf.eye(batch_size, dtype=tf.bool)
+        
+        if mask is None:
+            transitive_mask = tf.matmul(
+                tf.cast(user_mask, tf.float32),
+                tf.cast(movie_mask, tf.float32)
+            ) > 0.0
+            mask = tf.logical_and(transitive_mask,
+                tf.logical_not(identity_mask))
         
         # 1. Distinct-Entity Hypersphere Uniformity: log E_{i != j}[exp(-2 * ||x_i - x_j||^2)]
-        # Use logical_not(user_mask) and logical_not(movie_mask) so duplicate occurrences
-        # of the same user_id or movie_id in the batch are excluded along with the diagonal.
+        # Exclude diagonal AND duplicate occurrences of the same user_id or movie_id in the batch.
         u_sim = tf.matmul(user_embeddings, user_embeddings, transpose_b=True)
         m_sim = tf.matmul(movie_embeddings, movie_embeddings, transpose_b=True)
+        
+        # Straight-through clipping keeps forward values in [-1, 1] without killing gradients at 1.0
+        u_sim_safe = u_sim + tf.stop_gradient(
+            tf.clip_by_value(u_sim, -1.0, 1.0) - u_sim)
+        m_sim_safe = m_sim + tf.stop_gradient(
+            tf.clip_by_value(m_sim, -1.0, 1.0) - m_sim)
         
         valid_u_mask = tf.cast(tf.logical_not(user_mask), tf.float32)
         valid_m_mask = tf.cast(tf.logical_not(movie_mask), tf.float32)
         
-        u_kernel = tf.exp(
-            -4.0 + 4.0 * tf.clip_by_value(u_sim, -1.0, 1.0)) * valid_u_mask
-        m_kernel = tf.exp(
-            -4.0 + 4.0 * tf.clip_by_value(m_sim, -1.0, 1.0)) * valid_m_mask
+        u_kernel = tf.exp(-4.0 + 4.0 * u_sim_safe) * valid_u_mask
+        m_kernel = tf.exp(-4.0 + 4.0 * m_sim_safe) * valid_m_mask
         
         u_mean_potential = tf.reduce_sum(u_kernel) / tf.maximum(
             tf.reduce_sum(valid_u_mask), 1.0)
@@ -965,58 +1027,96 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         movie_uniformity = tf.math.log(tf.maximum(m_mean_potential, 1e-12))
         
         # 2. In-Batch Local Intra-List Diversity (ILD@20) over DISTINCT candidate movies in the batch
-        # Because popular movies appear multiple times in a 2048 batch, mask out duplicate columns
-        # (any column j that has the same movie_id as an earlier column c < j) so top_k selects 20 unique movies!
+        # Mask duplicate off-diagonal columns while keeping each row's true positive on the diagonal.
         strict_lower_movie = tf.logical_and(
             tf.linalg.band_part(movie_mask, -1, 0),
-            tf.logical_not(tf.eye(batch_size, dtype=tf.bool))
+            tf.logical_not(identity_mask)
         )
         is_dup_movie_col = tf.reduce_any(strict_lower_movie, axis=1)  # [B]
-        dedup_raw_logits = tf.where(
+        dup_col_mask = tf.logical_and(
             tf.expand_dims(is_dup_movie_col, axis=0),
+            tf.logical_not(identity_mask)
+        )
+        dedup_raw_logits = tf.where(
+            dup_col_mask,
             tf.constant(-1e9, dtype=masked_raw_logits.dtype),
             masked_raw_logits
         )
         
         k_actual = tf.minimum(ild_top_k, batch_size)
-        _, top_indices = tf.math.top_k(dedup_raw_logits, k=k_actual)  # [B, k_actual]
-        top_k_embs = tf.gather(movie_embeddings, top_indices)  # [B, k_actual, D]
-        slate_sim = tf.matmul(top_k_embs, top_k_embs, transpose_b=True)  # [B, k_actual, k_actual]
-        slate_dist = 1.0 - tf.clip_by_value(slate_sim, -1.0, 1.0)
-        k_eye = tf.expand_dims(tf.eye(k_actual, dtype=tf.float32), axis=0)
-        slate_dist = slate_dist * (1.0 - k_eye)
-        k_float = tf.cast(k_actual, tf.float32)
+        _, top_indices = tf.math.top_k(dedup_raw_logits,
+            k=k_actual)  # [B, k_actual]
+        top_k_embs = tf.gather(movie_embeddings,
+            top_indices)  # [B, k_actual, D]
+        slate_sim = tf.matmul(top_k_embs, top_k_embs,
+            transpose_b=True)  # [B, k_actual, k_actual]
+        slate_sim_safe = slate_sim + tf.stop_gradient(
+            tf.clip_by_value(slate_sim, -1.0, 1.0) - slate_sim
+        )
+        slate_dist = 1.0 - slate_sim_safe
+        
+        # Mask out both the k_actual diagonal AND any duplicate movie IDs within each top-k slate
+        canon_movie_ids = tf.argmax(tf.cast(movie_mask, tf.int32),
+            axis=1)  # [B]
+        slate_movie_ids = tf.gather(canon_movie_ids,
+            top_indices)  # [B, k_actual]
+        slate_same_movie = tf.equal(
+            tf.expand_dims(slate_movie_ids, axis=2),
+            tf.expand_dims(slate_movie_ids, axis=1)
+        )  # [B, k_actual, k_actual]
+        valid_slate_mask = tf.cast(tf.logical_not(slate_same_movie),
+            tf.float32)
+        
+        slate_dist = slate_dist * valid_slate_mask
+        slate_pair_counts = tf.maximum(
+            tf.reduce_sum(valid_slate_mask, axis=[1, 2]), 1.0)
         in_batch_ild = tf.reduce_mean(
-            tf.reduce_sum(slate_dist, axis=[1, 2]) / tf.maximum(
-                k_float * (k_float - 1.0), 1.0)
+            tf.reduce_sum(slate_dist, axis=[1, 2]) / slate_pair_counts
         )
         
         # 3. Soft In-Batch Hubness Penalty (Normalized Column Exposure Entropy in [0, 1])
-        row_probs = tf.nn.softmax(masked_raw_logits / self.temperature, axis=-1)
-        col_exposure = tf.reduce_mean(row_probs, axis=0)
+        # Average column probability strictly over valid unmasked candidate positions per column.
+        row_probs = tf.nn.softmax(masked_raw_logits / self.temperature,
+            axis=-1)
+        valid_logit_mask = tf.cast(tf.logical_not(mask), tf.float32)
+        col_avg_prob = tf.reduce_sum(row_probs * valid_logit_mask,
+            axis=0) / tf.maximum(
+            tf.reduce_sum(valid_logit_mask, axis=0), 1.0
+        )
+        col_exposure = col_avg_prob / tf.maximum(tf.reduce_sum(col_avg_prob),
+            1e-12)
         col_entropy = -tf.reduce_sum(
             col_exposure * tf.math.log(tf.maximum(col_exposure, 1e-12))
         ) / tf.maximum(tf.math.log(b_float), 1e-6)
         
-        # Threshold-Normalized Convex Combination in [0.75, 1.0]:
-        # Using a weighted sum instead of a 4-way product prevents early warmup epochs from compounding
-        # to ~0.31 (which would trigger false pruning in MinimumThresholdCallback), while still
-        # penalizing island collapse (ILD < 0.32 or L_unif > -2.5) by 7% to 25% during HPO.
-        user_spread = tf.clip_by_value((1.0 - u_mean_potential) / 0.96, 0.75,
-            1.0)
-        movie_spread = tf.clip_by_value((1.0 - m_mean_potential) / 0.95, 0.75,
-            1.0)
-        ild_factor = tf.clip_by_value(in_batch_ild / 0.48, 0.75, 1.0)
-        ent_factor = tf.clip_by_value(col_entropy / 0.97, 0.75, 1.0)
+        # 4. Metric Multiplier (clipped to [0.75, 1.0] for HPO / early stopping stability)
+        user_spread_raw = (1.0 - u_mean_potential) / 0.96
+        movie_spread_raw = (1.0 - m_mean_potential) / 0.95
+        ild_factor_raw = in_batch_ild / 0.48
+        ent_factor_raw = col_entropy / 0.97
+        
+        user_spread = tf.clip_by_value(user_spread_raw, 0.75, 1.0)
+        movie_spread = tf.clip_by_value(movie_spread_raw, 0.75, 1.0)
+        ild_factor = tf.clip_by_value(ild_factor_raw, 0.75, 1.0)
+        ent_factor = tf.clip_by_value(ent_factor_raw, 0.75, 1.0)
         
         geom_multiplier = (
-            0.25 * user_spread +
-            0.25 * movie_spread +
-            0.35 * ild_factor +
-            0.15 * ent_factor
+                0.25 * user_spread +
+                0.25 * movie_spread +
+                0.35 * ild_factor +
+                0.15 * ent_factor
         )
         
-        return user_uniformity, movie_uniformity, in_batch_ild, col_entropy, geom_multiplier
+        # 5. Differentiable Geometric Loss Deficit (unclipped below 0.75 so gradients never vanish)
+        # Reaches 0.0 when all four components meet or exceed the composite_ndcg target thresholds.
+        geom_loss = (
+                0.25 * tf.nn.relu(1.0 - user_spread_raw) +
+                0.25 * tf.nn.relu(1.0 - movie_spread_raw) +
+                0.35 * tf.nn.relu(1.0 - ild_factor_raw) +
+                0.15 * tf.nn.relu(1.0 - ent_factor_raw)
+        )
+        
+        return user_uniformity, movie_uniformity, in_batch_ild, col_entropy, geom_multiplier, geom_loss
     
     def train_step(self, batch):
         x, y = batch  # y is typically not used in pure In-Batch Softmax (identity matrix is the target)
@@ -1024,6 +1124,13 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         #  expect it to be [0.75,1.0] inclusive
         movie_ids = x['movie_id'] #/TensorShape([batch_size, 1]),
         beta_correction = self.log_q_correction_factor
+        
+        # Look up 1D [batch_size] movie_tiers once so both loss and composite_ndcg share it
+        shifted_ids = movie_ids - self.movies_offset
+        safe_ids = tf.clip_by_value(shifted_ids, 0, self.n_movies) #valid movie_ids are [1,3883] + 0 for OOV.
+        safe_ids = tf.reshape(tf.cast(safe_ids, dtype=tf.int32), [-1])
+        batch_movie_tiers = tf.gather(self.movie_tiers, safe_ids)
+        
         with tf.GradientTape() as tape:
             user_embeddings = self.query_model(x)  # [Batch, Dim]
             movie_embeddings = self.candidate_model(x)  # [Batch, Dim]
@@ -1068,46 +1175,56 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
             movie_mask = tf.equal(tf.expand_dims(movie_ids, 0), tf.expand_dims(movie_ids, 1))
             user_mask = tf.squeeze(user_mask, axis=-1)
             movie_mask = tf.squeeze(movie_mask, axis=-1)
-            mask = tf.logical_or(user_mask, movie_mask)  #true where i,j==j,i entries
-            # if diagonal got masked, unmask it
+            
             batch_size = tf.shape(logits)[0]
             identity_mask = tf.eye(batch_size, dtype=tf.bool)
-            mask = tf.logical_and(mask, tf.logical_not(identity_mask)) #true where i,j==j,i entries, including diagonal
+            transitive_mask = tf.matmul(
+                tf.cast(user_mask, tf.float32),
+                tf.cast(movie_mask, tf.float32)
+            ) > 0.0
+            mask = tf.logical_and(transitive_mask, tf.logical_not(identity_mask))
+
             masked_logits = tf.where(mask, tf.constant(-1e9, dtype=logits.dtype), logits)
-            masked_raw_logits = tf.where(mask, tf.constant(-1e9, dtype=logits.dtype), raw_logits)
-            
-            loss = self.in_batch_softmax_loss_function(y, masked_logits)
+            masked_raw_logits = tf.where(mask, tf.constant(-1e9, dtype=raw_logits.dtype), raw_logits)
+
+            # Tier- and rating-weighted in-batch softmax loss matching composite_ndcg
+            base_loss = self.in_batch_softmax_loss_function(
+                y_true=y,
+                logits=masked_logits,
+                batch_movie_tiers=batch_movie_tiers,
+            )
+
+            # Compute masked batch geometry stats and differentiable geom_loss inside the tape
+            u_unif, m_unif, batch_ild, col_ent, geom_mult, geom_loss = self._compute_batch_geometry_stats(
+                user_embeddings=user_embeddings,
+                movie_embeddings=movie_embeddings,
+                masked_raw_logits=masked_raw_logits,
+                user_mask=user_mask,
+                movie_mask=movie_mask,
+                mask=mask,
+            )
+
+            # Scale geom_loss proportionally to stop_gradient(base_loss) to mirror
+            # the multiplicative geom_multiplier in composite_ndcg
+            loss = base_loss + tf.stop_gradient(base_loss) * geom_loss
+
             # Include layer regularization losses (e.g. l2(1e-3) on user_emb, movie_emb, yr_z_emb)
             if self.losses:
                 loss += tf.add_n(self.losses)
-           
+
         gradients = tape.gradient(loss, self.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
 
         self.mean_loss_metric.update_state(loss)
-        
+
         labels = tf.range(batch_size)
-        
+
         self.mrr_k_metric.update_state(labels, masked_raw_logits, sample_weight=y)
         self.ndcg_k_metric.update_state(labels, masked_raw_logits, sample_weight=y)
         self.recall_k_metric.update_state(labels, masked_raw_logits, sample_weight=y)
         self.precision_k_metric.update_state(labels, masked_raw_logits, sample_weight=y)
         self.in_batch_hit_rate_metric(y_true=labels, y_pred=masked_raw_logits, sample_weight=y)
-        
-        #form the batch of movie_tiers for the ndc metrics
-        shifted_ids = movie_ids - self.movies_offset
-        safe_ids = tf.clip_by_value(shifted_ids, 0, self.n_movies - 1)
-        safe_ids = tf.cast(safe_ids, dtype=tf.int32)
-        batch_movie_tiers = tf.gather(self.movie_tiers, safe_ids)
-        #batch_movie_tiers is shape [batch_size]
-        
-        u_unif, m_unif, batch_ild, col_ent, geom_mult = self._compute_batch_geometry_stats(
-            user_embeddings=user_embeddings,
-            movie_embeddings=movie_embeddings,
-            masked_raw_logits=masked_raw_logits,
-            user_mask=user_mask,
-            movie_mask=movie_mask,
-        )
+
         self.ndcg_k_composite_metric.update_state(
             y_true=labels,
             y_pred=masked_raw_logits,
@@ -1115,18 +1232,19 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
             sample_weight=y,
             geom_multiplier=geom_mult,
         )
-        
+
         output = {m.name: m.result() for m in self.metrics}
-        #DEBUG: =====
         output.update({
             "geom_mult": geom_mult,
+            "geom_loss": geom_loss,
             "batch_ild": batch_ild,
+            "base_loss": base_loss,
             "pre_logit_max": pre_logit_max,
             "pre_logit_min": pre_logit_min,
             "pre_logit_mean": pre_logit_mean,
-            "logit_max" : tf.reduce_max(logits),
-            "logit_min" : tf.reduce_min(logits),
-            "logit_mean" : tf.reduce_mean(logits),
+            "logit_max": tf.reduce_max(logits),
+            "logit_min": tf.reduce_min(logits),
+            "logit_mean": tf.reduce_mean(logits),
         })
         return output
     
@@ -1140,6 +1258,12 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         logits = raw_logits / self.temperature
         batch_size = tf.shape(logits)[0]
         
+        # Look up 1D [batch_size] movie_tiers once for both loss and composite_ndcg
+        shifted_ids = movie_ids - self.movies_offset
+        safe_ids = tf.clip_by_value(shifted_ids, 0, self.n_movies) #valid movie_ids are [1,3883] + 0 for OOV.
+        safe_ids = tf.reshape(tf.cast(safe_ids, dtype=tf.int32), [-1])
+        batch_movie_tiers = tf.gather(self.movie_tiers, safe_ids)
+        
         # Define Ranking Labels
         user_mask = tf.equal(tf.expand_dims(x['user_id'], 0),
             tf.expand_dims(x['user_id'], 1))
@@ -1147,40 +1271,56 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
             tf.expand_dims(x['movie_id'], 1))
         user_mask = tf.squeeze(user_mask, axis=-1)
         movie_mask = tf.squeeze(movie_mask, axis=-1)
-        mask = tf.logical_or(user_mask, movie_mask)
-        #if diagonal got masked, unmask it
+        
         identity_mask = tf.eye(batch_size, dtype=tf.bool)
-        mask = tf.logical_and(mask, tf.logical_not(identity_mask))
+        transitive_mask = tf.matmul(
+            tf.cast(user_mask, tf.float32),
+            tf.cast(movie_mask, tf.float32)
+        ) > 0.0
+        mask = tf.logical_and(transitive_mask, tf.logical_not(identity_mask))
+        
         masked_logits = tf.where(mask, tf.constant(-1e9, dtype=logits.dtype),
             logits)
-        masked_raw_logits = tf.where(mask, tf.constant(-1e9, dtype=raw_logits.dtype),
-            raw_logits)
-        #loss = self.loss_function(y, logits)
-        loss = self.in_batch_softmax_loss_function(y, masked_logits)
-        if self.losses:
-            loss += tf.add_n(self.losses)
+        masked_raw_logits = tf.where(mask,
+            tf.constant(-1e9, dtype=raw_logits.dtype), raw_logits)
         
-        labels = tf.range(batch_size)
-        self.mean_loss_metric.update_state(loss)
-        self.mrr_k_metric.update_state(labels, masked_raw_logits, sample_weight=y)
-        self.ndcg_k_metric.update_state(labels, masked_raw_logits, sample_weight=y)
-        self.recall_k_metric.update_state(labels, masked_raw_logits, sample_weight=y)
-        self.precision_k_metric.update_state(labels, masked_raw_logits, sample_weight=y)
-        self.in_batch_hit_rate_metric.update_state(y_true=labels, y_pred=masked_raw_logits, sample_weight=y)
-        
-        # form the batch of movie_tiers for the ndc metrics
-        shifted_ids = movie_ids - self.movies_offset
-        safe_ids = tf.clip_by_value(shifted_ids, 0, self.n_movies - 1)
-        safe_ids = tf.cast(safe_ids, dtype=tf.int32)
-        batch_movie_tiers = tf.gather(self.movie_tiers, safe_ids)
-        
-        u_unif, m_unif, batch_ild, col_ent, geom_mult = self._compute_batch_geometry_stats(
+        u_unif, m_unif, batch_ild, col_ent, geom_mult, geom_loss = self._compute_batch_geometry_stats(
             user_embeddings=user_embeddings,
             movie_embeddings=movie_embeddings,
             masked_raw_logits=masked_raw_logits,
             user_mask=user_mask,
             movie_mask=movie_mask,
+            mask=mask,
         )
+        
+        base_loss = self.in_batch_softmax_loss_function(
+            y_true=y,
+            logits=masked_logits,
+            batch_movie_tiers=batch_movie_tiers,
+        )
+        loss = base_loss + tf.stop_gradient(base_loss) * geom_loss
+        if self.losses:
+            loss += tf.add_n(self.losses)
+        
+        labels = tf.range(batch_size)
+        self.mean_loss_metric.update_state(loss)
+        self.mrr_k_metric.update_state(labels, masked_raw_logits,
+            sample_weight=y)
+        self.ndcg_k_metric.update_state(labels, masked_raw_logits,
+            sample_weight=y)
+        self.recall_k_metric.update_state(labels, masked_raw_logits,
+            sample_weight=y)
+        self.precision_k_metric.update_state(labels, masked_raw_logits,
+            sample_weight=y)
+        self.in_batch_hit_rate_metric.update_state(y_true=labels,
+            y_pred=masked_raw_logits, sample_weight=y)
+        
+        # Form the 1D [batch_size] tensor of movie_tiers for the NDCG metrics
+        shifted_ids = movie_ids - self.movies_offset
+        safe_ids = tf.clip_by_value(shifted_ids, 0, self.n_movies) #valid movie_ids are [1,3883] + 0 for OOV.
+        safe_ids = tf.reshape(tf.cast(safe_ids, dtype=tf.int32), [-1])
+        batch_movie_tiers = tf.gather(self.movie_tiers, safe_ids)
+        
         self.ndcg_k_composite_metric.update_state(
             y_true=labels,
             y_pred=masked_raw_logits,
@@ -1190,19 +1330,20 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         )
         
         output = {m.name: m.result() for m in self.metrics}
-        # DEBUG: =====
         logit_max = tf.reduce_max(logits)
         logit_min = tf.reduce_min(logits)
         logit_mean = tf.reduce_mean(logits)
         output.update({
             "geom_mult": geom_mult,
+            "geom_loss": geom_loss,
             "batch_ild": batch_ild,
+            "base_loss": base_loss,
             "logit_max": logit_max,
             "logit_min": logit_min,
-            "logit_mean": logit_mean
+            "logit_mean": logit_mean,
         })
         return output
-    
+        
     #do not invoke this from within a tf_function because tensors won't have numpy
     def inspect_table_B_distribution(self, table_b, bins: int = 10,
             max_bar_width: int = 35):
@@ -1875,9 +2016,10 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
           return config
       
   def load_movie_tiers_as_tensor(movie_tiers_ndjson_uri: str,
-          n_movies: int = 3883, movies_offset: int = 6041) -> tf.Tensor:
-      # Initialize a numpy array with a default tier. 0=head, 1=torso, 2=tail
-      tiers_array = np.full(shape=(n_movies,), fill_value=2, dtype=np.int32)
+          n_movies: int = 3883, movies_offset: int = 6040) -> tf.Tensor:
+      # Initialize a numpy array with a default tier. 0=head, 1=torso, 2=tail.
+      # this leaves movie_id=0 to be tier=2 by default which is correct for cold starts, OOV
+      tiers_array = np.full(shape=(n_movies+1,), fill_value=2, dtype=np.int32)
       # Parse NDJSON line by line
       with open(movie_tiers_ndjson_uri, 'r', encoding='utf-8') as f:
           for line in f:
@@ -1888,12 +2030,16 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
               movie_id = row["movie_id"]
               tier = row["tier"]
               shifted_id = movie_id - movies_offset
-              if 0 <= shifted_id < n_movies:
+              if 0 <= shifted_id <= n_movies:
                   tiers_array[shifted_id] = tier
       # Convert to a static TF constant for native graph execution
       return tf.constant(tiers_array, dtype=tf.int32)
   
-  movies_offset = hp.get("n_users") + 1
+  #NOTE: user id range:  [1, 6040], n_users=6040  leaving [0] for OOV
+  #      movie id range: [6041, 6041+3883], n_movies=3883, use [6040] for OOV
+  #      user_id range leaves user_id=0 open for OOV
+  #      to do the same for movies, we need to use an offset of n_users so that movie_id ranges is [1,3883]
+  movies_offset = hp.get("n_users")
   n_movies_arg = hp.get("n_movies") + 1
   movie_tiers_uri = hp.get('movie_tiers_uri')
   movie_tiers = load_movie_tiers_as_tensor(movie_tiers_uri, n_movies=n_movies_arg,
@@ -2038,7 +2184,7 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   #hp.Fixed("layer_sizes", value=json.dumps([24])) # 16 too low, 24 too low, 64 too high.   32 good.
   # ahmos for "age", "hr_wk", "month", "occupation", "gender"
   hp.Fixed("feature_acronym", custom_config.get("feature_acronym", "h"))
-  hp.Fixed("incl_genres", custom_config["incl_genres"])
+  hp.Fixed("incl_genres", custom_config.get("incl_genres", True))
   hp.Fixed('BATCH_SIZE', custom_config.get("BATCH_SIZE", DEFAULT_BATCH_SIZE))
   hp.Fixed('NUM_EPOCHS', custom_config.get("NUM_EPOCHS", DEFAULT_NUM_EPOCHS))
   #use_bias_corr = hp.Choice("use_bias_corr", values=[True, False], default=True)

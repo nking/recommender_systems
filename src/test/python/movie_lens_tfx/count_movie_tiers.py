@@ -19,7 +19,7 @@ class ExploreMovieTiers(unittest.TestCase):
     def setUp(self):
         
         self.n_movies = 3883
-        self.MOVIE_OFFSET = 6040 + 1
+        self.MOVIE_OFFSET = 6040 #n_users
         
         movie_tiers_path = os.path.join(get_project_dir(),
             "src/test/resources/movie_tiers.json")

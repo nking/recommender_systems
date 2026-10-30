@@ -195,7 +195,7 @@ def _make_movie_metadata_model(hp: keras_tuner.HyperParameters) -> tf.keras.Mode
 
       self.embedding_model = keras.Sequential([
         keras.layers.IntegerLookup(
-            vocabulary=[i for i in range(movies_offset+1, movies_offset + n_movies + 1)],
+            vocabulary=[i for i in range(movies_offset, movies_offset + n_movies + 1)],
             output_mode="int"),
         keras.layers.Embedding(n_movies + 1, embed_out_dim),
         keras.layers.Flatten(data_format='channels_last'),
@@ -419,8 +419,8 @@ def _make_movie_metadata_model(hp: keras_tuner.HyperParameters) -> tf.keras.Mode
   
   with strategy.scope():
     model = MetadataDNN(
-      n_movies=hp.get("n_movies") + 1,
-      movies_offset = hp.get("n_users") + 1,
+      n_movies=hp.get("n_movies") + 1, #TODO: consider removing the +1, though it shouldn't matter
+      movies_offset = hp.get("n_users"),
       n_genres=hp.get("n_genres"),
       layer_sizes=hp.get('layer_sizes'),
       embed_out_dim=hp.get('embed_out_dim'),
