@@ -40,7 +40,9 @@ As of Oct 2026 the trian_step is more complex and so using the
 T4x2 GPUs would decrease runtime of the pipeline by about a factor of 10.
 
 Note that the Kaggle platform ubuntu distribution for GPU has some conflicting dependencies
-possibly when upgrade to TFX 1.21.0.
+possibly when upgrade to TFX 2.21.0.
+Note, when kaggle upgrades ubuntu to 24.04 or 26.06 in 2027,
+this might be a good time to update to use TFX > 2.16.
 
 *** If ever change to use the Kaggle T4x2 GPUs, change 
 _get_strategy() to use tf.distribute.OneDeviceStrategy("/gpu:0") 

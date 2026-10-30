@@ -1,3 +1,11 @@
+- low priority: when kaggle upgrades to ubuntu 24.04 or 26.04
+  in 2027, consider refactorint hei project and the kaggle notebook to
+  use the T4x2 GPUs.
+    - change _get_strategy() to use tf.distribute.OneDeviceStrategy("/gpu:0")
+    - update TFX to  version > 2.16 and the conda env reqs to use python > 3.10 
+    - update the notebook to use GPU selection
+      - add flags and env sensing flags so that code can still run on CPU,
+        but now also GPU
 - data items to consider:
   - parse the movie titles
      - to make release year a feature.
