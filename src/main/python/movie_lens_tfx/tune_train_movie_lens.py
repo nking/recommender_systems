@@ -2164,7 +2164,8 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   
   if not use_fixed:
       hp.Float('learning_rate', 5e-4, 1e-3, sampling='log', default=1e-3)
-      hp.Float('weight_decay', 0.01, 0.035, sampling='log', default=0.02)
+      #weight decay was small [0.01-0.035] before geom loss changes in order to keep embeddings clustering into a large hub.
+      hp.Float('weight_decay', 1e-3, 0.035, sampling='log', default=0.01)
       hp.Float('drop_rate', min_value=0.25, max_value=0.35, step=0.05, default=0.25)
       hp.Fixed("layer_sizes", value=json.dumps([32,16]))
   else:
@@ -2197,7 +2198,9 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
           hp.Fixed('temperature', 0.25)
       else:
           hp.Choice("bias_corr_alpha", values=[0.05, 0.1], default=0.05)
-          hp.Float('temperature', 0.25, 0.275, step=0.025, default=0.25)
+          #low temperatures (eg. 0.2) give peaked softmax(logits/temp) sim to one-hot vector
+          # with the col_entropy term in loss function now, need to use higher temp to smooth out the softmax(logits/temp)
+          hp.Float('temperature', 0.25, 1.0, step=0.25, default=0.5)
   else:
       hp.Choice("bias_corr_alpha", values=[0.1], default=0.1)  # 0.01, 0.05, 0.1
       hp.Fixed("temperature", value=1.0)
