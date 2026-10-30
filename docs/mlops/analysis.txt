@@ -30,9 +30,83 @@ TFR 0.6.0 is needed for tf 2.16 and then the
 versions of keras would conflict.
 So any ranking metrics and losses used here are implemented.
 
-NOTE that as of Sep 2026 there is TFX 1.21.0 so this project could be updated.
+NOTE that as of Sep 2026 there is TFX 1.21.0 so this project could be updated!
+Currently, TFX 2.16 and python 3.10 are used on kaggle platform.
+There were dependency and/or C library constraints that led to this.
+The first arithmetic intensity comparison to the T4X2 ridge points
+showed that there was no advatange to using the T4x2 GPUs in terms
+of runtime execution.
+As of Oct 2026 the trian_step is more complex and so using the
+T4x2 GPUs would decrease runtime of the pipeline by about a factor of 10.
+
 Note that the Kaggle platform ubuntu distribution for GPU has some conflicting dependencies
-possibly when upgrade to TFX 1.21.0, but this project uses CPU as it gains nothing from GPU.
+possibly when upgrade to TFX 1.21.0.
+
+*** If ever change to use the Kaggle T4x2 GPUs, change 
+_get_strategy() to use tf.distribute.OneDeviceStrategy("/gpu:0") 
+so TensorFlow runs on a single T4 GPU with zero multi-replica hash-table conflicts
+for MutableHashTables self.table_A and self.table_B
+
+The arguments for using GPU as of Oct 2026 are in the notebook
+https://www.kaggle.com/code/nicholeasuniquename/recommender-systems-with-tfx-pipelines/
+
+and repeated here:
+
+## Use CPU or GPU?
+**You should use the CPU for this notebook.**
+  * but if I were to update the code to latest TFX pipeline which is now available and check compatibility for kaggle's ubuntu OS C library with that version, and if I were to modify the _get_stratgey() method to use tf.distribute.OneDeviceStrategy("/gpu:0")  then one could use the T4x2 GPU selection here instead.  (Note I chose to design for CPU originally due to TFX 2.16 avail at time and the lower runtime complexity of training previously).
+
+Here are the arguments for using the **T4x2 GPU(s)** instead if designing the project starting now (making those changes above).
+
+While single-query inference (`call`) is lightweight, full-batch contrastive training (`train_step` at $B = 2048$) with Wang & Isola hypersphere uniformity, Top-$K$ Intra-List Diversity (`ILD@20`), and 8 in-batch ranking metrics is **$16\times$ to $25\times$ faster on a T4 GPU than on the Kaggle CPU**.
+
+### Hardware Specifications & Roofline Ridge Points
+- **Arithmetic Intensity ($I$)** $= \frac{\text{FLOPs}}{\text{Memory Traffic (Bytes Loaded + Stored)}}$
+- **Hardware Ridge Point ($I_{\text{ridge}}$)** $= \frac{\text{Peak Hardware FLOPs/sec}}{\text{Peak Memory Bandwidth Bytes/sec}}$ (see [Roofline Analysis](https://docs.nersc.gov/tools/performance/roofline/))
+  * **NVIDIA T4 GPU (FP32):** $8{,}100\text{ GFLOPS (8.1 TFLOPS)} \;/\; 320\text{ GB/s} = \mathbf{25.3\text{ FLOPs/Byte}}$
+  * **Kaggle CPU (4-vCPU Xeon):** $100\text{ GFLOPS} \;/\; 20\text{ GB/s} = \mathbf{5.0\text{ FLOPs/Byte}}$
+
+### "Memory-Bound on GPU" Still Beats "Compute-Bound on CPU"
+In Roofline analysis, achievable performance is:
+$$\text{Attainable Throughput (GFLOPS)} = \min\!\big(\text{Peak GFLOPS},\; I \times \text{Bandwidth}\big)$$
+When an operation has Arithmetic Intensity $I < 25.3\text{ FLOPs/Byte}$, it is memory-bound on the T4 GPU—meaning its speed is dictated by **memory bandwidth**. Because the T4 GPU has **$16\times$ higher memory bandwidth** than the Kaggle CPU ($320\text{ GB/s}$ vs. $20\text{ GB/s}$) and **$81\times$ higher compute** ($8{,}100\text{ GFLOPS}$ vs. $100\text{ GFLOPS}$), the T4 GPU outperforms the CPU at **every** Arithmetic Intensity $I > 0$:
+* At $I = 7.9\text{ FLOPs/Byte}$ (single $Q C^T$ matmul):
+  * **T4 GPU Throughput:** $\min(8{,}100,\; 7.88 \times 320) = \mathbf{2{,}521\text{ GFLOPS}}$ *(memory-bound, running at 31% of peak compute)*
+  * **Kaggle CPU Throughput:** $\min(100,\; 7.88 \times 20) = \mathbf{100\text{ GFLOPS}}$ *(compute-bound, capped at 100% of CPU ceiling)*
+  * **Result:** The T4 GPU is **$25.2\times$ faster** than the CPU.
+
+### Algorithmic Intensity of `TwoTowerDNN.train_step` ($B = 2048, D = 16, K_{\text{ILD}} = 20$)
+1. **All-to-All Embedding Matmuls (7 passes of $[B, D] \times [D, B]$ across Fwd + Bwd):**
+   * Forward: `raw_logits` ($U M^T$), user uniformity `u_sim` ($U U^T$), movie uniformity `m_sim` ($M M^T$) $= 3 \times 2 B^2 D$
+   * Backward (`GradientTape`): $\nabla_U, \nabla_M$ for `raw_logits` (2 matmuls), `u_sim` (1 matmul), `m_sim` (1 matmul) $= 4 \times 2 B^2 D$
+   * **FLOPs:** $7 \times 2 \times 2048^2 \times 16 = \mathbf{939{,}524{,}096\text{ FLOPs}}$ ($939.5\text{ MFLOPs}$)
+   * **Bytes:** $7 \times (2 B D + B^2) \times 4 = \mathbf{119{,}275{,}520\text{ Bytes}}$ ($119.3\text{ MB}$)
+   * **Arithmetic Intensity:** $\mathbf{7.88\text{ FLOPs/Byte}}$ (approaching $D/2 = 8.0$ as $B \to \infty$)
+
+2. **In-Batch Top-$K$ Intra-List Diversity (`ILD@20`):**
+   * Partial heap-select `top_k(k=20)` over $[B, B]$ ($B^2 \lceil\log_2 20\rceil = 21.0\text{ MOPS}$) + gather $[B, 20, D]$ + batched slate matmul $[B, 20, D] \times [B, D, 20] \to [B, 20, 20]$ (Fwd + Bwd $= 4 B K^2 D = 52.4\text{ MFLOPs}$) + distance masking ($4.9\text{ MFLOPs}$)
+   * **FLOPs:** $\mathbf{78{,}315{,}520\text{ FLOPs}}$ ($78.3\text{ MFLOPs}$)
+   * **Bytes:** $(B^2 + 2 B K + 3 B K D + 4 B K^2) \times 4 = \mathbf{38{,}076{,}416\text{ Bytes}}$ ($38.1\text{ MB}$)
+   * **Arithmetic Intensity:** $\mathbf{2.06\text{ FLOPs/Byte}}$
+
+3. **Dense $[B, B]$ Elementwise & Reduction Kernels (Uniformity $\exp$, Softmax, Masking & 8 Ranking Metrics):**
+   * Gaussian potential $\exp(-4 + 4\cdot\text{sim})$ on `u_sim` and `m_sim` + Fwd/Bwd softmax on `masked_logits` and `masked_raw_logits` (column entropy) + $O(B^2)$ false-negative masking + rank comparisons (`>= pos_scores`) across `mrr_100`, `ndcg_100`, `head`, `torso`, `tail`, `recall_100`, `precision_100`, and `hit_rate`
+   * **FLOPs:** $\sim 74 \times B^2 = \mathbf{310{,}378{,}496\text{ FLOPs}}$ ($310.4\text{ MFLOPs}$)
+   * **Bytes:** $\sim 16 \times B^2 \times 4 = \mathbf{268{,}435{,}456\text{ Bytes}}$ ($268.4\text{ MB}$)
+   * **Arithmetic Intensity:** $\mathbf{1.16\text{ FLOPs/Byte}}$
+
+4. **Query & Candidate Tower MLPs (`[B, 44] -> [B, 32] -> [B, 16]` Fwd + Bwd):**
+   * **FLOPs:** $\mathbf{36{,}175{,}872\text{ FLOPs}}$ ($36.2\text{ MFLOPs}$)
+
+### Total `train_step` Roofline Comparison ($B = 2048$)
+* **Total FLOPs per step:** $\mathbf{1.36\text{ GFLOPs}}$ ($1{,}364{,}393{,}984\text{ FLOPs}$)
+* **Total Memory Traffic per step:** $\mathbf{425.8\text{ MB}}$ ($425{,}787{,}392\text{ Bytes}$)
+* **Composite Arithmetic Intensity:** $1{,}364.4\text{ MFLOPs} \;/\; 425.8\text{ MB} = \mathbf{3.20\text{ FLOPs/Byte}}$
+* **Attainable Throughput & Step Time:**
+  * **Kaggle CPU:** $\min(100,\; 3.20 \times 20) = \mathbf{64.0\text{ GFLOPS}} \implies \sim\mathbf{180\text{–}220\text{ ms/step}}$ ($\sim 45\text{s/epoch}$, or $\sim 10\text{ hours}$ for 40 HPO trials)
+  * **NVIDIA T4 GPU:** $\min(8{,}100,\; 3.20 \times 320) = \mathbf{1{,}024\text{ GFLOPS}} \implies \sim\mathbf{8\text{–}15\text{ ms/step}}$ ($\sim 2\text{–}3\text{s/epoch}$, completing all 40 HPO trials in **$< 45\text{ minutes}$**)
+
+
 
 ==================================================================================
 Pre-processing: Renumerbing user and movie ids

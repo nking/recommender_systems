@@ -862,33 +862,29 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         movie_ids_int = tf.cast(movie_ids, tf.int32)
         movie_ids_flat = tf.reshape(movie_ids_int, [-1])
         
-        # Deduplicate IDs in current batch to avoid race conditions in MutableHashTable
-        unique_ids, _ = tf.unique(movie_ids_flat)
+        # Deduplicate IDs and count in-batch occurrences
+        unique_ids, _, counts = tf.unique_with_counts(movie_ids_flat)
         
-        #Lookup last physical time seen and old time gap B
+        # Lookup last physical time seen and old time gap B
         last_t = self.table_A.lookup(unique_ids)
         B_old = self.table_B.lookup(unique_ids)
         
-        # Calculate physical time gap (delta_t) in days
-        # Ensure delta_t is strictly positive (at least ~8 seconds = 1e-4 days)
-        delta_t = tf.maximum(batch_t - last_t, 1e-4)
+        # Divide physical time gap by in-batch count so multiple appearances shrink the gap
+        delta_t = tf.maximum(batch_t - last_t, 1e-4) / tf.cast(counts,
+            tf.float32)
         
         # Exponential Moving Average update
         is_first_seen = tf.equal(last_t, 0.0)
-        B_updated = (1.0 - self.bias_corr_alpha) * B_old + self.bias_corr_alpha * delta_t
-        # If first time seen, initialize B directly with delta_t
+        B_updated = (
+                                1.0 - self.bias_corr_alpha) * B_old + self.bias_corr_alpha * delta_t
         B_new = tf.where(is_first_seen, delta_t, B_updated)
         
-        #Insert updated state for unique items
+        # Insert updated state for unique items
         self.table_A.insert(unique_ids, tf.fill(tf.shape(unique_ids), batch_t))
         self.table_B.insert(unique_ids, B_new)
         
-        # Lookup updated B for ALL items in the batch (including duplicates)
         batch_B = self.table_B.lookup(movie_ids_flat)
-        
-        # Frequency p_i is inverse of average time gap between appearances
-        p_i = 1.0 / tf.maximum(batch_B, 1e-6)
-        return p_i
+        return 1.0 / tf.maximum(batch_B, 1e-6)
     
     def _update_frequencies(self, movie_ids):
         """frequency estimation logic from Yi et al."""
@@ -898,20 +894,19 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         movie_ids_int = tf.cast(movie_ids, tf.int32)
         movie_ids_flat = tf.reshape(movie_ids_int, [-1])
         
-        last_t = self.table_A.lookup(movie_ids_flat)
-        B_old = self.table_B.lookup(movie_ids_flat)
+        # Deduplicate IDs and divide step gap by in-batch count so 5 appearances -> delta_t = 0.2
+        unique_ids, _, counts = tf.unique_with_counts(movie_ids_flat)
+        last_t = self.table_A.lookup(unique_ids)
+        B_old = self.table_B.lookup(unique_ids)
         
-        delta_t = tf.cast(t - last_t, tf.float32)
-        
-        # b_new = b_old + alpha * (delta - b_old)
+        delta_t = tf.cast(t - last_t, tf.float32) / tf.cast(counts, tf.float32)
         B_new = (1.0 - self.bias_corr_alpha) * B_old + self.bias_corr_alpha * delta_t
         
-        self.table_A.insert(movie_ids_flat, tf.fill(tf.shape(movie_ids_flat), t))
-        self.table_B.insert(movie_ids_flat, B_new)
+        self.table_A.insert(unique_ids, tf.fill(tf.shape(unique_ids), t))
+        self.table_B.insert(unique_ids, B_new)
         
-        # Remove tf.maximum(B_new, 1.0).
-        # If B_new is 0.2 (appears 5 times per batch), p_i correctly becomes 5.0
-        return 1.0 / tf.maximum(B_new, 1e-6)
+        batch_B = self.table_B.lookup(movie_ids_flat)
+        return 1.0 / tf.maximum(batch_B, 1e-6)
     
     def in_batch_softmax_loss_function(
         self,
@@ -993,12 +988,10 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         identity_mask = tf.eye(batch_size, dtype=tf.bool)
         
         if mask is None:
-            transitive_mask = tf.matmul(
-                tf.cast(user_mask, tf.float32),
-                tf.cast(movie_mask, tf.float32)
-            ) > 0.0
-            mask = tf.logical_and(transitive_mask,
-                tf.logical_not(identity_mask))
+            mask = tf.logical_and(
+                tf.logical_or(user_mask, movie_mask),
+                tf.logical_not(identity_mask)
+            )
         
         # 1. Distinct-Entity Hypersphere Uniformity: log E_{i != j}[exp(-2 * ||x_i - x_j||^2)]
         # Exclude diagonal AND duplicate occurrences of the same user_id or movie_id in the batch.
@@ -1178,11 +1171,10 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
             
             batch_size = tf.shape(logits)[0]
             identity_mask = tf.eye(batch_size, dtype=tf.bool)
-            transitive_mask = tf.matmul(
-                tf.cast(user_mask, tf.float32),
-                tf.cast(movie_mask, tf.float32)
-            ) > 0.0
-            mask = tf.logical_and(transitive_mask, tf.logical_not(identity_mask))
+            mask = tf.logical_and(
+                tf.logical_or(user_mask, movie_mask),
+                tf.logical_not(identity_mask)
+            )
 
             masked_logits = tf.where(mask, tf.constant(-1e9, dtype=logits.dtype), logits)
             masked_raw_logits = tf.where(mask, tf.constant(-1e9, dtype=raw_logits.dtype), raw_logits)
@@ -1223,7 +1215,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         self.ndcg_k_metric.update_state(labels, masked_raw_logits, sample_weight=y)
         self.recall_k_metric.update_state(labels, masked_raw_logits, sample_weight=y)
         self.precision_k_metric.update_state(labels, masked_raw_logits, sample_weight=y)
-        self.in_batch_hit_rate_metric(y_true=labels, y_pred=masked_raw_logits, sample_weight=y)
+        self.in_batch_hit_rate_metric.update_state(y_true=labels, y_pred=masked_raw_logits, sample_weight=y)
 
         self.ndcg_k_composite_metric.update_state(
             y_true=labels,
@@ -1273,11 +1265,10 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         movie_mask = tf.squeeze(movie_mask, axis=-1)
         
         identity_mask = tf.eye(batch_size, dtype=tf.bool)
-        transitive_mask = tf.matmul(
-            tf.cast(user_mask, tf.float32),
-            tf.cast(movie_mask, tf.float32)
-        ) > 0.0
-        mask = tf.logical_and(transitive_mask, tf.logical_not(identity_mask))
+        mask = tf.logical_and(
+            tf.logical_or(user_mask, movie_mask),
+            tf.logical_not(identity_mask)
+        )
         
         masked_logits = tf.where(mask, tf.constant(-1e9, dtype=logits.dtype),
             logits)
@@ -1314,12 +1305,6 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
             sample_weight=y)
         self.in_batch_hit_rate_metric.update_state(y_true=labels,
             y_pred=masked_raw_logits, sample_weight=y)
-        
-        # Form the 1D [batch_size] tensor of movie_tiers for the NDCG metrics
-        shifted_ids = movie_ids - self.movies_offset
-        safe_ids = tf.clip_by_value(shifted_ids, 0, self.n_movies) #valid movie_ids are [1,3883] + 0 for OOV.
-        safe_ids = tf.reshape(tf.cast(safe_ids, dtype=tf.int32), [-1])
-        batch_movie_tiers = tf.gather(self.movie_tiers, safe_ids)
         
         self.ndcg_k_composite_metric.update_state(
             y_true=labels,
@@ -1413,6 +1398,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
         print("=" * 60)
     
     def fit(self, *args, **kwargs):
+        kwargs["verbose"] = 2
         history = super().fit(*args, **kwargs)
         
         # Run diagnostic hook at the end of the fit call
@@ -2040,7 +2026,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   #      user_id range leaves user_id=0 open for OOV
   #      to do the same for movies, we need to use an offset of n_users so that movie_id ranges is [1,3883]
   movies_offset = hp.get("n_users")
-  n_movies_arg = hp.get("n_movies") + 1
+  n_movies_arg = hp.get("n_movies")
   movie_tiers_uri = hp.get('movie_tiers_uri')
   movie_tiers = load_movie_tiers_as_tensor(movie_tiers_uri, n_movies=n_movies_arg,
       movies_offset=movies_offset)
@@ -2053,7 +2039,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
   
   with strategy.scope():
     model = TwoTowerDNN(
-      n_users=hp.get("n_users") + 1,
+      n_users=hp.get("n_users"),
       n_movies=n_movies_arg,
       movies_offset = movies_offset,
       k = hp.get("k"),
@@ -2096,7 +2082,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
     
     lr_scheduler = tf.keras.optimizers.schedules.CosineDecay(
         initial_learning_rate=0.0,
-        decay_steps=TOTAL_STEPS,
+        decay_steps=TOTAL_STEPS - WARMUP_STEPS,
         warmup_steps=WARMUP_STEPS,
         warmup_target=hp.get('learning_rate')
     )
@@ -2163,14 +2149,14 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   #    and hence, memorizing data.  in this model we see strong over-fitting when weight_decay is as low as 1e-4
   
   if not use_fixed:
-      hp.Float('learning_rate', 5e-4, 1e-3, sampling='log', default=1e-3)
+      hp.Float('learning_rate', 8e-4, 3e-3, sampling='log', default=1.2e-3)
       #weight decay was small [0.01-0.035] before geom loss changes in order to keep embeddings clustering into a large hub.
-      hp.Float('weight_decay', 1e-3, 0.035, sampling='log', default=0.01)
-      hp.Float('drop_rate', min_value=0.25, max_value=0.35, step=0.05, default=0.25)
+      hp.Float('weight_decay', 1e-3, 0.015, sampling='log', default=0.0038)
+      hp.Float('drop_rate', min_value=0.25, max_value=0.3, step=0.05, default=0.25)
       hp.Fixed("layer_sizes", value=json.dumps([32,16]))
   else:
-      hp.Fixed('learning_rate', 0.001)
-      hp.Fixed('weight_decay', 0.01)
+      hp.Fixed('learning_rate', 0.0012)
+      hp.Fixed('weight_decay', 0.0038)
       hp.Fixed('drop_rate', 0.25)
       hp.Fixed("layer_sizes", value=json.dumps([32,16]))
   
@@ -2178,7 +2164,6 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   #let AdamW weight decay handle the regularization, so set regl2 to 0:
   #hp.Float('regl2', 1e-5, 1e-2, sampling="log")
   hp.Fixed('regl2', 0.0)
-  
   
   #hp.Choice("layer_sizes", values=[json.dumps([16]), json.dumps([32, 16])], default=json.dumps([16]))
   #hp.Fixed("layer_sizes", value=json.dumps([32]))
@@ -2200,7 +2185,7 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
           hp.Choice("bias_corr_alpha", values=[0.05, 0.1], default=0.05)
           #low temperatures (eg. 0.2) give peaked softmax(logits/temp) sim to one-hot vector
           # with the col_entropy term in loss function now, need to use higher temp to smooth out the softmax(logits/temp)
-          hp.Float('temperature', 0.25, 1.0, step=0.25, default=0.5)
+          hp.Choice('temperature', values=[0.20, 0.25, 0.30], default=0.25)
   else:
       hp.Choice("bias_corr_alpha", values=[0.1], default=0.1)  # 0.01, 0.05, 0.1
       hp.Fixed("temperature", value=1.0)
@@ -2376,10 +2361,10 @@ def get_stop_early_callback(k: int):
     # patience=2 with min_delta=0.0008 prevents dead-end trials from dragging out HPO runtime.
     return keras.callbacks.EarlyStopping(
         monitor=f'val_composite_ndcg_{k}',
-        min_delta=0.0025,
-        patience=2,
+        min_delta=0.0005,
+        patience=3,
         mode="max",
-        start_from_epoch=1,
+        start_from_epoch=4,
         restore_best_weights=True)
 
 def calc_random_ndcg(k: int, movie_catalog_size:int) -> float:
@@ -2792,6 +2777,7 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       outputs = candidate_model(inputs=transformed_features, training=False)
       return {'outputs': outputs}
   
+  @tf.function
   def serve_twotower_tf_examples_fn(serialized_tf_example):
       '''Returns the serving signature for input being raw examples such as
       inputs = tf.data.TFRecordDataset(examples_file_paths, compression_type="GZIP")
@@ -2805,42 +2791,6 @@ https://github.com/tensorflow/tfx/blob/master/tfx/types/standard_component_specs
       raw_features = tf.io.parse_example(serialized_tf_example, raw_feature_spec2)
       transformed_features = tft_layer(raw_features)
       outputs = model(inputs=transformed_features, training=False)
-      return {'outputs': outputs}
-  
-  @tf.function
-  def serve_query_tf_examples_fn(serialized_tf_example):
-      '''
-      Returns the serving signature query embeddings for input being raw examples, not yet transformed to features.
-      '''
-      relaxed_feature_spec = get_relaxed_feature_spec(raw_feature_spec)
-      try:
-          relaxed_feature_spec.pop(LABEL_KEY)
-      except KeyError as e:
-          logging.error(f'ERROR: {e}')
-      raw_features = tf.io.parse_example(serialized_tf_example, relaxed_feature_spec)
-      raw_timestamp = raw_features['timestamp']
-      raw_features['timestamp'] = tf.where(
-          tf.equal(raw_timestamp, -1),
-          tf.cast(tf.timestamp(), tf.int64),
-          raw_timestamp
-      )
-      transformed_features = tft_layer(raw_features)
-      outputs = query_model(inputs=transformed_features, training=False)
-      return {'outputs': outputs}
-  
-  @tf.function
-  def serve_candidate_tf_examples_fn(serialized_tf_example):
-      '''
-      Returns the serving signature candidate embeddings for input being raw examples, not yet transformed to features.
-      '''
-      relaxed_feature_spec = get_relaxed_feature_spec(raw_feature_spec)
-      try:
-          relaxed_feature_spec.pop(LABEL_KEY)
-      except KeyError as e:
-          logging.error(f'ERROR: {e}')
-      raw_features = tf.io.parse_example(serialized_tf_example, relaxed_feature_spec)
-      transformed_features = tft_layer(raw_features)
-      outputs = candidate_model(inputs=transformed_features, training=False)
       return {'outputs': outputs}
   
   @tf.function
