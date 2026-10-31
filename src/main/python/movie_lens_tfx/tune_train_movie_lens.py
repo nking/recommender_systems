@@ -2151,7 +2151,7 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   if not use_fixed:
       hp.Float('learning_rate', 8e-4, 3e-3, sampling='log', default=1.2e-3)
       #weight decay was small [0.01-0.035] before geom loss changes in order to keep embeddings clustering into a large hub.
-      hp.Float('weight_decay', 1e-3, 0.03, sampling='log', default=0.02)
+      hp.Float('weight_decay', 1e-3, 0.04, sampling='log', default=0.02)
       hp.Float('drop_rate', min_value=0.25, max_value=0.3, step=0.05, default=0.25)
       hp.Fixed("layer_sizes", value=json.dumps([32,16]))
   else:
