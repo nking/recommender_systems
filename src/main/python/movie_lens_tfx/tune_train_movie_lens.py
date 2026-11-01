@@ -1108,6 +1108,15 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
                 0.35 * tf.nn.relu(1.0 - ild_factor_raw) +
                 0.15 * tf.nn.relu(1.0 - ent_factor_raw)
         )
+
+        # Cross-Tower Modality Gap Penalty: ||mean(U) - mean(M)||_2^2
+        u_center = tf.reduce_mean(user_embeddings, axis=0)
+        m_center = tf.reduce_mean(movie_embeddings, axis=0)
+        modality_gap_sq = tf.reduce_sum(tf.square(u_center - m_center))
+
+        # Penalize if Modality Gap exceeds 0.35 (0.35^2 = 0.1225)
+        gap_deficit = tf.nn.relu(modality_gap_sq - 0.1225)
+        geom_loss = geom_loss + 0.25 * gap_deficit
         
         return user_uniformity, movie_uniformity, in_batch_ild, col_entropy, geom_multiplier, geom_loss
     
@@ -2149,9 +2158,9 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   #    and hence, memorizing data.  in this model we see strong over-fitting when weight_decay is as low as 1e-4
   
   if not use_fixed:
-      hp.Float('learning_rate', 8e-4, 3e-3, sampling='log', default=1.2e-3)
+      hp.Float('learning_rate', 6e-4, 1.6e-3, sampling='log', default=1.0e-3)
       #weight decay was small [0.01-0.035] before geom loss changes in order to keep embeddings clustering into a large hub.
-      hp.Float('weight_decay', 1e-3, 0.04, sampling='log', default=0.02)
+      hp.Float('weight_decay', 6e-3, 0.04, sampling='log', default=0.02)
       hp.Float('drop_rate', min_value=0.25, max_value=0.3, step=0.05, default=0.25)
       hp.Fixed("layer_sizes", value=json.dumps([32,16]))
   else:
@@ -2185,7 +2194,8 @@ def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
           hp.Choice("bias_corr_alpha", values=[0.05, 0.1], default=0.05)
           #low temperatures (eg. 0.2) give peaked softmax(logits/temp) sim to one-hot vector
           # with the col_entropy term in loss function now, need to use higher temp to smooth out the softmax(logits/temp)
-          hp.Choice('temperature', values=[0.20, 0.25, 0.30], default=0.25)
+          #hp.Choice('temperature', values=[0.20, 0.25, 0.30], default=0.25)
+          hp.Fixed('temperature', 0.25)
   else:
       hp.Choice("bias_corr_alpha", values=[0.1], default=0.1)  # 0.01, 0.05, 0.1
       hp.Fixed("temperature", value=1.0)
@@ -2361,10 +2371,10 @@ def get_stop_early_callback(k: int):
     # patience=2 with min_delta=0.0008 prevents dead-end trials from dragging out HPO runtime.
     return keras.callbacks.EarlyStopping(
         monitor=f'val_composite_ndcg_{k}',
-        min_delta=0.0005,
-        patience=3,
+        min_delta=0.0015,
+        patience=2,
         mode="max",
-        start_from_epoch=4,
+        start_from_epoch=6,
         restore_best_weights=True)
 
 def calc_random_ndcg(k: int, movie_catalog_size:int) -> float:

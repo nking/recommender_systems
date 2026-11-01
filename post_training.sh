@@ -32,17 +32,17 @@
 
 # **** EDIT THIS PATH AS NEEDED ******
 
-export PIPELINE_DATA_DIR="$(realpath -m ../kaggle_reco_sys/TMP70/bin/rs_pipeline)"
-export OUTPUT_BASE_DIR="$(realpath -m ../kaggle_reco_sys/TMP70)"
-export TAG="newLoss"
+export PIPELINE_DATA_DIR="$(realpath -m ../kaggle_reco_sys/TMP72/bin/rs_pipeline)"
+export OUTPUT_BASE_DIR="$(realpath -m ../kaggle_reco_sys/TMP72)"
+export TAG="TMP71"
 
 unset PIPELINE_DATA_DIR_BASELINE
 unset OUTPUT_BASE_DIR_BASELINE
 unset TAG_BASELINE
 #if have a baseline model such as previous bes to compare PIPELINE_DATA_DIR to, set these vars
-export PIPELINE_DATA_DIR_BASELINE="$(realpath -m ../kaggle_reco_sys/TMP62/bin/rs_pipeline)"
-export OUTPUT_BASE_DIR_BASELINE="$(realpath -m ../kaggle_reco_sys/TMP62)"
-export TAG_BASELINE="oldLoss"
+#export PIPELINE_DATA_DIR_BASELINE="$(realpath -m ../kaggle_reco_sys/TMP72/bin/rs_pipeline)"
+#export OUTPUT_BASE_DIR_BASELINE="$(realpath -m ../kaggle_reco_sys/TMP72)"
+#export TAG_BASELINE="TMP72"
 
 #======= generate the train, val, test curves ====================
 # writes to ${OUTPUT_BASE_DIR}/pngs
