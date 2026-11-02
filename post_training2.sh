@@ -15,7 +15,7 @@
 set -euo pipefail
 
 #the base dir containing the tower_products directory
-export TMP="$(realpath -m ../TMP62)"
+export TMP="$(realpath -m ../kaggle_reco_sys/TMP75)"
 export PIPELINE_DATA_DIR="$TMP/bin/rs_pipeline"
 export OUTPUT_BASE_DIR=$TMP
 #the sub_directory number in ../ranker/src/test/resources/model_repositories/saved_model_formats/bi-encoder/ to store model files.
@@ -113,6 +113,7 @@ fi
 rm -rf "$docs_dir/post_training_analysis"
 if [ -d "$OUTPUT_BASE_DIR/post_training_analysis" ]; then
     cp -rf "$OUTPUT_BASE_DIR/post_training_analysis" "$docs_dir/post_training_analysis"
+    rm -rf "$docs_dir/post_training_analysis/parquet_metrics"
 fi
 
 echo "=== Copying Files to Retrieval Project ==="

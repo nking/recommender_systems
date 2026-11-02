@@ -200,4 +200,8 @@ I haven't time to do it yet.
 
     https://www.kaggle.com/code/nicholeasuniquename/re-ranker-fine-tuning-of-pre-trained
 
+=======================================================================
+This project increasingly used Gemini for feedback and code review.
+The best results were obtained when I provided narrow, specialized questions
+and data details when asking questions.
 
