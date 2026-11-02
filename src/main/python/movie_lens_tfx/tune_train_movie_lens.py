@@ -2371,10 +2371,10 @@ def get_stop_early_callback(k: int):
     # patience=2 with min_delta=0.0008 prevents dead-end trials from dragging out HPO runtime.
     return keras.callbacks.EarlyStopping(
         monitor=f'val_composite_ndcg_{k}',
-        min_delta=0.0015,
+        min_delta=0.001,
         patience=2,
         mode="max",
-        start_from_epoch=4,
+        start_from_epoch=8,
         restore_best_weights=True)
 
 def calc_random_ndcg(k: int, movie_catalog_size:int) -> float:

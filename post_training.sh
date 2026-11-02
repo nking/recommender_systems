@@ -32,9 +32,9 @@
 
 # **** EDIT THIS PATH AS NEEDED ******
 
-export PIPELINE_DATA_DIR="$(realpath -m ../kaggle_reco_sys/TMP73/bin/rs_pipeline)"
-export OUTPUT_BASE_DIR="$(realpath -m ../kaggle_reco_sys/TMP73)"
-export TAG="TMP73"
+export PIPELINE_DATA_DIR="$(realpath -m ../kaggle_reco_sys/TMP74/bin/rs_pipeline)"
+export OUTPUT_BASE_DIR="$(realpath -m ../kaggle_reco_sys/TMP74)"
+export TAG="TMP74"
 
 unset PIPELINE_DATA_DIR_BASELINE
 unset OUTPUT_BASE_DIR_BASELINE
