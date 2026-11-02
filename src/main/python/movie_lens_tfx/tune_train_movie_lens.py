@@ -2368,7 +2368,6 @@ class ResetFrequencyTablesCallback(tf.keras.callbacks.Callback):
                 
 def get_stop_early_callback(k: int):
     # we use val_composite_ndcg_k (with threshold-normalized geometry multiplier)
-    # patience=2 with min_delta=0.0008 prevents dead-end trials from dragging out HPO runtime.
     return keras.callbacks.EarlyStopping(
         monitor=f'val_composite_ndcg_{k}',
         min_delta=0.001,
