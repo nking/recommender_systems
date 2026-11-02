@@ -2143,7 +2143,7 @@ def _make_2tower_keras_model(hp: keras_tuner.HyperParameters) -> tf.keras.Model:
 def get_default_hyperparameters(custom_config) -> keras_tuner.HyperParameters:
   """Returns hyperparameters for building Keras model."""
   #print(f'get_default_hyperparameters: custom_config={custom_config}')
-  use_fixed = False
+  use_fixed = True
   
   hp = keras_tuner.HyperParameters()
   # Defines search space.
