@@ -2374,7 +2374,7 @@ def get_stop_early_callback(k: int):
         min_delta=0.0015,
         patience=2,
         mode="max",
-        start_from_epoch=6,
+        start_from_epoch=4,
         restore_best_weights=True)
 
 def calc_random_ndcg(k: int, movie_catalog_size:int) -> float:
