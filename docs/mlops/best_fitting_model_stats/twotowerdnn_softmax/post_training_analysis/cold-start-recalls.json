@@ -2,51 +2,53 @@
     "expected_random_recall@100": 0.025753,
     "comparison_metrics": {
         "recall@100_overall": {
-            "test set": 0.088964,
-            "cold-start set": 0.077665,
-            "abs_change": -0.011299,
-            "rel_change_pct": "-12.70%"
+            "test set": 0.123583,
+            "cold-start set": 0.057823,
+            "abs_change": -0.06576,
+            "rel_change_pct": "-53.21%"
         },
         "recall_movie_tier0@100": {
-            "test set": 0.04878,
-            "cold-start set": 0.04878,
-            "abs_change": 0.0,
-            "rel_change_pct": "+0.00%"
+            "test set": 0.090062,
+            "cold-start set": 0.012422,
+            "abs_change": -0.07764,
+            "rel_change_pct": "-86.21%"
         },
         "recall_movie_tier1@100": {
-            "test set": 0.067308,
-            "cold-start set": 0.073718,
-            "abs_change": 0.00641,
-            "rel_change_pct": "+9.52%"
+            "test set": 0.104938,
+            "cold-start set": 0.067901,
+            "abs_change": -0.037037,
+            "rel_change_pct": "-35.29%"
         },
         "recall_movie_tier2@100": {
-            "test set": 0.143333,
-            "cold-start set": 0.118333,
-            "abs_change": -0.025,
-            "rel_change_pct": "-17.44%"
+            "test set": 0.166667,
+            "cold-start set": 0.088435,
+            "abs_change": -0.078231,
+            "rel_change_pct": "-46.94%"
         },
         "retrieved_share_tier0@100": {
-            "test set": 0.266374,
-            "cold-start set": 0.249077,
-            "abs_change": -0.017297,
-            "rel_change_pct": "-6.49%"
+            "test set": 0.229274,
+            "cold-start set": 0.21102,
+            "abs_change": -0.018254,
+            "rel_change_pct": "-7.96%"
         },
         "retrieved_share_tier1@100": {
-            "test set": 0.474144,
-            "cold-start set": 0.486847,
-            "abs_change": 0.012703,
-            "rel_change_pct": "+2.68%"
+            "test set": 0.429206,
+            "cold-start set": 0.420771,
+            "abs_change": -0.008435,
+            "rel_change_pct": "-1.97%"
         },
         "retrieved_share_tier2@100": {
-            "test set": 0.259482,
-            "cold-start set": 0.264077,
-            "abs_change": 0.004595,
-            "rel_change_pct": "+1.77%"
+            "test set": 0.341519,
+            "cold-start set": 0.368209,
+            "abs_change": 0.026689,
+            "rel_change_pct": "+7.81%"
         }
     },
-    "recall_cold_start_percnt_drop": 12.70042194092826,
+    "recall_cold_start_percnt_drop": 53.21100917431193,
     "automated_conclusions": [
-        "[PERFORMANCE DROP]: cold-start set overall recall dropped by 12.7% relative to test set. Metadata partially compensates for missing interactions, but performance still degrades.",
-        "[SLATE COMPOSITION - cold-start set]: Top-100 candidate slates consist of 24.9% Tier 0, 48.7% Tier 1, and 26.4% Tier 2 items."
+        "[SEVERE COLD-START PENALTY]: cold-start set overall recall dropped by 53.2% relative to test set (12.36% -> 5.78%). The item tower overfits to interaction IDs rather than generalizing via metadata.",
+        "[TIER 0 COLLAPSE]: Tier 0 recall dropped from 9.01% to 1.24%. Without interaction history, the model's ability to target Tier 0 falls to random chance.",
+        "[PRECISION DEFICIT - TIER 0]: Model allocates 21.1% of top-100 candidate slots to Tier 0 items, yet recall (1.24%) is at/below random chance. It retrieves the WRONG items.",
+        "[SLATE COMPOSITION - cold-start set]: Top-100 candidate slates consist of 21.1% Tier 0, 42.1% Tier 1, and 36.8% Tier 2 items."
     ]
 }

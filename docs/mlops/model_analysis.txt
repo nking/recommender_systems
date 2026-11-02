@@ -6,9 +6,10 @@ minimum threshold, and model selection by the keras tuner BayesianOptimization.
    including the train, val, test curves
 
 exeuction times:
+  on a CPU w/ 3 cores, 30 GB RAM and CPU speed ~ 2.2GHz
 - running the pipeline with BayesianOptimization and 6 parameters that have range
   or choices takes 5-7 hours
-- running the piepline with RandomSearch an all fixed parameters takes 1 hour.
+- running the pipeline with RandomSearch an all fixed parameters takes about 1 hour.
 
 When reading the metrics in docs/mlops/best_fitting_model_stats/twotowderdnn_softmax
 keep in mind these statistics for random:
@@ -27,7 +28,7 @@ within the catalog for each user.
 The metrics are above expectations for random selection.
 
 Embeddings and the t-SNE, UMAP plots:
-   the user and candidate embeddings made from these trained models
+   the ser and candidate embeddings made from these trained models
    were plotted use t-SNE and UMAP in the retrieval github project
    and the results are in the images subdirectory here.
 
@@ -42,8 +43,15 @@ Embeddings and the t-SNE, UMAP plots:
          evenly fill their hyperspheres in the maps and that the individual 
          movie tiers will be co-spatial with one another, and the same for 
          user_tiers.
+         the raw k-NN graph should show extensive, seamless bridges where 
+         user and movie points blend together fluidly across the entire space.
          expect  L_unif=-2.75 to -2.8 where L_unif is hypershpere
-                 uniformity from Wang & Isola, 2020
+                 uniformity from Wang & Isola, 2020.
+                 a gap in the raw stacked knn ~ 0.2-0.25 with top 1 sim > 0.85
+                 and average postive-pair squared distance < 1.5.
+         Note that if there are not enough features, such as for the movie model
+         at this time, the overlap in the raw k-NN space will be few bridges
+         and a bigger gap.
       under fit:
          all points lie in an outside ring because there are not enough dimensions 
          to represent the features well without wrapping around the ring.
@@ -62,7 +70,6 @@ Embeddings and the t-SNE, UMAP plots:
    caveat that one clan see that the Movie features of id and genres are not
    enough.  (easy to add the movie release year, title, and additional info 
    such as actors and directors, etc.)
-
 
 How large should num_candidates found from an approx nearest 
 neighbor search of user embeddings who rated tail movies?

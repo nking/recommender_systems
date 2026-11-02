@@ -1,32 +1,32 @@
 {
     "user_tier_0_metrics": {
-        "mean_retrieved_log_pop": 5.7839,
+        "mean_retrieved_log_pop": 5.7499,
         "mean_ground_truth_log_pop": 7.6762,
-        "delta_log_pop": -1.8923,
-        "std_delta_log_pop": 1.5496,
-        "amplification_ratio": 0.7535
+        "delta_log_pop": -1.9263,
+        "std_delta_log_pop": 1.7006,
+        "amplification_ratio": 0.7491
     },
     "user_tier_0_automated_conclusions": [
-        "[LOG-Q TAIL EXPLORATION]: Retrieved top-100 slates reach deeper into torso/tail inventory (LogPop: 5.78, Ratio: 0.75x, Delta: -1.89) than historical test positives (7.68), counteracting training popularity bias."
+        "[LOG-Q TAIL EXPLORATION]: Retrieved top-100 slates reach deeper into torso/tail inventory (LogPop: 5.75, Ratio: 0.75x, Delta: -1.93) than historical test positives (7.68), counteracting training popularity bias."
     ],
     "user_tier_1_metrics": {
-        "mean_retrieved_log_pop": 5.5246,
+        "mean_retrieved_log_pop": 5.4228,
         "mean_ground_truth_log_pop": 8.1433,
-        "delta_log_pop": -2.6187,
-        "std_delta_log_pop": 1.6932,
-        "amplification_ratio": 0.6784
+        "delta_log_pop": -2.7205,
+        "std_delta_log_pop": 1.8211,
+        "amplification_ratio": 0.6659
     },
     "user_tier_1_automated_conclusions": [
-        "[LOG-Q TAIL EXPLORATION]: Retrieved top-100 slates reach deeper into torso/tail inventory (LogPop: 5.52, Ratio: 0.68x, Delta: -2.62) than historical test positives (8.14), counteracting training popularity bias."
+        "[LOG-Q TAIL EXPLORATION]: Retrieved top-100 slates reach deeper into torso/tail inventory (LogPop: 5.42, Ratio: 0.67x, Delta: -2.72) than historical test positives (8.14), counteracting training popularity bias."
     ],
     "user_tier_2_metrics": {
-        "mean_retrieved_log_pop": 5.4798,
+        "mean_retrieved_log_pop": 5.4736,
         "mean_ground_truth_log_pop": 8.4242,
-        "delta_log_pop": -2.9444,
-        "std_delta_log_pop": 1.8885,
-        "amplification_ratio": 0.6505
+        "delta_log_pop": -2.9506,
+        "std_delta_log_pop": 2.0292,
+        "amplification_ratio": 0.6497
     },
     "user_tier_2_automated_conclusions": [
-        "[LOG-Q TAIL EXPLORATION]: Retrieved top-100 slates reach deeper into torso/tail inventory (LogPop: 5.48, Ratio: 0.65x, Delta: -2.94) than historical test positives (8.42), counteracting training popularity bias."
+        "[LOG-Q TAIL EXPLORATION]: Retrieved top-100 slates reach deeper into torso/tail inventory (LogPop: 5.47, Ratio: 0.65x, Delta: -2.95) than historical test positives (8.42), counteracting training popularity bias."
     ]
 }

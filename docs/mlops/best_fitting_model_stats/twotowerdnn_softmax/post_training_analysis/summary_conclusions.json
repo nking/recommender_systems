@@ -1,15 +1,15 @@
 {
     "coverage@100": [
-        "HIGHLY UNIFORM EXPOSURE at_100: Gini is 0.41 (Effective Catalog: 2925 items). Recommendations are spread very broadly across the catalog.",
-        "STRONG TAIL at_100: The bottom 80% captures 55.9% of traffic, indicating excellent long-tail surfacing capability.",
-        "DIVERSE HEAD at_100: The top 10% consume 26.0% of slots, leaving plenty of room for the torso/tail.",
-        "LIGHT/NICHE USER DIVERSIFICATION at_100: Light/niche users (Tier 2 Equalized Gini: 0.444) receive more broadly distributed catalog exposure than power users (Tier 0 Equalized Gini: 0.470)."
+        "HEALTHY EXPOSURE BALANCE at_100: Gini is 0.72 (Effective Catalog: 1455 items, Normalized Entropy: 0.881). The model successfully balances mainstream relevance with catalog exploration.",
+        "STRONG TAIL at_100: The bottom 80% captures 26.7% of traffic, indicating excellent long-tail surfacing capability.",
+        "DIVERSE HEAD at_100: The top 10% consume 48.9% of slots, leaving plenty of room for the torso/tail.",
+        "LIGHT/NICHE USER DIVERSIFICATION at_100: Light/niche users (Tier 2 Equalized Gini: 0.723) receive more broadly distributed catalog exposure than power users (Tier 0 Equalized Gini: 0.755)."
     ],
     "coverage@20": [
-        "HEALTHY EXPOSURE BALANCE at_20: Gini is 0.59 (Effective Catalog: 2113 items, Normalized Entropy: 0.926). The model successfully balances mainstream relevance with catalog exploration.",
-        "STRONG TAIL at_20: The bottom 80% captures 40.8% of traffic, indicating excellent long-tail surfacing capability.",
-        "DIVERSE HEAD at_20: The top 10% consume 38.5% of slots, leaving plenty of room for the torso/tail.",
-        "LIGHT/NICHE USER DIVERSIFICATION at_20: Light/niche users (Tier 2 Equalized Gini: 0.634) receive more broadly distributed catalog exposure than power users (Tier 0 Equalized Gini: 0.660)."
+        "HEALTHY EXPOSURE BALANCE at_20: Gini is 0.85 (Effective Catalog: 768 items, Normalized Entropy: 0.804). The model successfully balances mainstream relevance with catalog exploration.",
+        "MODERATE TAIL at_20: The bottom 80% captures 6.6% of traffic.",
+        "DIVERSE HEAD at_20: The top 10% consume 72.7% of slots, leaving plenty of room for the torso/tail.",
+        "UNIFORM COHORT CONCENTRATION at_20: Power (Tier 0: 0.877) and Light (Tier 2: 0.861) users experience roughly the same level of catalog concentration."
     ],
     "data_shifts": [
         "HIGH MOVIE TIER DRIFT WARNING: Significant item popularity shift between Train and Test splits (Train-Test EMD: 0.0679). Evaluation may be biased.",
@@ -22,54 +22,56 @@
         "Covariate shift between Train and Test splits."
     ],
     "embedding_hubness": [
-        "HEALTHY ITEM DISPERSION: Global Item Uniformity is excellent (-2.55). Movies are well-distributed across the hypersphere.",
-        "LOW MOVIE HUBNESS: k-NN occurrence skewness is well-controlled (0.38, Anti-hubs: 0.2%).",
-        "USER GEOMETRY HEALTHY: Global User Uniformity (-2.83), Power users (Tier 0: -2.74), and Light users (Tier 2: -2.77) are well-spread across the hypersphere without island collapse.",
-        "HEALTHY MULTI-INTEREST ALIGNMENT: Average positive pair squared distance is 1.49 (Tier 0: 1.72, Tier 1: 1.46, Tier 2: 1.30). Model balances proximity to positive items across multiple user interests."
+        "HEALTHY ITEM DISPERSION: Global Item Uniformity is excellent (-2.83). Movies are well-distributed across the hypersphere.",
+        "LOW MOVIE HUBNESS: k-NN occurrence skewness is well-controlled (0.55, Anti-hubs: 0.1%).",
+        "USER GEOMETRY HEALTHY: Global User Uniformity (-2.92), Power users (Tier 0: -2.90), and Light users (Tier 2: -2.85) are well-spread across the hypersphere without island collapse.",
+        "WEAK ALIGNMENT WARNING: Average positive pair squared distance is 1.70 (Orthogonal/Random is 2.0, Max is 4.0). User embeddings are struggling to align with their ground-truth test items."
     ],
     "all_users_inter_user_diversity_conclusions": [
-        "[HYPER-PERSONALIZED SLATES]: Mean Jaccard overlap (2.42%) aligns closely with random chance (1.30%). Candidate slates are highly individualized across users."
+        "[MODERATE PERSONALIZATION]: Mean Jaccard overlap (5.52%) is 4.2x random chance (1.30%). Candidate slates share core popular hubs while retaining user-specific targeting."
     ],
     "user_tier_0_inter_user_diversity_conclusions": [
-        "[HYPER-PERSONALIZED SLATES]: Mean Jaccard overlap (2.71%) aligns closely with random chance (1.30%). Candidate slates are highly individualized across users."
+        "[MODERATE PERSONALIZATION]: Mean Jaccard overlap (6.26%) is 4.8x random chance (1.30%). Candidate slates share core popular hubs while retaining user-specific targeting."
     ],
     "user_tier_1_inter_user_diversity_conclusions": [
-        "[HYPER-PERSONALIZED SLATES]: Mean Jaccard overlap (2.42%) aligns closely with random chance (1.30%). Candidate slates are highly individualized across users."
+        "[MODERATE PERSONALIZATION]: Mean Jaccard overlap (5.32%) is 4.1x random chance (1.30%). Candidate slates share core popular hubs while retaining user-specific targeting."
     ],
     "user_tier_2_inter_user_diversity_conclusions": [
-        "[HYPER-PERSONALIZED SLATES]: Mean Jaccard overlap (2.65%) aligns closely with random chance (1.30%). Candidate slates are highly individualized across users."
+        "[MODERATE PERSONALIZATION]: Mean Jaccard overlap (5.39%) is 4.1x random chance (1.30%). Candidate slates share core popular hubs while retaining user-specific targeting."
     ],
     "all_users_and_catalog_has_cold_start_movies_inter_user_diversity_conclusions": [
-        "[HYPER-PERSONALIZED SLATES]: Mean Jaccard overlap (2.20%) aligns closely with random chance (1.20%). Candidate slates are highly individualized across users."
+        "[MODERATE PERSONALIZATION]: Mean Jaccard overlap (4.97%) is 4.2x random chance (1.20%). Candidate slates share core popular hubs while retaining user-specific targeting."
     ],
-    "intra-list divserity": [
-        "[FOCUSED CANDIDATE POOL]: Model ILD (0.3168) retains 33.3% of random catalog diversity. This indicates strong, coherent cluster targeting around user preferences."
+    "intra-list diversity": [
+        "[FOCUSED CANDIDATE POOL]: Model ILD (0.4545) retains 47.1% of random catalog diversity. This indicates strong, coherent cluster targeting around user preferences."
     ],
     "user_tier_0_popularity_bias": [
-        "[LOG-Q TAIL EXPLORATION]: Retrieved top-100 slates reach deeper into torso/tail inventory (LogPop: 5.78, Ratio: 0.75x, Delta: -1.89) than historical test positives (7.68), counteracting training popularity bias."
+        "[LOG-Q TAIL EXPLORATION]: Retrieved top-100 slates reach deeper into torso/tail inventory (LogPop: 5.75, Ratio: 0.75x, Delta: -1.93) than historical test positives (7.68), counteracting training popularity bias."
     ],
     "user_tier_1_popularity_bias": [
-        "[LOG-Q TAIL EXPLORATION]: Retrieved top-100 slates reach deeper into torso/tail inventory (LogPop: 5.52, Ratio: 0.68x, Delta: -2.62) than historical test positives (8.14), counteracting training popularity bias."
+        "[LOG-Q TAIL EXPLORATION]: Retrieved top-100 slates reach deeper into torso/tail inventory (LogPop: 5.42, Ratio: 0.67x, Delta: -2.72) than historical test positives (8.14), counteracting training popularity bias."
     ],
     "user_tier_2_popularity_bias": [
-        "[LOG-Q TAIL EXPLORATION]: Retrieved top-100 slates reach deeper into torso/tail inventory (LogPop: 5.48, Ratio: 0.65x, Delta: -2.94) than historical test positives (8.42), counteracting training popularity bias."
+        "[LOG-Q TAIL EXPLORATION]: Retrieved top-100 slates reach deeper into torso/tail inventory (LogPop: 5.47, Ratio: 0.65x, Delta: -2.95) than historical test positives (8.42), counteracting training popularity bias."
     ],
     "cold_start_embeddings": [
-        "[PERFORMANCE DROP]: cold-start set overall recall dropped by 12.7% relative to test set. Metadata partially compensates for missing interactions, but performance still degrades.",
-        "[SLATE COMPOSITION - cold-start set]: Top-100 candidate slates consist of 24.9% Tier 0, 48.7% Tier 1, and 26.4% Tier 2 items."
+        "[SEVERE COLD-START PENALTY]: cold-start set overall recall dropped by 53.2% relative to test set (12.36% -> 5.78%). The item tower overfits to interaction IDs rather than generalizing via metadata.",
+        "[TIER 0 COLLAPSE]: Tier 0 recall dropped from 9.01% to 1.24%. Without interaction history, the model's ability to target Tier 0 falls to random chance.",
+        "[PRECISION DEFICIT - TIER 0]: Model allocates 21.1% of top-100 candidate slots to Tier 0 items, yet recall (1.24%) is at/below random chance. It retrieves the WRONG items.",
+        "[SLATE COMPOSITION - cold-start set]: Top-100 candidate slates consist of 21.1% Tier 0, 42.1% Tier 1, and 36.8% Tier 2 items."
     ],
     "stratified_metrics@20": [
-        "STRONG RECALL LIFT: Global Recall@20 (3.0%) heavily outperforms the random expected baseline (0.5%). The candidate generator is extracting meaningful semantic signal.",
-        "STRONG PRECISION LIFT: Global Precision@20 (0.94%) heavily outperforms the random expected precision (0.24%), indicating high density of relevant items in the retrieved slates.",
-        "STRONG LIGHT-USER GENERALIZATION: Light/niche users (Tier 2 Recall: 5.4%) achieve recall comparable to or exceeding power users (Tier 0 Recall: 1.3%).",
-        "STRONG NICHE USER RANKING: Light/niche users achieve strong top-K ranking quality (Tier 2 NDCG: 2.54% vs Tier 0: 1.57%).",
-        "POPULARITY BIAS DETECTED: Ranking quality heavily favors head/popular movies (Tier 0 NDCG: 1.49%) compared to long-tail/niche items (Tier 2 NDCG: 0.52%)."
+        "STRONG RECALL LIFT: Global Recall@20 (2.4%) heavily outperforms the random expected baseline (0.5%). The candidate generator is extracting meaningful semantic signal.",
+        "STRONG PRECISION LIFT: Global Precision@20 (0.88%) heavily outperforms the random expected precision (0.24%), indicating high density of relevant items in the retrieved slates.",
+        "STRONG LIGHT-USER GENERALIZATION: Light/niche users (Tier 2 Recall: 3.3%) achieve recall comparable to or exceeding power users (Tier 0 Recall: 1.4%).",
+        "POWER USER RANKING ADVANTAGE: NDCG is higher for power users (Tier 0: 1.60% vs Tier 2: 1.54%).",
+        "STRONG LONG-TAIL PERFORMANCE: Model surfaces and ranks niche/long-tail items (Tier 2 NDCG: 1.25%) higher than popular head items (Tier 0 NDCG: 0.99%)."
     ],
     "stratified_metrics@100": [
-        "STRONG RECALL LIFT: Global Recall@100 (11.7%) heavily outperforms the random expected baseline (2.6%). The candidate generator is extracting meaningful semantic signal.",
-        "STRONG PRECISION LIFT: Global Precision@100 (0.77%) heavily outperforms the random expected precision (0.24%), indicating high density of relevant items in the retrieved slates.",
-        "STRONG LIGHT-USER GENERALIZATION: Light/niche users (Tier 2 Recall: 17.9%) achieve recall comparable to or exceeding power users (Tier 0 Recall: 6.0%).",
-        "STRONG NICHE USER RANKING: Light/niche users achieve strong top-K ranking quality (Tier 2 NDCG: 5.32% vs Tier 0: 3.56%).",
-        "POPULARITY BIAS DETECTED: Ranking quality heavily favors head/popular movies (Tier 0 NDCG: 3.38%) compared to long-tail/niche items (Tier 2 NDCG: 1.68%)."
+        "STRONG RECALL LIFT: Global Recall@100 (9.3%) heavily outperforms the random expected baseline (2.6%). The candidate generator is extracting meaningful semantic signal.",
+        "MODERATE PRECISION LIFT: Global Precision@100 (0.71%) is better than random (0.24%), suggesting basic relevance filtering is functioning.",
+        "STRONG LIGHT-USER GENERALIZATION: Light/niche users (Tier 2 Recall: 11.6%) achieve recall comparable to or exceeding power users (Tier 0 Recall: 6.2%).",
+        "POWER USER RANKING ADVANTAGE: NDCG is higher for power users (Tier 0: 3.75% vs Tier 2: 3.43%).",
+        "STRONG LONG-TAIL PERFORMANCE: Model surfaces and ranks niche/long-tail items (Tier 2 NDCG: 3.32%) higher than popular head items (Tier 0 NDCG: 2.43%)."
     ]
 }
