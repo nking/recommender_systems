@@ -1,6 +1,6 @@
 Analysis:
    these models were trained from a pipeline with same fixed
-   hyper-parameters, exceptinf layer_sizes which is the DNN on the 
+   hyper-parameters, excepting layer_sizes which is the DNN on the 
    end of the CandidateModel and Query Model.
    The DNN layer_sizes was run for 6 pipelines, each of which had
    layer_Sizes within the increasing range of [8,4] to [256,128].
@@ -15,6 +15,11 @@ Analysis:
 
    The results are summarized below and the figures and analysis
    results are in this folder.
+
+   The models were trained from builds spanning githash commits
+   ac12670b8d5d57fdbfb025eb0d9d35ff0c3b312e
+   to
+   1917cb4f274c8c3333545a9e64b0a87b40fcedb5 
 
 A look through the movie embeddings t-SNE and Umap plots and the
 same for the user embeddings:
