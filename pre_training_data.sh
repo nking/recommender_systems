@@ -31,7 +31,10 @@ export TMP_OUT=../retrieval/src/test/resources/data
 cp -f bin/full/ratings*array_record $TMP_OUT/
 cp -f bin/small/ratings*array_record $TMP_OUT/small/
 
-export TMP_OUT=../ranker/src/test/resources/data 
+echo "copy data to ranker"
+TMP_OUT=../ranker/src/test/resources/data 
+mkdir -p $TMP_OUT/small $TMP_OUT/tiny $TMP_OUT/tiny3
+
 cp -f bin/full/ratings*array_record $TMP_OUT/
 cp -f bin/full/ratings*parquet $TMP_OUT/
 
@@ -44,6 +47,25 @@ cp -f bin/tiny/ratings*parquet $TMP_OUT/tiny/
 cp -f bin/tiny3/ratings*array_record $TMP_OUT/tiny3/
 cp -f bin/tiny3/ratings*parquet $TMP_OUT/tiny3/
 
-echo "copy movie_tiers to ranker"
 cp -rf bin/movie_tiers/* $TMP_OUT/
 
+echo "=== Copying Files from Ranker to Re-Ranker Project ==="
+if [ ! -d "../reranker" ]; then
+    echo "Directory '../reranker' does not exist.  Checkout the project from github if want to use it" >&2
+    exit 0
+fi
+
+TMP_SRC=../ranker/src/test/resources/data 
+TMP_OUT=../reranker/src/test/resources/data 
+mkdir -p $TMP_OUT/small $TMP_OUT/tiny $TMP_OUT/tiny3
+cp -f $TMP_SRC/*parquet $TMP_OUT/
+
+cp -f $TMP_SRC/ratings*parquet $TMP_OUT/small/
+cp -f $TMP_SRC/ratings*parquet $TMP_OUT/tiny/
+cp -f $TMP_SRC/ratings*parquet $TMP_OUT/tiny3/
+
+cp -rf $TMP_SRC/movie_tiers.json $TMP_OUT/
+
+#the users and movies files are copied to rerankerhere, but
+## could be placed in recommender_systems/pre_training_data_copy_to_ranker.sh
+cp -rf $TMP_SRC/users.bin $TMP_OUT/

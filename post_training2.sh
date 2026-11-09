@@ -158,4 +158,33 @@ rm -rf "${ranker_data_dir:?}"/*
 cp -rf "$tower_prod_dir/"* "$ranker_data_dir/"
 rm -f "$ranker_data_dir/"*tfrecord*
 
+echo "=== Copying Files to Re-Ranker Project ==="
+if [ ! -d "../reranker" ]; then
+    echo "Directory '../reranker' does not exist.  Checkout the project from github if want to use it" >&2
+    exit 0
+fi
+
+reranker_q_dir="../reranker/src/test/resources/model_repositories/saved_model_formats/bi-encoder/query/$RANKER_QUERY_SUDBIR_VERSION"
+reranker_c_dir="../reranker/src/test/resources/model_repositories/saved_model_formats/bi-encoder/candidate/$RANKER_QUERY_SUDBIR_VERSION"
+mkdir -p "$reranker_q_dir" "$reranker_c_dir"
+
+rm -rf "${reranker_q_dir:?}"/* "${reranker_c_dir:?}"/*
+cp -rf "$trained_model_dir/serving_query_model/"* "$reranker_q_dir/"
+cp -rf "$trained_model_dir/serving_candidate_model/"* "$reranker_c_dir/"
+
+if command -v saved_model_cli &> /dev/null; then
+    saved_model_cli show --dir "$reranker_q_dir" --all > "$reranker_q_dir/../../query_model_signatures.txt" 2>&1 || true
+    saved_model_cli show --dir "$reranker_c_dir" --all > "$reranker_c_dir/../../candidate_model_signatures.txt" 2>&1 || true
+else
+    echo "Warning: 'saved_model_cli' not found in PATH. Skipping signature inspection files." >&2
+fi
+
+rer_dir="../reranker/src/test/resources/data"
+cp -rf "$tower_prod_dir/user_emb"*parquet "$rer_dir/"
+cp -rf "$tower_prod_dir/movie_emb"*parquet "$rer_dir/"
+cp -rf "$tower_prod_dir/recommended_movies"*parquet "$rer_dir/"
+cp -rf "$tower_prod_dir/user_emb"*json "$rer_dir/"
+cp -rf "$tower_prod_dir/movie_emb"*json "$rer_dir/"
+cp -rf "$tower_prod_dir/recommended_movies"*json "$rer_dir/"
+
 echo "=== Post-training artifact deployment completed successfully! ==="
